@@ -3,7 +3,7 @@ package users
 import "testing"
 
 func TestHashPassword(t *testing.T) {
-	password := "admin123"
+	password := "secret123"
 
 	hash, err := HashPassword(password)
 	if err != nil {
@@ -11,34 +11,44 @@ func TestHashPassword(t *testing.T) {
 	}
 
 	if hash == "" {
-		t.Fatal("hash is empty")
+		t.Fatal("expected hash")
 	}
 
 	if hash == password {
-		t.Fatal("hash equals password")
+		t.Fatal("password was not hashed")
 	}
 }
 
 func TestVerifyPassword(t *testing.T) {
-	password := "admin123"
+	password := "secret123"
 
 	hash, err := HashPassword(password)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := VerifyPassword(hash, password); err != nil {
-		t.Fatalf("expected valid password: %v", err)
-	}
-}
-
-func TestVerifyPassword_Invalid(t *testing.T) {
-	hash, err := HashPassword("admin123")
+	ok, err := VerifyPassword(password, hash)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := VerifyPassword(hash, "wrong-password"); err == nil {
-		t.Fatal("expected password verification to fail")
+	if !ok {
+		t.Fatal("expected valid password")
+	}
+}
+
+func TestVerifyPassword_Invalid(t *testing.T) {
+	hash, err := HashPassword("secret123")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ok, err := VerifyPassword("wrong-password", hash)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if ok {
+		t.Fatal("expected invalid password")
 	}
 }

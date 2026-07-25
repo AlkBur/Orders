@@ -2,6 +2,7 @@ package app
 
 import (
 	"Orders/internal/database"
+	"Orders/internal/users"
 	"database/sql"
 	"fmt"
 	"net/http"
@@ -25,9 +26,9 @@ func New() (*App, error) {
 		return nil, err
 	}
 
-	//Подготовка и проверка таблиц базы
-	if err := database.InitSchema(db); err != nil {
-		db.Close()
+	store := users.NewStore(db)
+
+	if err := users.Seed(store); err != nil {
 		return nil, err
 	}
 
