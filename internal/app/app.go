@@ -4,6 +4,7 @@ import (
 	"Orders/internal/database"
 	"Orders/internal/users"
 	"database/sql"
+	"html/template"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -17,6 +18,8 @@ type App struct {
 
 	router *chi.Mux
 	server *http.Server
+
+	templates map[string]*template.Template
 }
 
 func New() (*App, error) {
@@ -38,9 +41,21 @@ func New() (*App, error) {
 	}
 
 	app := &App{
-		config: config,
-		db:     db,
-		users:  usersStore,
+		config:    config,
+		db:        db,
+		users:     usersStore,
+		templates: make(map[string]*template.Template),
+	}
+
+	for _, page := range []string{
+		"login",
+		"orders",
+	} {
+		tmpl, err := LoadTemplates(page)
+		if err != nil {
+			return nil, err
+		}
+		app.templates[page] = tmpl
 	}
 
 	app.router = app.NewRouter()
