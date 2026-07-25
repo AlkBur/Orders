@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ru">
+
+<head>
+	<meta charset="utf-8">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+
+	<title>{{.Title}}</title>
+
+	<link rel="stylesheet" href="/static/css/pico.min.css">
+
+	<link rel="stylesheet" href="/static/css/orders.css">
+</head>
+
+<body>
+
+	<main class="container">
+
+		<article class="login-card">
+
+			<header>
+
+				<h1>Orders</h1>
+
+				<p>Товарные чеки</p>
+
+			</header>
+
+			{{if .Error}}
+
+			<article class="error">
+
+				{{.Error}}
+
+			</article>
+
+			{{end}}
+
+			<form method="post" action="/login">
+
+				<label for="login">
+					Логин
+				</label>
+
+				<input id="login" name="login" type="text" value="{{.Login}}" autocomplete="username" autofocus>
+
+				<label for="password">
+					Пароль
+				</label>
+
+				<input id="password" name="password" type="password" autocomplete="current-password">
+
+				<button type="submit">
+
+					Войти
+
+				</button>
+
+			</form>
+
+		</article>
+
+	</main>
+
+</body>
+
+</html>

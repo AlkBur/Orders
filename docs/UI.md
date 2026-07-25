@@ -347,3 +347,63 @@ The server is the single source of truth.
 HTML is generated on the server.
 The browser is responsible only for presentation and user interaction.
 Business logic never executes in the browser.
+
+
+# Login Page
+
+The login page is the application entry point.
+
+It is available without authentication.
+
+Layout:
+
+- Application title
+- Optional subtitle
+- Login field
+- Password field
+- Login button
+- Error message area
+
+The page uses the common layout template.
+
+The login form is centered vertically on desktop.
+
+On mobile devices it occupies the full available width.
+
+The login button always has full width.
+
+After successful authentication:
+
+/login
+    ↓
+302 Redirect
+    ↓
+/orders
+
+After failed authentication:
+
+- login page is rendered again;
+- entered login is preserved;
+- password field is cleared;
+- an error message is displayed.
+
+The page is fully functional without JavaScript.
+
+# Authentication Flow
+
+GET  /login
+    ↓
+Render login page
+
+POST /login
+    ↓
+Authenticate user
+
+Success
+    ↓
+302 → /orders
+
+Failure
+    ↓
+Render login page
+Display authentication error

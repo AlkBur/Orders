@@ -18,6 +18,14 @@ func (a *App) NewRouter() *chi.Mux {
 	r.Get("/login", a.LoginPage)
 	r.Post("/login", a.Login)
 
+	r.Handle(
+		"/static/*",
+		http.StripPrefix(
+			"/static/",
+			http.FileServer(http.FS(StaticFS())),
+		),
+	)
+
 	// Требуют авторизации
 	r.Group(func(r chi.Router) {
 
@@ -27,7 +35,7 @@ func (a *App) NewRouter() *chi.Mux {
 
 		r.Post("/logout", a.Logout)
 
-		r.Get("/", homeHandler)
+		r.Get("/orders", a.OrdersPage)
 
 		// Следующие обработчики появятся позже
 		// r.Get("/products", a.Products)
@@ -36,23 +44,4 @@ func (a *App) NewRouter() *chi.Mux {
 	})
 
 	return r
-}
-
-func homeHandler(w http.ResponseWriter, r *http.Request) {
-
-	tmpl, err := LoadTemplates()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	data := struct {
-		Title string
-	}{
-		Title: "Orders Server",
-	}
-
-	if err := tmpl.ExecuteTemplate(w, "layout.html", data); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
 }

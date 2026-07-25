@@ -4,11 +4,31 @@ package app
 
 import (
 	"html/template"
+	"io/fs"
+	"os"
+	"path/filepath"
 )
 
-func LoadTemplates() (*template.Template, error) {
+func LoadTemplates(page string) (*template.Template, error) {
+
+	if page == "login" {
+		return template.ParseFiles(
+			filepath.Join("internal", "app", "templates", "login.html"),
+		)
+	}
+
+	content := page + ".html"
+
 	return template.ParseFiles(
-		"internal/app/templates/layout.html",
-		"internal/app/templates/index.html",
+		filepath.Join("internal", "app", "templates", "layout.html"),
+		filepath.Join("internal", "app", "templates", content),
 	)
+}
+
+func StaticFS() fs.FS {
+	return os.DirFS(filepath.Join(
+		"internal",
+		"app",
+		"static",
+	))
 }

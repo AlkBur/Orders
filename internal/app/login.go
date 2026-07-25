@@ -1,11 +1,16 @@
 package app
 
 import (
+	"Orders/internal/app/pages"
 	"net/http"
 )
 
 func (a *App) LoginPage(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("Login"))
+	page := pages.LoginPage{
+		Title: "Orders",
+	}
+
+	a.Render(w, "login", page)
 }
 
 func (app *App) Login(w http.ResponseWriter, r *http.Request) {
@@ -34,5 +39,5 @@ func (app *App) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	http.Redirect(w, r, "/orders", http.StatusSeeOther)
 }
