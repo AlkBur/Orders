@@ -1,12 +1,14 @@
 package app
 
 import (
+	"database/sql"
 	"fmt"
 	"net/http"
 )
 
 type App struct {
 	config *Config
+	db     *sql.DB
 	server *http.Server
 }
 
@@ -17,10 +19,21 @@ func New() (*App, error) {
 		return nil, err
 	}
 
+	db, err := OpenDatabase()
+	if err != nil {
+		return nil, err
+	}
+
+	if err := InitSchema(db); err != nil {
+		db.Close()
+		return nil, err
+	}
+
 	router := NewRouter()
 
 	return &App{
 		config: config,
+		db:     db,
 		server: &http.Server{
 			Addr:    fmt.Sprintf(":%d", config.HTTPPort),
 			Handler: router,
@@ -29,5 +42,6 @@ func New() (*App, error) {
 }
 
 func (a *App) Run() error {
+	defer a.db.Close()
 	return a.server.ListenAndServe()
 }
