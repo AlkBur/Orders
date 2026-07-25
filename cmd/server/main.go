@@ -1,17 +1,19 @@
 package main
 
 import (
-	"fmt"
 	"log"
-	"net/http"
+
+	"orders/internal/app"
 )
 
 func main() {
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintln(w, "Server works!")
-	})
 
-	log.Println("Listening on :3000")
+	a, err := app.New()
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	log.Fatal(http.ListenAndServe(":3000", nil))
+	if err := a.Run(); err != nil {
+		log.Fatal(err)
+	}
 }
