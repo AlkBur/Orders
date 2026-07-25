@@ -1,4 +1,4 @@
-package app
+package databese
 
 import (
 	"database/sql"
@@ -8,7 +8,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-func OpenDatabase() (*sql.DB, error) {
+func Open() (*sql.DB, error) {
 
 	if err := os.MkdirAll("data", 0755); err != nil {
 		return nil, err

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	databese "orders/internal/database"
 )
 
 type App struct {
@@ -13,18 +14,18 @@ type App struct {
 }
 
 func New() (*App, error) {
-
 	config, err := LoadConfig("config.json")
 	if err != nil {
 		return nil, err
 	}
 
-	db, err := OpenDatabase()
+	db, err := databese.Open()
+
 	if err != nil {
 		return nil, err
 	}
 
-	if err := InitSchema(db); err != nil {
+	if err := databese.InitSchema(db); err != nil {
 		db.Close()
 		return nil, err
 	}
