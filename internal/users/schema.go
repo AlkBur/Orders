@@ -1,6 +1,13 @@
 package users
 
-import "database/sql"
+import (
+	"Orders/internal/database"
+	"database/sql"
+)
+
+func init() {
+	database.RegisterSchema(InitSchema)
+}
 
 func InitSchema(db *sql.DB) error {
 

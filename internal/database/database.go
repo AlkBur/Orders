@@ -1,4 +1,4 @@
-package databese
+package database
 
 import (
 	"database/sql"
@@ -9,12 +9,15 @@ import (
 )
 
 func Open() (*sql.DB, error) {
+	return OpenPath(filepath.Join("data", "base.db"))
+}
 
-	if err := os.MkdirAll("data", 0755); err != nil {
+func OpenPath(path string) (*sql.DB, error) {
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return nil, err
 	}
 
-	db, err := sql.Open("sqlite", filepath.Join("data", "base.db"))
+	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		return nil, err
 	}

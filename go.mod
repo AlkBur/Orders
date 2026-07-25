@@ -1,4 +1,4 @@
-module orders
+module Orders
 
 go 1.26.5
 
