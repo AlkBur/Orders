@@ -3,7 +3,7 @@ package main
 import (
 	"log"
 
-	"orders/internal/app"
+	"Orders/internal/app"
 )
 
 func main() {

@@ -1,13 +1,20 @@
-package databese
+package database
 
-import (
-	"database/sql"
-	"orders/internal/users"
-)
+import "database/sql"
+
+type SchemaFunc func(*sql.DB) error
+
+var schemas []SchemaFunc
+
+func RegisterSchema(fn SchemaFunc) {
+	schemas = append(schemas, fn)
+}
 
 func InitSchema(db *sql.DB) error {
-	if err := users.InitSchema(db); err != nil {
-		return err
+	for _, fn := range schemas {
+		if err := fn(db); err != nil {
+			return err
+		}
 	}
 	return nil
 }
