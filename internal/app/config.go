@@ -6,7 +6,8 @@ import (
 )
 
 type Config struct {
-	HTTPPort int `json:"httpPort"`
+	HTTPAddress string `json:"http_address"`
+	Secret   string `json:"secret"`
 }
 
 func LoadConfig(filename string) (*Config, error) {
