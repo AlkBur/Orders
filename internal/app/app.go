@@ -4,13 +4,18 @@ import (
 	"Orders/internal/database"
 	"Orders/internal/users"
 	"database/sql"
-	"fmt"
 	"net/http"
+
+	"github.com/go-chi/chi/v5"
 )
 
 type App struct {
 	config *Config
-	db     *sql.DB
+
+	db    *sql.DB
+	users *users.Store
+
+	router *chi.Mux
 	server *http.Server
 }
 
@@ -26,22 +31,26 @@ func New() (*App, error) {
 		return nil, err
 	}
 
-	store := users.NewStore(db)
+	usersStore := users.NewStore(db)
 
-	if err := users.Seed(store); err != nil {
+	if err := users.Seed(usersStore); err != nil {
 		return nil, err
 	}
 
-	router := NewRouter()
-
-	return &App{
+	app := &App{
 		config: config,
 		db:     db,
-		server: &http.Server{
-			Addr:    fmt.Sprintf(":%d", config.HTTPPort),
-			Handler: router,
-		},
-	}, nil
+		users:  usersStore,
+	}
+
+	app.router = app.NewRouter()
+
+	app.server = &http.Server{
+		Addr:    config.HTTPAddress,
+		Handler: app.router,
+	}
+
+	return app, nil
 }
 
 func (a *App) Run() error {

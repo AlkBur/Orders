@@ -56,7 +56,7 @@ func (s *Store) Update(user *User) error {
 
 // FindByLogin ищет пользователя по логину.
 func (s *Store) FindByLogin(login string) (*User, error) {
-	return s.scanUser(s.db.QueryRow(`
+	return scanUser(s.db.QueryRow(`
 		SELECT
 			id,
 			login,
@@ -71,7 +71,7 @@ func (s *Store) FindByLogin(login string) (*User, error) {
 
 // FindAdmin возвращает администратора.
 func (s *Store) FindAdmin() (*User, error) {
-	return s.scanUser(s.db.QueryRow(`
+	return scanUser(s.db.QueryRow(`
 		SELECT
 			id,
 			login,
@@ -85,7 +85,7 @@ func (s *Store) FindAdmin() (*User, error) {
 	`))
 }
 
-func (s *Store) scanUser(row *sql.Row) (*User, error) {
+func scanUser(row *sql.Row) (*User, error) {
 	user := &User{}
 
 	err := row.Scan(
@@ -101,4 +101,38 @@ func (s *Store) scanUser(row *sql.Row) (*User, error) {
 	}
 
 	return user, nil
+}
+
+func (s *Store) Authenticate(login, password string) (*User, error) {
+	user, err := s.FindByLogin(login)
+	if err != nil {
+		return nil, err
+	}
+
+	ok, err := user.VerifyPassword(password)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, ErrInvalidCredentials
+	}
+
+	return user, nil
+}
+
+func (s *Store) FindByID(id int64) (*User, error) {
+
+	row := s.db.QueryRow(`
+		SELECT
+			id,
+			login,
+			password_hash,
+			is_admin,
+			created_at,
+			updated_at
+		FROM users
+		WHERE id = ?
+	`, id)
+
+	return scanUser(row)
 }
