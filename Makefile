@@ -1,16 +1,10 @@
-.PHONY: run dev caddy build clean
+APP=orders
 
 run:
 	go run ./cmd/server
 
-dev:
-	~/go/bin/air
-
-caddy:
-	caddy run --config Caddyfile
+debug:
+	go run -tags debug ./cmd/server
 
 build:
-	go build -o bin/receipt-server ./cmd/server
-
-clean:
-	rm -rf tmp bin
+	go build -o bin/$(APP) ./cmd/server

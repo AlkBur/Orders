@@ -2,10 +2,12 @@ root = "."
 tmp_dir = "tmp"
 
 [build]
-cmd = "go build -o ./tmp/server ./cmd/server"
+cmd = "go build -tags debug -o ./tmp/server ./cmd/server"
 bin = "./tmp/server"
+
 include_ext = ["go"]
-exclude_dir = ["tmp", "web", ".git"]
+
+exclude_dir = ["tmp", ".git"]
 
 [log]
 time = true
