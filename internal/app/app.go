@@ -13,6 +13,10 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+type Integration struct {
+	Name string
+}
+
 type App struct {
 	config *Config
 
@@ -24,7 +28,8 @@ type App struct {
 	router *chi.Mux
 	server *http.Server
 
-	templates map[string]*template.Template
+	templates    map[string]*template.Template
+	integrations map[string]*Integration
 }
 
 func New(configPath string) (*App, error) {
@@ -46,13 +51,19 @@ func New(configPath string) (*App, error) {
 
 	sessionStore := sessions.NewStore(db)
 
+	integrations := make(map[string]*Integration, len(config.API.Keys))
+	for _, k := range config.API.Keys {
+		integrations[k.Key] = &Integration{Name: k.Name}
+	}
+
 	app := &App{
-		config:    config,
-		db:        db,
-		users:     usersStore,
-		sessions:  sessionStore,
-		customers: customers.NewStore(db),
-		templates: make(map[string]*template.Template),
+		config:       config,
+		db:           db,
+		users:        usersStore,
+		sessions:     sessionStore,
+		customers:    customers.NewStore(db),
+		templates:    make(map[string]*template.Template),
+		integrations: integrations,
 	}
 
 	for _, page := range []string{

@@ -6,6 +6,11 @@
         "initial_password": "admin"
     },
     "api": {
-        "key": "change-me"
+        "keys": [
+            {
+                "name": "1С Бухгалтерия",
+                "key": "d0f4b4c8-4e9d-48e7-9d36-4d8d89d6d54a"
+            }
+        ]
     }
 }
