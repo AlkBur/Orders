@@ -18,7 +18,7 @@ type Session struct {
 
 func CreateSession(w http.ResponseWriter, secret string, session Session) {
 
-	value := fmt.Sprintf("%d:%t", session.UserID)
+	value := fmt.Sprintf("%d", session.UserID)
 	signature := sign(secret, value)
 
 	http.SetCookie(w, &http.Cookie{

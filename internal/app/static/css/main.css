@@ -1,0 +1,21 @@
+html,
+body {
+	height: 100%;
+}
+
+body {
+	min-height: 100vh;
+}
+
+.login-page {
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	min-height: 100vh;
+	padding: 1rem;
+}
+
+.login-card {
+	width: 100%;
+	max-width: 420px;
+}
