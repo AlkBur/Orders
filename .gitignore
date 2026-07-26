@@ -1,2 +1,4 @@
 /tmp
 data/base.db
+config.agent.json
+tools/agent/

@@ -6,41 +6,60 @@ import (
 )
 
 func (a *App) LoginPage(w http.ResponseWriter, r *http.Request) {
+	NoCache(w)
+
 	page := pages.LoginPage{
 		Title: "Orders",
 	}
 
-	if err := a.Render(w, "login", page); err != nil {
-		a.InternalError(w, err)
-		return
-	}
+	a.Render(w, "login", page)
 }
 
 func (app *App) Login(w http.ResponseWriter, r *http.Request) {
+	page := pages.LoginPage{
+		Title: "Orders",
+	}
 
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
 
-	login := r.FormValue("login")
+	page.Login = r.FormValue("login")
 	password := r.FormValue("password")
 
-	user, err := app.users.Authenticate(login, password)
+	user, err := app.users.FindByLogin(page.Login)
 	if err != nil {
-		http.Error(w, "Invalid login or password", http.StatusUnauthorized)
+		NoCache(w)
+		page.Error = "Invalid login or password"
+		app.Render(w, "login", page)
 		return
 	}
 
-	CreateSession(w, app.config.Secret, Session{
-		UserID: user.ID,
-	})
-
-	// Первоначальная установка пароля администратора
-	if user.IsAdmin && !user.HasPassword() {
-		http.Redirect(w, r, "/setup", http.StatusSeeOther)
+	if user.NeedsPasswordSetup() {
+		session, err := app.sessions.Create(user.ID, r.UserAgent())
+		if err != nil {
+			app.InternalError(w, err)
+			return
+		}
+		SetSessionCookie(w, session.ID)
+		http.Redirect(w, r, "/orders", http.StatusSeeOther)
 		return
 	}
 
+	ok, err := user.VerifyPassword(password)
+	if err != nil || !ok {
+		NoCache(w)
+		page.Error = "Invalid login or password"
+		app.Render(w, "login", page)
+		return
+	}
+
+	session, err := app.sessions.Create(user.ID, r.UserAgent())
+	if err != nil {
+		app.InternalError(w, err)
+		return
+	}
+	SetSessionCookie(w, session.ID)
 	http.Redirect(w, r, "/orders", http.StatusSeeOther)
 }

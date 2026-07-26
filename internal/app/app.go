@@ -2,6 +2,7 @@ package app
 
 import (
 	"Orders/internal/database"
+	"Orders/internal/sessions"
 	"Orders/internal/users"
 	"database/sql"
 	"html/template"
@@ -13,23 +14,23 @@ import (
 type App struct {
 	config *Config
 
-	db    *sql.DB
-	users *users.Store
+	db        *sql.DB
+	users     *users.Store
+	sessions  *sessions.Store
 
-	router *chi.Mux
-	server *http.Server
+	router    *chi.Mux
+	server    *http.Server
 
 	templates map[string]*template.Template
 }
 
-func New() (*App, error) {
-	config, err := LoadConfig("config.json")
+func New(configPath string) (*App, error) {
+	config, err := LoadConfig(configPath)
 	if err != nil {
 		return nil, err
 	}
 
-	//Подготовка работы с базой
-	db, err := database.Open()
+	db, err := database.OpenPath(config.DatabasePath)
 	if err != nil {
 		return nil, err
 	}
@@ -40,16 +41,20 @@ func New() (*App, error) {
 		return nil, err
 	}
 
+	sessionStore := sessions.NewStore(db)
+
 	app := &App{
 		config:    config,
 		db:        db,
 		users:     usersStore,
+		sessions:  sessionStore,
 		templates: make(map[string]*template.Template),
 	}
 
 	for _, page := range []string{
 		"login",
 		"orders",
+		"set-password",
 	} {
 		tmpl, err := LoadTemplates(page)
 		if err != nil {

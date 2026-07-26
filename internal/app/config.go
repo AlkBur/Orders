@@ -6,8 +6,9 @@ import (
 )
 
 type Config struct {
-	HTTPAddress string `json:"http_address"`
-	Secret   string `json:"secret"`
+	HTTPAddress  string `json:"http_address"`
+	DatabasePath string `json:"database_path"`
+	Secret       string `json:"secret"`
 }
 
 func LoadConfig(filename string) (*Config, error) {
