@@ -14,7 +14,7 @@ func (a *App) Render(
 
 	tmpl, ok := a.templates[page]
 	if !ok {
-		return ErrInvalidTamplate
+		return ErrInvalidTemplate
 	}
 
 	return tmpl.Execute(w, data)
