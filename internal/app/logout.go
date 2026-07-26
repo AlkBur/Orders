@@ -3,8 +3,11 @@ package app
 import "net/http"
 
 func (a *App) Logout(w http.ResponseWriter, r *http.Request) {
+	session := CurrentSession(r)
+	if session != nil {
+		a.sessions.Delete(session.ID)
+	}
 
-	DeleteSession(w)
-
+	DeleteSessionCookie(w)
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }

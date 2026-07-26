@@ -17,5 +17,9 @@ func (a *App) Render(
 		return ErrInvalidTemplate
 	}
 
+	if tmpl.Lookup("layout") != nil {
+		return tmpl.ExecuteTemplate(w, "layout", data)
+	}
+
 	return tmpl.Execute(w, data)
 }

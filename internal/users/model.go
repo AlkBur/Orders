@@ -16,6 +16,11 @@ func (u *User) HasPassword() bool {
 	return u.PasswordHash != ""
 }
 
+// NeedsPasswordSetup возвращает true, если пользователь должен установить пароль.
+func (u *User) NeedsPasswordSetup() bool {
+	return !u.HasPassword()
+}
+
 // SetPassword устанавливает новый пароль.
 func (u *User) SetPassword(password string) error {
 	hash, err := HashPassword(password)

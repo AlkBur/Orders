@@ -13,8 +13,8 @@ func (a *App) NewRouter() *chi.Mux {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	r.Use(SessionMiddleware(a.sessions))
 
-	// Публичные маршруты
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login", http.StatusFound)
 	})
@@ -34,21 +34,20 @@ func (a *App) NewRouter() *chi.Mux {
 		),
 	)
 
-	// Требуют авторизации
 	r.Group(func(r chi.Router) {
-
 		r.Use(func(next http.Handler) http.Handler {
-			return RequireAuth(a.users, a.config.Secret, next)
+			return RequireAuth(a.sessions, a.users, next)
 		})
 
+		r.Get("/set-password", a.SetPasswordPage)
+		r.Post("/set-password", a.SetPasswordSubmit)
 		r.Post("/logout", a.Logout)
 
-		r.Get("/orders", a.OrdersPage)
+		r.Group(func(r chi.Router) {
+			r.Use(RequirePassword)
 
-		// Следующие обработчики появятся позже
-		// r.Get("/products", a.Products)
-		// r.Get("/customers", a.Customers)
-		// r.Get("/orders", a.Orders)
+			r.Get("/orders", a.OrdersPage)
+		})
 	})
 
 	return r
