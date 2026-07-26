@@ -4,5 +4,8 @@
     "secret": "very-long-random-secret",
     "auth": {
         "initial_password": "admin"
+    },
+    "api": {
+        "key": "change-me"
     }
 }

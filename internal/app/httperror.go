@@ -12,6 +12,18 @@ func (a *App) InternalError(w http.ResponseWriter, err error) {
 	)
 }
 
+func (a *App) BadRequest(w http.ResponseWriter, msg string) {
+	http.Error(w, msg, http.StatusBadRequest)
+}
+
+func (a *App) Unauthorized(w http.ResponseWriter) {
+	http.Error(w, "Unauthorized", http.StatusUnauthorized)
+}
+
+func (a *App) Forbidden(w http.ResponseWriter) {
+	http.Error(w, "Forbidden", http.StatusForbidden)
+}
+
 func NoCache(w http.ResponseWriter) {
 	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 	w.Header().Set("Pragma", "no-cache")
