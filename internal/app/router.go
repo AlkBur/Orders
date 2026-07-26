@@ -10,11 +10,19 @@ import (
 func (a *App) NewRouter() *chi.Mux {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
-	r.Use(middleware.ClientIPFromRemoteAddr)
-
+	r.Use(middleware.RealIP)
+	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
 	// Публичные маршруты
+	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/login", http.StatusFound)
+	})
+
+	r.Get("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+
 	r.Get("/login", a.LoginPage)
 	r.Post("/login", a.Login)
 
