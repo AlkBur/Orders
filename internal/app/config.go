@@ -10,11 +10,16 @@ type AuthConfig struct {
 	InitialPassword string `json:"initial_password"`
 }
 
+type APIConfig struct {
+	Key string `json:"key"`
+}
+
 type Config struct {
 	HTTPAddress  string     `json:"http_address"`
 	DatabasePath string     `json:"database_path"`
 	Secret       string     `json:"secret"`
 	Auth         AuthConfig `json:"auth"`
+	API          APIConfig  `json:"api"`
 }
 
 func LoadConfig(filename string) (*Config, error) {
@@ -32,6 +37,10 @@ func LoadConfig(filename string) (*Config, error) {
 
 	if config.Auth.InitialPassword == "" {
 		return nil, errors.New("auth.initial_password is required")
+	}
+
+	if config.API.Key == "" {
+		return nil, errors.New("api.key is required")
 	}
 
 	return &config, nil

@@ -1,12 +1,14 @@
 package app
 
 import (
-	"Orders/internal/database"
-	"Orders/internal/sessions"
-	"Orders/internal/users"
 	"database/sql"
 	"html/template"
 	"net/http"
+
+	"Orders/internal/customers"
+	"Orders/internal/database"
+	"Orders/internal/sessions"
+	"Orders/internal/users"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -14,9 +16,10 @@ import (
 type App struct {
 	config *Config
 
-	db       *sql.DB
-	users    *users.Store
-	sessions *sessions.Store
+	db        *sql.DB
+	users     *users.Store
+	sessions  *sessions.Store
+	customers *customers.Store
 
 	router *chi.Mux
 	server *http.Server
@@ -48,6 +51,7 @@ func New(configPath string) (*App, error) {
 		db:        db,
 		users:     usersStore,
 		sessions:  sessionStore,
+		customers: customers.NewStore(db),
 		templates: make(map[string]*template.Template),
 	}
 

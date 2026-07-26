@@ -34,6 +34,13 @@ func (a *App) NewRouter() *chi.Mux {
 		),
 	)
 
+	// Admin API
+	r.Group(func(r chi.Router) {
+		r.Use(a.RequireAPIKey)
+		r.Use(a.RequireAdminAPI)
+		r.Put("/api/customers", a.HandlePutCustomers)
+	})
+
 	r.Group(func(r chi.Router) {
 		r.Use(func(next http.Handler) http.Handler {
 			return RequireAuth(a.sessions, a.users, next)
