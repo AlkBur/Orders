@@ -10,7 +10,10 @@ func (a *App) LoginPage(w http.ResponseWriter, r *http.Request) {
 		Title: "Orders",
 	}
 
-	a.Render(w, "login", page)
+	if err := a.Render(w, "login", page); err != nil {
+		a.InternalError(w, err)
+		return
+	}
 }
 
 func (app *App) Login(w http.ResponseWriter, r *http.Request) {

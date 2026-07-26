@@ -10,5 +10,8 @@ func (a *App) OrdersPage(w http.ResponseWriter, r *http.Request) {
 		Title: "Orders",
 	}
 
-	a.Render(w, "orders", page)
+	if err := a.Render(w, "orders", page); err != nil {
+		a.InternalError(w, err)
+		return
+	}
 }

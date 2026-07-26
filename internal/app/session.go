@@ -44,13 +44,15 @@ func ReadSession(r *http.Request, secret string) (*Session, error) {
 	}
 
 	parts := strings.Split(string(data), ":")
-	if len(parts) != 3 {
+
+	if len(parts) != 2 {
 		return nil, fmt.Errorf("invalid session")
 	}
 
-	value := parts[0] + ":" + parts[1]
+	value := parts[0]
+	signature := parts[1]
 
-	if sign(secret, value) != parts[2] {
+	if sign(secret, value) != signature {
 		return nil, fmt.Errorf("invalid signature")
 	}
 
