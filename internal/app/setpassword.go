@@ -10,7 +10,7 @@ func (a *App) SetPasswordPage(w http.ResponseWriter, r *http.Request) {
 
 	user := CurrentUser(r)
 	if user == nil || !user.NeedsPasswordSetup() {
-		http.Redirect(w, r, "/orders", http.StatusSeeOther)
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 
@@ -32,7 +32,7 @@ func (a *App) SetPasswordPage(w http.ResponseWriter, r *http.Request) {
 func (a *App) SetPasswordSubmit(w http.ResponseWriter, r *http.Request) {
 	user := CurrentUser(r)
 	if user == nil || !user.NeedsPasswordSetup() {
-		http.Redirect(w, r, "/orders", http.StatusSeeOther)
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 
@@ -64,5 +64,10 @@ func (a *App) SetPasswordSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, "/orders", http.StatusSeeOther)
+	if session := CurrentSession(r); session != nil {
+		a.sessions.Delete(session.ID)
+	}
+	DeleteSessionCookie(w)
+
+	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }

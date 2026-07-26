@@ -1,6 +1,7 @@
 # Test Users
 
-| Role    | Login   | Password | Purpose                 |
-|---------|---------|----------|-------------------------|
-| Admin   | admin   | pass123  | Full access             |
-| Manager | manager | —        | First-time password set |
+| Role  | Login | Password                 | Purpose     |
+|-------|-------|--------------------------|-------------|
+| Admin | admin | initial_password (config) | Bootstrap   |
+
+После первого входа через initial_password администратор устанавливает собственный пароль.

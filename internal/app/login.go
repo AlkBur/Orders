@@ -2,6 +2,7 @@ package app
 
 import (
 	"Orders/internal/app/pages"
+	"Orders/internal/users"
 	"net/http"
 )
 
@@ -36,19 +37,16 @@ func (app *App) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if user.NeedsPasswordSetup() {
-		session, err := app.sessions.Create(user.ID, r.UserAgent())
-		if err != nil {
-			app.InternalError(w, err)
-			return
-		}
-		SetSessionCookie(w, session.ID)
-		http.Redirect(w, r, "/orders", http.StatusSeeOther)
-		return
+	var authenticated bool
+
+	if user.HasPassword() {
+		ok, err := user.VerifyPassword(password)
+		authenticated = (err == nil && ok)
+	} else {
+		authenticated = users.VerifyBootstrapPassword(password, app.config.Auth.InitialPassword)
 	}
 
-	ok, err := user.VerifyPassword(password)
-	if err != nil || !ok {
+	if !authenticated {
 		NoCache(w)
 		page.Error = "Invalid login or password"
 		app.Render(w, "login", page)
@@ -61,5 +59,11 @@ func (app *App) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	SetSessionCookie(w, session.ID)
+
+	if user.NeedsPasswordSetup() {
+		http.Redirect(w, r, "/set-password", http.StatusSeeOther)
+		return
+	}
+
 	http.Redirect(w, r, "/orders", http.StatusSeeOther)
 }

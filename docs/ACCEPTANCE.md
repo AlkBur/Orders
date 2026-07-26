@@ -6,7 +6,7 @@
 
 ```bash
 make build-agent
-make run-agent  # в отдельном терминале
+make run-agent
 # ... curl-сценарии ...
 make agent-clean
 ```
@@ -15,14 +15,15 @@ make agent-clean
 
 ## Authentication
 
-- [ ] Login без пароля → `/set-password`
-- [ ] Установка пароля → `/orders`
+- [ ] admin / test-bootstrap → `/set-password`
+- [ ] admin / wrong → "Invalid login or password"
+- [ ] Set Password → `/login`
+- [ ] admin / test-bootstrap после установки пароля → "Invalid login or password"
+- [ ] admin / newpassword → `/orders`
 - [ ] Logout
-- [ ] Повторный Login с паролем → `/orders`
 - [ ] Неверный пароль → ошибка + NoCache
 - [ ] F5 после ошибки → чистая форма (без ошибки)
-- [ ] Без пароля → защищённые страницы блокированы
-- [ ] После пароля `/set-password` недоступен
+- [ ] Защищённая страница без Login → `/login`
 
 ## Sessions
 
