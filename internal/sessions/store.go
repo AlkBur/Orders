@@ -47,9 +47,9 @@ func (s *Session) RemoveValue(key string) {
 }
 
 type Store struct {
-	mu        sync.Mutex
-	db        *sql.DB
-	opsCount  int64
+	mu       sync.Mutex
+	db       *sql.DB
+	opsCount int64
 }
 
 func NewStore(db *sql.DB) *Store {

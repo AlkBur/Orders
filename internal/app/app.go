@@ -14,12 +14,12 @@ import (
 type App struct {
 	config *Config
 
-	db        *sql.DB
-	users     *users.Store
-	sessions  *sessions.Store
+	db       *sql.DB
+	users    *users.Store
+	sessions *sessions.Store
 
-	router    *chi.Mux
-	server    *http.Server
+	router *chi.Mux
+	server *http.Server
 
 	templates map[string]*template.Template
 }
