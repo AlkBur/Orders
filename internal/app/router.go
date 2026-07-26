@@ -34,11 +34,10 @@ func (a *App) NewRouter() *chi.Mux {
 		),
 	)
 
-	// Admin API
-	r.Group(func(r chi.Router) {
-		r.Use(a.RequireAPIKey)
-		r.Use(a.RequireAdminAPI)
-		r.Put("/api/customers", a.HandlePutCustomers)
+	// Integration API — обмен между системами
+	r.Route("/api/integration", func(r chi.Router) {
+		r.Use(a.RequireIntegration)
+		r.Put("/customers", a.HandlePutCustomers)
 	})
 
 	r.Group(func(r chi.Router) {

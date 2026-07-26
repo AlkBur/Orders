@@ -9,10 +9,13 @@ import (
 	"Orders/internal/users"
 )
 
-type contextKey string
+type contextKey int
 
-const userContextKey contextKey = "user"
-const sessionContextKey contextKey = "session"
+const (
+	userContextKey contextKey = iota
+	sessionContextKey
+	integrationContextKey
+)
 
 func CurrentUser(r *http.Request) *users.User {
 	user, _ := r.Context().Value(userContextKey).(*users.User)
@@ -22,6 +25,11 @@ func CurrentUser(r *http.Request) *users.User {
 func CurrentSession(r *http.Request) *sessions.Session {
 	session, _ := r.Context().Value(sessionContextKey).(*sessions.Session)
 	return session
+}
+
+func CurrentIntegration(r *http.Request) *Integration {
+	integration, _ := r.Context().Value(integrationContextKey).(*Integration)
+	return integration
 }
 
 // SessionMiddleware извлекает сессию из cookie и помещает её в context.
@@ -85,37 +93,18 @@ func RequirePassword(next http.Handler) http.Handler {
 	})
 }
 
-// RequireAPIKey проверяет заголовок X-API-Key.
-func (a *App) RequireAPIKey(next http.Handler) http.Handler {
+// RequireIntegration проверяет заголовок X-API-Key для доступа
+// к интеграционному API (/api/integration/*).
+// При успехе помещает Integration в context.
+func (a *App) RequireIntegration(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("X-API-Key") != a.config.API.Key {
+		key := r.Header.Get("X-API-Key")
+		integration, ok := a.integrations[key]
+		if !ok {
 			a.Unauthorized(w)
 			return
 		}
-		next.ServeHTTP(w, r)
-	})
-}
-
-// RequireAdminAPI проверяет, что пользователь аутентифицирован,
-// установил пароль и имеет права администратора.
-//
-// TODO: при появлении API для обычных пользователей выделить
-// RequireAuthenticatedAPI для отделения аутентификации от авторизации.
-func (a *App) RequireAdminAPI(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		user := CurrentUser(r)
-		if user == nil {
-			a.Unauthorized(w)
-			return
-		}
-		if user.NeedsPasswordSetup() {
-			a.Forbidden(w)
-			return
-		}
-		if !user.IsAdmin {
-			a.Forbidden(w)
-			return
-		}
-		next.ServeHTTP(w, r)
+		ctx := context.WithValue(r.Context(), integrationContextKey, integration)
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
