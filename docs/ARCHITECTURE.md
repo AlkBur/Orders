@@ -57,6 +57,64 @@ Orders Server — веб-приложение для создания, отпр�
 
 ---
 
+## Authentication Principles
+
+1. Cookie never contains authentication state.
+2. Authentication does not imply session creation.
+   Session creation is a consequence of successful authentication.
+3. Session is created only after successful authentication.
+4. Authentication is performed through explicit authentication flows.
+
+---
+
+## Password State
+
+The absence of a password is an account state.
+
+It is not an authentication method.
+
+`NeedsPasswordSetup()` exists in the model solely to represent
+this state, not to serve as an authentication gate.
+
+Authentication is always performed through an explicit
+authentication flow.
+
+---
+
+## Authentication Flow
+
+```
+Login
+  │
+  ▼
+Find User
+  │
+  ▼
+Determine Authentication Method
+  │     │
+ YES   NO
+(has   (no
+password)  password)
+  │     │
+  ▼     ▼
+Verify User   Verify Initial
+Password      Password
+  │     │
+  └──┬──┘
+     ▼
+Authenticated
+     │
+     ▼
+Needs Password Setup?
+  │     │
+ YES   NO
+  │     │
+  ▼     ▼
+/set-password   /orders
+```
+
+---
+
 ## SQLite
 
 SQLite является единственной базой данных приложения.

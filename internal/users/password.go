@@ -1,6 +1,10 @@
 package users
 
-import "golang.org/x/crypto/bcrypt"
+import (
+	"crypto/subtle"
+
+	"golang.org/x/crypto/bcrypt"
+)
 
 // HashPassword создает bcrypt-хэш пароля.
 func HashPassword(password string) (string, error) {
@@ -13,6 +17,15 @@ func HashPassword(password string) (string, error) {
 	}
 
 	return string(hash), nil
+}
+
+// VerifyBootstrapPassword проверяет введённый пароль
+// на соответствие initial password из конфигурации.
+func VerifyBootstrapPassword(password, initialPassword string) bool {
+	return subtle.ConstantTimeCompare(
+		[]byte(password),
+		[]byte(initialPassword),
+	) == 1
 }
 
 // VerifyPassword проверяет соответствие пароля bcrypt-хэшу.
