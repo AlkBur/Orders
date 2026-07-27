@@ -5,12 +5,13 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+
+	"Orders/internal/common"
 )
 
 type SyncResult struct {
-	Inserted    int `json:"inserted"`
-	Updated     int `json:"updated"`
-	Deactivated int `json:"deactivated"`
+	Inserted int `json:"inserted"`
+	Updated  int `json:"updated"`
 }
 
 type Store struct {
@@ -21,80 +22,181 @@ func NewStore(db *sql.DB) *Store {
 	return &Store{db: db}
 }
 
-func (s *Store) Synchronize(ctx context.Context, snapshots []CustomerSnapshot) (SyncResult, error) {
+func (s *Store) New() *Customer {
+	return &Customer{ID: common.NilUUID, Active: true}
+}
+
+func (s *Store) Get(ctx context.Context, organizationID, id string) (*Customer, error) {
+	c := &Customer{}
+	err := s.db.QueryRowContext(ctx, `
+		SELECT organization_id, id, name, active, created_at, updated_at
+		FROM customers
+		WHERE organization_id = ? AND id = ?
+	`, organizationID, id).Scan(
+		&c.OrganizationID, &c.ID, &c.Name, &c.Active, &c.CreatedAt, &c.UpdatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
+func (s *Store) List(ctx context.Context, organizationID string) ([]*Customer, error) {
+	var rows *sql.Rows
+	var err error
+
+	if common.IsNilUUID(organizationID) {
+		rows, err = s.db.QueryContext(ctx, `
+			SELECT organization_id, id, name, active, created_at, updated_at
+			FROM customers
+			ORDER BY name
+		`)
+	} else {
+		rows, err = s.db.QueryContext(ctx, `
+			SELECT organization_id, id, name, active, created_at, updated_at
+			FROM customers
+			WHERE organization_id = ?
+			ORDER BY name
+		`, organizationID)
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var customers []*Customer
+	for rows.Next() {
+		c := &Customer{}
+		if err := rows.Scan(
+			&c.OrganizationID, &c.ID, &c.Name, &c.Active, &c.CreatedAt, &c.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		customers = append(customers, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if customers == nil {
+		customers = []*Customer{}
+	}
+
+	return customers, nil
+}
+
+func (s *Store) Save(ctx context.Context, c *Customer) error {
+	if common.IsNilUUID(c.OrganizationID) {
+		return ErrOrganizationRequired
+	}
+
+	var exists bool
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT EXISTS(SELECT 1 FROM organizations WHERE uuid = ?)`, c.OrganizationID,
+	).Scan(&exists); err != nil {
+		return fmt.Errorf("check organization: %w", err)
+	}
+	if !exists {
+		return ErrOrganizationNotFound
+	}
+
+	if common.IsNilUUID(c.ID) {
+		id, err := common.GenerateUUID()
+		if err != nil {
+			return err
+		}
+		c.ID = id
+
+		_, err = s.db.ExecContext(ctx, `
+			INSERT INTO customers (organization_id, id, name, active, created_at, updated_at)
+			VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+		`, c.OrganizationID, c.ID, c.Name, c.Active)
+		return err
+	}
+
+	result, err := s.db.ExecContext(ctx, `
+		UPDATE customers
+		SET name = ?, active = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE organization_id = ? AND id = ?
+	`, c.Name, c.Active, c.OrganizationID, c.ID)
+	if err != nil {
+		return err
+	}
+	n, _ := result.RowsAffected()
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (s *Store) Delete(ctx context.Context, organizationID, id string) error {
+	result, err := s.db.ExecContext(ctx, `
+		DELETE FROM customers
+		WHERE organization_id = ? AND id = ?
+	`, organizationID, id)
+	if err != nil {
+		return err
+	}
+	n, _ := result.RowsAffected()
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (s *Store) Synchronize(ctx context.Context, organizationID string, items []Customer) (SyncResult, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return SyncResult{}, err
 	}
 	defer tx.Rollback()
 
-	insertStmt, err := tx.PrepareContext(ctx, `
-		INSERT INTO customers (uuid, name, active, created_at, updated_at)
-		SELECT ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-		WHERE NOT EXISTS (SELECT 1 FROM customers WHERE uuid = ?)
-	`)
-	if err != nil {
-		return SyncResult{}, err
+	// Validate: no duplicates in request
+	seen := make(map[string]bool)
+	for _, item := range items {
+		if common.IsNilUUID(item.ID) {
+			return SyncResult{}, fmt.Errorf("customer id is required")
+		}
+		key := organizationID + ":" + item.ID
+		if seen[key] {
+			return SyncResult{}, fmt.Errorf("duplicate customer id: %s", item.ID)
+		}
+		seen[key] = true
 	}
-	defer insertStmt.Close()
-
-	updateStmt, err := tx.PrepareContext(ctx, `
-		UPDATE customers
-		SET name = ?, active = 1, updated_at = CURRENT_TIMESTAMP
-		WHERE uuid = ? AND (name != ? OR active = 0)
-	`)
-	if err != nil {
-		return SyncResult{}, err
-	}
-	defer updateStmt.Close()
 
 	var result SyncResult
 
-	for _, sn := range snapshots {
-		res, err := insertStmt.ExecContext(ctx, sn.UUID, sn.Name, sn.UUID)
-		if err != nil {
-			return SyncResult{}, err
-		}
-		n, _ := res.RowsAffected()
-		result.Inserted += int(n)
-	}
+	for _, item := range items {
+		active := item.Active
 
-	for _, sn := range snapshots {
-		res, err := updateStmt.ExecContext(ctx, sn.Name, sn.UUID, sn.Name)
-		if err != nil {
-			return SyncResult{}, err
-		}
-		n, _ := res.RowsAffected()
-		result.Updated += int(n)
-	}
-
-	if len(snapshots) == 0 {
 		res, err := tx.ExecContext(ctx, `
-			UPDATE customers SET active = 0, updated_at = CURRENT_TIMESTAMP
-			WHERE active = 1
-		`)
+			UPDATE customers
+			SET name = ?, active = ?, updated_at = CURRENT_TIMESTAMP
+			WHERE organization_id = ? AND id = ?
+		`, item.Name, active, organizationID, item.ID)
 		if err != nil {
 			return SyncResult{}, err
 		}
 		n, _ := res.RowsAffected()
-		result.Deactivated = int(n)
-	} else {
-		placeholders := make([]string, len(snapshots))
-		args := make([]any, len(snapshots))
-		for i, sn := range snapshots {
-			placeholders[i] = "?"
-			args[i] = sn.UUID
+		if n > 0 {
+			result.Updated++
+			continue
 		}
-		query := fmt.Sprintf(
-			`UPDATE customers SET active = 0, updated_at = CURRENT_TIMESTAMP WHERE active = 1 AND uuid NOT IN (%s)`,
-			strings.Join(placeholders, ","),
-		)
-		res, err := tx.ExecContext(ctx, query, args...)
+
+		_, err = tx.ExecContext(ctx, `
+			INSERT INTO customers (organization_id, id, name, active, created_at, updated_at)
+			VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+		`, organizationID, item.ID, item.Name, active)
 		if err != nil {
+			if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+				return SyncResult{}, fmt.Errorf("duplicate customer id in organization: %s", item.ID)
+			}
 			return SyncResult{}, err
 		}
-		n, _ := res.RowsAffected()
-		result.Deactivated = int(n)
+		result.Inserted++
 	}
 
 	return result, tx.Commit()

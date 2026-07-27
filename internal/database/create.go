@@ -18,7 +18,7 @@ func (t Table) CreateSQL() string {
 		b.WriteString(" ")
 		b.WriteString(sqliteType(col.Type))
 
-		if col.IsPK {
+		if col.IsPK && len(t.PrimaryKey) == 0 {
 			b.WriteString(" PRIMARY KEY")
 		}
 		if col.IsAutoInc {
@@ -46,10 +46,21 @@ func (t Table) CreateSQL() string {
 			}
 		}
 
-		if i < len(t.Columns)-1 {
+		if i < len(t.Columns)-1 || len(t.PrimaryKey) > 0 {
 			b.WriteString(",")
 		}
 		b.WriteString("\n")
+	}
+
+	if len(t.PrimaryKey) > 0 {
+		b.WriteString("    PRIMARY KEY (")
+		for i, pk := range t.PrimaryKey {
+			if i > 0 {
+				b.WriteString(", ")
+			}
+			b.WriteString(pk)
+		}
+		b.WriteString(")\n")
 	}
 
 	b.WriteString(")")

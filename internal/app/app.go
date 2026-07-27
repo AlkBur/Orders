@@ -82,6 +82,8 @@ func New(configPath string) (*App, error) {
 		"menu",
 		"organizations",
 		"organization_card",
+		"customers",
+		"customer_card",
 	} {
 		tmpl, err := LoadTemplates(page)
 		if err != nil {

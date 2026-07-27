@@ -10,7 +10,7 @@ import (
 var mainMenuItems = []ui.MenuItem{
 	{Text: "Товарные чеки", Href: "/receipts"},
 	{Text: "Организации", Href: "/organizations", Access: ui.Access{Admin: true}},
-	{Text: "Контрагенты", Href: "/counterparties", Access: ui.Access{Admin: true}},
+	{Text: "Контрагенты", Href: "/customers", Access: ui.Access{Admin: true}},
 	{Text: "Товары", Href: "/products", Access: ui.Access{Admin: true}},
 	{Text: "Пользователи", Href: "/users", Access: ui.Access{Admin: true}},
 }

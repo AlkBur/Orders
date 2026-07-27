@@ -83,8 +83,14 @@ func DateTime(name string) Column {
 }
 
 type Table struct {
-	Name    string
-	Columns []Column
+	Name       string
+	Columns    []Column
+	PrimaryKey []string
+}
+
+func (t Table) SetPrimaryKey(columns ...string) Table {
+	t.PrimaryKey = columns
+	return t
 }
 
 func NewTable(name string, columns ...Column) (Table, error) {

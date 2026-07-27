@@ -235,7 +235,110 @@ PDF-файлы                    | Внешняя система
 
 ---
 
-# 11. Будущее развитие
+# 11. Справочники: единый шаблон
+
+Все справочники платформы Orders следуют единому шаблону.
+
+## Архитектурные правила
+
+**Организация является корнем бизнес-модели Orders.** Все бизнес-объекты
+(справочники, документы и регистры) существуют в контексте организации
+и адресуются через маршрут `/organizations/{organization_id}/...`.
+
+**Идентификация:** Объект идентифицируется парой `(OrganizationID, ID)`.
+Составной первичный ключ. Никаких суррогатных ключей и ExternalID.
+
+**NilUUID** (`00000000-0000-0000-0000-000000000000`) — единственное
+специальное значение транспортного уровня (URL/UI). NilUUID никогда
+не сохраняется в базе данных:
+
+- URL, формы, DTO, модели до вызова `Save()` — разрешён.
+- Хранение в таблицах, `Synchronize()`, возврат из `Store.Get()` — запрещён.
+
+**URL — источник истины** для OrganizationID. Из формы — только при
+oid == NilUUID (создание из глобального списка).
+
+**Два режима доступа:**
+
+1. **Глобальный (администратор):** `GET /{resource}` — read-only список
+   всех объектов. Создание через `/organizations/NilUUID/{resource}/NilUUID`.
+2. **Контекст организации (authenticated):** все мутации через
+   `/organizations/{organization_id}/{resource}`.
+
+**Права доступа:**
+
+- Администратор: просмотр, создание, изменение, удаление.
+- Пользователь: только просмотр (view only).
+
+Проверка прав — через middleware `RequireAdmin`, не в хендлерах.
+
+## Шаблон справочника
+
+Каждый справочник реализует:
+
+```go
+// Model — чистая структура, без знаний о БД
+type Entity struct {
+    OrganizationID string
+    ID             string
+    Name           string
+    Active         bool
+    CreatedAt      time.Time
+    UpdatedAt      time.Time
+}
+
+// Schema — Table через Schema Builder с composite PK
+// .SetPrimaryKey("organization_id", "id")
+
+// Store — единый интерфейс методов
+New() *T
+Get(ctx, organizationID, id) (*T, error)
+List(ctx, organizationID) ([]*T, error)    // NilUUID = все организации
+Save(ctx, *T) error                         // NilUUID → INSERT, иначе UPDATE
+Delete(ctx, organizationID, id) error
+Synchronize(ctx, organizationID, items) (Result, error)  // upsert для интеграции
+
+// HTTP — nested маршруты
+GET    /{resource}                                    — глобальный список
+GET    /organizations/{oid}/{resource}/{id}            — карточка (NilUUID = создание)
+POST   /organizations/{oid}/{resource}                 — сохранение (admin)
+DELETE /organizations/{oid}/{resource}/{id}            — удаление (admin)
+PUT    /api/integration/organizations/{oid}/{resource} — синхронизация (API key)
+
+// Templates — список + карточка
+// Rights — RequireAdmin для мутаций
+```
+
+Customers — эталонная реализация данного шаблона.
+
+## Правила Save
+
+- `ID == NilUUID` → `GenerateUUID()` → INSERT.
+- `ID != NilUUID` → UPDATE по `(OrganizationID, ID)`. 0 rows → `ErrNotFound`.
+- `OrganizationID` неизменяем после сохранения (обеспечивается URL source of truth).
+
+## Synchronize contract
+
+```
+Input:
+    organization_id (из URL)
+    []Entity
+
+Rules:
+    - одна транзакция (all-or-nothing)
+    - дубликаты ID в запросе → ошибка, полный откат
+    - NilUUID запрещён → ошибка
+    - OrganizationID из URL, не из тела запроса
+    - UPDATE по (OrganizationID, ID)
+    - 0 rows → INSERT (upsert)
+    - Нет DELETE
+    - Нет deactivate
+    - Нет поиска по Name или другим полям
+```
+
+---
+
+# 12. Будущее развитие
 
 Архитектура должна позволять:
 

@@ -1,0 +1,46 @@
+{{define "header"}}
+<header class="app-header">
+	<div class="app-header__content">
+		<form method="post" action="/logout">
+			<button type="submit" class="outline secondary">Выход</button>
+		</form>
+	</div>
+</header>
+{{end}}
+
+{{define "content"}}
+<article class="page-card">
+	<h1 class="card-title">{{.Title}}</h1>
+
+	<form method="post" action="/organizations/{{.OrganizationID}}/customers">
+		<input id="id" name="id" type="hidden" value="{{.Customer.ID}}">
+
+		{{if .IsNew}}
+			{{if eq .Customer.OrganizationID "00000000-0000-0000-0000-000000000000"}}
+			<label for="organization_id">Организация</label>
+			<select id="organization_id" name="organization_id" required>
+				<option value="">Выберите организацию</option>
+				{{range .Orgs}}
+				<option value="{{.UUID}}"{{if eq .UUID $.Customer.OrganizationID}} selected{{end}}>{{.Name}}</option>
+				{{end}}
+			</select>
+			{{else}}
+			<input id="organization_id" name="organization_id" type="hidden" value="{{.Customer.OrganizationID}}">
+			{{end}}
+		{{else}}
+		<label for="organization_id">Организация</label>
+		<input id="organization_id" type="text" value="{{.Customer.OrganizationID}}" readonly disabled>
+		{{end}}
+
+		<label for="name">Наименование</label>
+		<input id="name" name="name" type="text" value="{{.Customer.Name}}" required>
+
+		<button type="submit">Сохранить</button>
+		{{if eq .OrganizationID "00000000-0000-0000-0000-000000000000"}}
+		<a href="/customers" role="button" class="outline">Назад</a>
+		{{else}}
+		<a href="/organizations/{{.OrganizationID}}/customers" role="button" class="outline">Назад</a>
+		{{end}}
+	</form>
+</article>
+{{end}}
