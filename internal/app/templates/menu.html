@@ -1,0 +1,8 @@
+{{define "content"}}
+<h1>Главное меню</h1>
+<nav class="main-menu">
+	{{range .Items}}
+	<a href="{{.Href}}" role="button" class="outline">{{.Text}}</a>
+	{{end}}
+</nav>
+{{end}}

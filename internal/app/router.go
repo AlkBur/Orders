@@ -53,6 +53,7 @@ func (a *App) NewRouter() *chi.Mux {
 			r.Use(RequirePassword)
 
 			r.Get("/orders", a.OrdersPage)
+			r.Get("/menu", a.MenuPage)
 		})
 	})
 
