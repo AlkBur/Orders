@@ -9,6 +9,12 @@ import (
 func (a *App) LoginPage(w http.ResponseWriter, r *http.Request) {
 	NoCache(w)
 
+	session := CurrentSession(r)
+	if session != nil && session.UserID != nil {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
 	page := pages.LoginPage{
 		Title: "Orders",
 	}

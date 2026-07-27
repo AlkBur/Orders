@@ -15,10 +15,6 @@ func (a *App) NewRouter() *chi.Mux {
 	r.Use(middleware.Recoverer)
 	r.Use(SessionMiddleware(a.sessions))
 
-	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/login", http.StatusFound)
-	})
-
 	r.Get("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
@@ -52,8 +48,8 @@ func (a *App) NewRouter() *chi.Mux {
 		r.Group(func(r chi.Router) {
 			r.Use(RequirePassword)
 
+			r.Get("/", a.MenuPage)
 			r.Get("/orders", a.OrdersPage)
-			r.Get("/menu", a.MenuPage)
 		})
 	})
 
