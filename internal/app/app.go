@@ -7,6 +7,7 @@ import (
 
 	"Orders/internal/customers"
 	"Orders/internal/database"
+	"Orders/internal/organizations"
 	"Orders/internal/sessions"
 	"Orders/internal/users"
 
@@ -20,10 +21,11 @@ type Integration struct {
 type App struct {
 	config *Config
 
-	db        *sql.DB
-	users     *users.Store
-	sessions  *sessions.Store
-	customers *customers.Store
+	db            *sql.DB
+	users         *users.Store
+	sessions      *sessions.Store
+	customers     *customers.Store
+	organizations *organizations.Store
 
 	router *chi.Mux
 	server *http.Server
@@ -57,13 +59,14 @@ func New(configPath string) (*App, error) {
 	}
 
 	app := &App{
-		config:       config,
-		db:           db,
-		users:        usersStore,
-		sessions:     sessionStore,
-		customers:    customers.NewStore(db),
-		templates:    make(map[string]*template.Template),
-		integrations: integrations,
+		config:        config,
+		db:            db,
+		users:         usersStore,
+		sessions:      sessionStore,
+		customers:     customers.NewStore(db),
+		organizations: organizations.NewStore(db),
+		templates:     make(map[string]*template.Template),
+		integrations:  integrations,
 	}
 
 	for _, page := range []string{
@@ -71,6 +74,7 @@ func New(configPath string) (*App, error) {
 		"orders",
 		"set-password",
 		"menu",
+		"organizations",
 	} {
 		tmpl, err := LoadTemplates(page)
 		if err != nil {

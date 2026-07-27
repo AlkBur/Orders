@@ -50,6 +50,7 @@ func (a *App) NewRouter() *chi.Mux {
 
 			r.Get("/", a.MenuPage)
 			r.Get("/orders", a.OrdersPage)
+			r.Get("/organizations", a.OrganizationsPage)
 		})
 	})
 
