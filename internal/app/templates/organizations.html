@@ -1,0 +1,44 @@
+{{define "header"}}
+<header class="app-header">
+	<div class="app-header__content">
+		<form method="post" action="/logout">
+			<button type="submit" class="outline secondary">Выход</button>
+		</form>
+	</div>
+</header>
+{{end}}
+
+{{define "content"}}
+<div class="list-header">
+	<h1>{{.Title}}</h1>
+	<a href="#" role="button" aria-disabled="true" class="disabled">Добавить</a>
+</div>
+
+<div class="list-table">
+	<table>
+		<thead>
+			<tr>
+				<th scope="col">Наименование</th>
+				<th scope="col">Статус</th>
+				<th scope="col" class="col-actions"></th>
+			</tr>
+		</thead>
+		<tbody>
+			{{range .Orgs}}
+			<tr>
+				<td>{{.Name}}</td>
+				<td>{{if .Active}}Активен{{else}}Неактивен{{end}}</td>
+				<td class="col-actions"><a href="#" aria-disabled="true" class="disabled">Открыть</a></td>
+			</tr>
+			{{else}}
+			<tr>
+				<td colspan="3">Нет организаций</td>
+			</tr>
+			{{end}}
+		</tbody>
+	</table>
+</div>
+
+<nav class="list-pagination">
+</nav>
+{{end}}

@@ -1,3 +1,3 @@
 package database
 
-const SchemaVersion = 3
+const SchemaVersion = 4

@@ -63,3 +63,34 @@ body {
 	width: auto;
 	margin-bottom: 0;
 }
+
+.list-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 1rem;
+}
+
+.list-header h1 {
+	margin-bottom: 0;
+}
+
+.list-table {
+	overflow-x: auto;
+}
+
+.col-actions {
+	text-align: right;
+	white-space: nowrap;
+}
+
+a.disabled,
+a[aria-disabled="true"] {
+	pointer-events: none;
+	opacity: 0.5;
+}
+
+.list-pagination {
+	margin-top: 1rem;
+	text-align: center;
+}
