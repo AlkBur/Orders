@@ -41,3 +41,25 @@ body {
 .card-title {
 	text-align: center;
 }
+
+.app-header {
+	padding: 0.5rem var(--pico-spacing, 1rem);
+	border-bottom: 1px solid var(--pico-muted-border-color, #e0e0e0);
+}
+
+.app-header__content {
+	max-width: var(--pico-container-max-width, 1024px);
+	margin: 0 auto;
+	display: flex;
+	justify-content: flex-end;
+	align-items: center;
+}
+
+.app-header form {
+	margin-bottom: 0;
+}
+
+.app-header button {
+	width: auto;
+	margin-bottom: 0;
+}

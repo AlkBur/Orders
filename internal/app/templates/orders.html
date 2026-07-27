@@ -1,3 +1,12 @@
+{{define "header"}}
+<header class="app-header">
+	<div class="app-header__content">
+		<form method="post" action="/logout">
+			<button type="submit" class="outline secondary">Выход</button>
+		</form>
+	</div>
+</header>
+{{end}}
 {{ define "content" }}
 
 <h1>Orders Server (Commit 9 — Login)</h1>
