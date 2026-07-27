@@ -70,6 +70,7 @@ func New(configPath string) (*App, error) {
 		"login",
 		"orders",
 		"set-password",
+		"menu",
 	} {
 		tmpl, err := LoadTemplates(page)
 		if err != nil {
