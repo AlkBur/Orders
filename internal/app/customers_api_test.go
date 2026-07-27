@@ -37,7 +37,7 @@ func scanCustomer(rows *sql.Rows) (CustomerTableRow, error) {
 }
 
 func TestCustomersAPI(t *testing.T) {
-	db := testutil.NewTestDB(t)
+	db := testutil.NewTestDB(t, NewSchema())
 	app := &App{
 		customers:    customers.NewStore(db),
 		integrations: map[string]*Integration{"test-key": {Name: "Test"}},

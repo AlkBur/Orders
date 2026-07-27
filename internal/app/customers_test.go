@@ -67,7 +67,7 @@ func TestHandlePutCustomers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			db := testutil.NewTestDB(t)
+			db := testutil.NewTestDB(t, NewSchema())
 			app := &App{
 				customers: customers.NewStore(db),
 			}

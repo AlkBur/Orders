@@ -45,6 +45,12 @@ func New(configPath string) (*App, error) {
 		return nil, err
 	}
 
+	schema := NewSchema()
+	if err := schema.RunMigrations(db); err != nil {
+		db.Close()
+		return nil, err
+	}
+
 	usersStore := users.NewStore(db)
 
 	if err := users.Seed(usersStore); err != nil {

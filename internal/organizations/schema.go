@@ -1,26 +1,12 @@
 package organizations
 
-import (
-	"database/sql"
+import "Orders/internal/database"
 
-	"Orders/internal/database"
-)
-
-func init() {
-	database.RegisterSchema(InitSchema)
-}
-
-func InitSchema(db *sql.DB) error {
-	const query = `
-CREATE TABLE IF NOT EXISTS organizations (
-    uuid         TEXT PRIMARY KEY,
-    name         TEXT NOT NULL,
-    api_key      TEXT NOT NULL UNIQUE,
-    active       BOOLEAN NOT NULL DEFAULT 1,
-    created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-`
-	_, err := db.Exec(query)
-	return err
-}
+var Table = database.Must(database.NewTable("organizations",
+	database.String("uuid").PrimaryKey(),
+	database.String("name").NotNull(),
+	database.String("api_key").NotNull().Unique(),
+	database.Bool("active").NotNull().Default(true),
+	database.DateTime("created_at").NotNull().Default("CURRENT_TIMESTAMP"),
+	database.DateTime("updated_at").NotNull().Default("CURRENT_TIMESTAMP"),
+))

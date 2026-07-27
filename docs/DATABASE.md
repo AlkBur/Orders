@@ -1,6 +1,6 @@
 # Orders Server — Структура базы данных
 
-Версия: 0.2
+Версия: 0.3
 
 ---
 
@@ -42,7 +42,61 @@
 
 ---
 
-# 3. База данных base.db
+# 3. Schema Builder и миграции
+
+Схема базы данных описывается декларативно в Go с помощью Schema Builder.
+
+Каждый доменный пакет определяет свою таблицу:
+
+```go
+var Table = database.Must(database.NewTable("organizations",
+    database.String("uuid").PrimaryKey(),
+    database.String("name").NotNull(),
+    database.String("api_key").NotNull().Unique(),
+    database.Bool("active").NotNull().Default(true),
+    database.DateTime("created_at").NotNull().Default("CURRENT_TIMESTAMP"),
+    database.DateTime("updated_at").NotNull().Default("CURRENT_TIMESTAMP"),
+))
+```
+
+При запуске приложения:
+
+```go
+schema := database.NewSchema()
+schema.Register(users.Table)
+schema.Register(sessions.Table)
+
+db, err := database.OpenPath(config.DatabasePath)
+schema.RunMigrations(db)
+```
+
+## Сценарии RunMigrations
+
+| Состояние | Действие |
+|-----------|----------|
+| Новая БД (v=0) | CREATE TABLE из описаний, запись v=1 |
+| Старая система (v=1..4) | Одноразовый transition |
+| v == code version | Ничего |
+| v < code version | Выполнить недостающие миграции по порядку |
+| v > code version | Ошибка (БД новее кода) |
+
+## Служебная таблица system_info
+
+```sql
+key   TEXT PRIMARY KEY
+value TEXT NOT NULL
+```
+
+Хранит одну запись:
+
+```
+key = 'schema_version'
+value = '1'
+```
+
+---
+
+# 4. База данных base.db
 
 ## Таблица Users
 
@@ -132,7 +186,7 @@
 
 ---
 
-# 4. База данных files.db
+# 5. База данных files.db
 
 ## Таблица OrderFiles
 
@@ -153,7 +207,7 @@
 
 ---
 
-# 5. Статусы документов
+# 6. Статусы документов
 
 | Код | Статус |
 |------|---------|
@@ -164,7 +218,7 @@
 
 ---
 
-# 6. Связи
+# 7. Связи
 
 ## base.db
 
@@ -189,7 +243,7 @@ OrderFiles
 
 ---
 
-# 7. Правила хранения данных
+# 8. Правила хранения данных
 
 Контрагенты и товары синхронизируются только через API.
 
@@ -199,7 +253,7 @@ OrderFiles
 
 ---
 
-# 8. Правила хранения PDF
+# 9. Правила хранения PDF
 
 PDF-файлы сохраняются только в базе данных `files.db`.
 
@@ -213,7 +267,7 @@ PDF-файлы сохраняются только в базе данных `fil
 
 ---
 
-# 9. Резервное копирование
+# 10. Резервное копирование
 
 Для полного резервного копирования приложения необходимо сохранить:
 

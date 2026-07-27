@@ -158,6 +158,81 @@ Keep SQL readable.
 
 Avoid ORMs.
 
+## Schema Builder
+
+Tables are described declaratively in Go using the Schema Builder,
+not SQL files. Each domain package defines its own `Table`:
+
+```go
+var Table = database.Must(database.NewTable("users",
+    database.Int("id").PrimaryKey().AutoIncrement(),
+    database.String("login").NotNull().Unique(),
+    database.String("password_hash").NotNull().Default(""),
+    database.Bool("is_admin").NotNull().Default(false),
+    database.DateTime("created_at").NotNull().Default("CURRENT_TIMESTAMP"),
+    database.DateTime("updated_at").NotNull().Default("CURRENT_TIMESTAMP"),
+))
+```
+
+Column types are logical (string, int, bool, datetime), not SQL-specific.
+The `CreateSQL()` method maps them to SQLite types at generation time.
+
+### Rules
+
+- `Table` is the single source of truth for the target schema.
+- Business structs (`User`, `Organization`) must NOT know about the database.
+- No struct tags, no init(), no global state, no ORM.
+- `NewTable()` validates the schema at startup (panic via `Must()` on error).
+- New databases are created directly from `Table` descriptions
+  (no migration replay).
+
+## Migrations
+
+All migrations live in `internal/database/migrations.go` as a single list:
+
+```go
+var _ = RegisterMigrations // ensure import
+
+func RegisterMigrations(s *database.Schema) {
+    s.AddMigration(database.Migration{
+        Version: 2,
+        Name:    "Add column x to items",
+        Up: func(ctx context.Context, tx *sql.Tx) error {
+            _, err := tx.ExecContext(ctx, "ALTER TABLE items ADD COLUMN x INTEGER")
+            return err
+        },
+    })
+}
+```
+
+### Rules
+
+- Migrations are append-only. Never edit or delete existing entries.
+- Never change version numbers.
+- Never insert a migration between existing ones.
+- Version 1 is always the initial schema created by the Builder.
+  New migrations start at version 2.
+- Each migration runs in its own transaction.
+- If a migration fails, the transaction rolls back and version does not advance.
+- Gaps or duplicate versions cause a startup error.
+
+## Startup Flow
+
+```
+app.New():
+    1. database.NewSchema()
+    2. schema.Register(domain.Table) for each domain
+    3. database.OpenPath()          — opens SQLite file
+    4. schema.RunMigrations(db)     — creates or updates schema
+
+RunMigrations:
+    ├─ fresh DB (version 0)     → CREATE TABLE from Table descriptions
+    ├─ old system (version 1-4)  → one-time transition
+    ├─ up to date                → nothing
+    ├─ behind                    → apply pending migrations in order
+    └─ DB ahead of code          → error
+```
+
 ---
 
 # Authentication

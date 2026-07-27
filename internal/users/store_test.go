@@ -5,11 +5,21 @@ import (
 	"errors"
 	"testing"
 
+	"Orders/internal/database"
 	"Orders/internal/testutil"
 )
 
+func testDB(t *testing.T) *sql.DB {
+	t.Helper()
+	schema := database.NewSchema()
+	if err := schema.Register(Table); err != nil {
+		t.Fatalf("register table: %v", err)
+	}
+	return testutil.NewTestDB(t, schema)
+}
+
 func TestStore_CreateAndFindByLogin(t *testing.T) {
-	db := testutil.NewTestDB(t)
+	db := testDB(t)
 	store := NewStore(db)
 
 	user := &User{
@@ -49,7 +59,7 @@ func TestStore_CreateAndFindByLogin(t *testing.T) {
 }
 
 func TestStore_FindByLogin_NotFound(t *testing.T) {
-	db := testutil.NewTestDB(t)
+	db := testDB(t)
 	store := NewStore(db)
 
 	_, err := store.FindByLogin("unknown")
@@ -60,7 +70,7 @@ func TestStore_FindByLogin_NotFound(t *testing.T) {
 }
 
 func TestStore_FindAdmin(t *testing.T) {
-	db := testutil.NewTestDB(t)
+	db := testDB(t)
 	store := NewStore(db)
 
 	admin := &User{
@@ -91,7 +101,7 @@ func TestStore_FindAdmin(t *testing.T) {
 }
 
 func TestStore_FindAdmin_NotFound(t *testing.T) {
-	db := testutil.NewTestDB(t)
+	db := testDB(t)
 	store := NewStore(db)
 
 	_, err := store.FindAdmin()

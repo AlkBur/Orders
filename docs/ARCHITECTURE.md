@@ -167,11 +167,23 @@ Go Application
 
 ```
 cmd/
+    server/       — точка входа
 internal/
-web/
-uploads/
-migrations/
+    app/          — composition root (сборка приложения)
+    database/     — Schema Builder, миграции, OpenPath
+    users/        — домен пользователей
+    sessions/     — домен сессий
+    customers/    — домен контрагентов
+    organizations/ — домен организаций
+    ui/           — UI-компоненты
+    testutil/     — утилиты для тестов
+data/             — SQLite базы данных
+docs/             — документация
+static/           — статические файлы (CSS, JS)
 ```
+
+Единственным источником истины для структуры БД является
+`internal/database/` — Schema Builder и миграции.
 
 ---
 
