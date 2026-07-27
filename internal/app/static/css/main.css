@@ -15,7 +15,29 @@ body {
 	padding: 1rem;
 }
 
-.login-card {
-	max-width: 420px;
+.page-card {
+	max-width: var(--page-card-width, 420px);
 	margin: 0 auto;
+}
+
+:root {
+	--page-card-width: 420px;
+}
+
+.main-menu {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+
+.centered-page {
+	min-height: 100vh;
+	min-height: 100dvh;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.card-title {
+	text-align: center;
 }

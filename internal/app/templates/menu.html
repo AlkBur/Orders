@@ -1,8 +1,10 @@
 {{define "content"}}
-<h1>Главное меню</h1>
-<nav class="main-menu">
-	{{range .Items}}
-	<a href="{{.Href}}" role="button" class="outline">{{.Text}}</a>
-	{{end}}
-</nav>
+<article class="page-card">
+	<h1 class="card-title">Главное меню</h1>
+	<nav class="main-menu">
+		{{range .Items}}
+		<a href="{{.Href}}" role="button" class="outline">{{.Text}}</a>
+		{{end}}
+	</nav>
+</article>
 {{end}}
