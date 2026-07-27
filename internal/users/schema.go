@@ -1,30 +1,12 @@
 package users
 
-import (
-	"database/sql"
+import "Orders/internal/database"
 
-	"Orders/internal/database"
-)
-
-func init() {
-	database.RegisterSchema(InitSchema)
-}
-
-func InitSchema(db *sql.DB) error {
-	const query = `
-CREATE TABLE IF NOT EXISTS users (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-
-    login           TEXT NOT NULL UNIQUE,
-    password_hash   TEXT NOT NULL DEFAULT '',
-
-    is_admin        INTEGER NOT NULL DEFAULT 0,
-
-    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-`
-
-	_, err := db.Exec(query)
-	return err
-}
+var Table = database.Must(database.NewTable("users",
+	database.Int("id").PrimaryKey().AutoIncrement(),
+	database.String("login").NotNull().Unique(),
+	database.String("password_hash").NotNull().Default(""),
+	database.Bool("is_admin").NotNull().Default(false),
+	database.DateTime("created_at").NotNull().Default("CURRENT_TIMESTAMP"),
+	database.DateTime("updated_at").NotNull().Default("CURRENT_TIMESTAMP"),
+))

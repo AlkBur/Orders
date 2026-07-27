@@ -2,13 +2,24 @@ package customers
 
 import (
 	"context"
+	"database/sql"
 	"testing"
 
+	"Orders/internal/database"
 	"Orders/internal/testutil"
 )
 
+func testDB(t *testing.T) *sql.DB {
+	t.Helper()
+	schema := database.NewSchema()
+	if err := schema.Register(Table); err != nil {
+		t.Fatalf("register table: %v", err)
+	}
+	return testutil.NewTestDB(t, schema)
+}
+
 func TestSynchronize_EmptyList_EmptyDB(t *testing.T) {
-	db := testutil.NewTestDB(t)
+	db := testDB(t)
 	store := NewStore(db)
 
 	result, err := store.Synchronize(context.Background(), nil)
@@ -28,7 +39,7 @@ func TestSynchronize_EmptyList_EmptyDB(t *testing.T) {
 }
 
 func TestSynchronize_FirstSync(t *testing.T) {
-	db := testutil.NewTestDB(t)
+	db := testDB(t)
 	store := NewStore(db)
 
 	items := []CustomerSnapshot{
@@ -53,7 +64,7 @@ func TestSynchronize_FirstSync(t *testing.T) {
 }
 
 func TestSynchronize_Idempotent(t *testing.T) {
-	db := testutil.NewTestDB(t)
+	db := testDB(t)
 	store := NewStore(db)
 
 	items := []CustomerSnapshot{
@@ -82,7 +93,7 @@ func TestSynchronize_Idempotent(t *testing.T) {
 }
 
 func TestSynchronize_UpdateName(t *testing.T) {
-	db := testutil.NewTestDB(t)
+	db := testDB(t)
 	store := NewStore(db)
 
 	if _, err := store.Synchronize(context.Background(), []CustomerSnapshot{
@@ -110,7 +121,7 @@ func TestSynchronize_UpdateName(t *testing.T) {
 }
 
 func TestSynchronize_Deactivate(t *testing.T) {
-	db := testutil.NewTestDB(t)
+	db := testDB(t)
 	store := NewStore(db)
 
 	if _, err := store.Synchronize(context.Background(), []CustomerSnapshot{
@@ -139,7 +150,7 @@ func TestSynchronize_Deactivate(t *testing.T) {
 }
 
 func TestSynchronize_Reactivate(t *testing.T) {
-	db := testutil.NewTestDB(t)
+	db := testDB(t)
 	store := NewStore(db)
 
 	if _, err := store.Synchronize(context.Background(), []CustomerSnapshot{
@@ -175,7 +186,7 @@ func TestSynchronize_Reactivate(t *testing.T) {
 }
 
 func TestSynchronize_Combined(t *testing.T) {
-	db := testutil.NewTestDB(t)
+	db := testDB(t)
 	store := NewStore(db)
 
 	if _, err := store.Synchronize(context.Background(), []CustomerSnapshot{
