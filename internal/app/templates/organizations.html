@@ -11,7 +11,9 @@
 {{define "content"}}
 <div class="list-header">
 	<h1>{{.Title}}</h1>
-	<a href="#" role="button" aria-disabled="true" class="disabled">Добавить</a>
+	<div class="toolbar">
+		<a href="#" role="button" aria-disabled="true" class="disabled">Добавить</a>
+	</div>
 </div>
 
 <div class="list-table">
@@ -38,7 +40,4 @@
 		</tbody>
 	</table>
 </div>
-
-<nav class="list-pagination">
-</nav>
 {{end}}

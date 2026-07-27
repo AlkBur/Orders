@@ -79,6 +79,18 @@ body {
 	overflow-x: auto;
 }
 
+.toolbar {
+	display: flex;
+	gap: .5rem;
+	align-items: center;
+}
+
+.toolbar a[role="button"],
+.toolbar button {
+	width: auto;
+	flex: 0 0 auto;
+}
+
 .col-actions {
 	text-align: right;
 	white-space: nowrap;
@@ -88,9 +100,4 @@ a.disabled,
 a[aria-disabled="true"] {
 	pointer-events: none;
 	opacity: 0.5;
-}
-
-.list-pagination {
-	margin-top: 1rem;
-	text-align: center;
 }

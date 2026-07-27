@@ -71,5 +71,5 @@ func (app *App) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, "/menu", http.StatusSeeOther)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
