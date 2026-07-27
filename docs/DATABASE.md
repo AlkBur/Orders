@@ -123,11 +123,16 @@ value = '1'
 
 | Поле | Тип | Описание |
 |------|-----|----------|
-| uuid | TEXT | UUID |
+| organization_id | TEXT | UUID организации (часть составного PK) |
+| id | TEXT | UUID объекта (часть составного PK). Для 1С — UUID из 1С, для UI — сгенерированный Orders |
 | name | TEXT | Наименование на текущий момент |
 | active | BOOLEAN | Активный |
 | created_at | DATETIME | Создан |
 | updated_at | DATETIME | Изменен |
+
+Первичный ключ: `PRIMARY KEY (organization_id, id)`.
+Объект идентифицируется парой `(OrganizationID, ID)`. Один и тот же UUID
+может существовать в разных организациях как независимые записи.
 
 ---
 

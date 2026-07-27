@@ -33,7 +33,9 @@ func (a *App) NewRouter() *chi.Mux {
 	// Integration API — обмен между системами
 	r.Route("/api/integration", func(r chi.Router) {
 		r.Use(a.RequireIntegration)
-		r.Put("/customers", a.HandlePutCustomers)
+		r.Route("/organizations/{oid}", func(r chi.Router) {
+			r.Put("/customers", a.HandlePutCustomers)
+		})
 	})
 
 	r.Group(func(r chi.Router) {
@@ -50,6 +52,23 @@ func (a *App) NewRouter() *chi.Mux {
 
 			r.Get("/", a.MenuPage)
 			r.Get("/orders", a.OrdersPage)
+
+			// Customers — глобальный список (admin)
+			r.Get("/customers", a.CustomersPage)
+
+			// Customers — организационный контекст
+			r.Route("/organizations/{oid}/customers", func(r chi.Router) {
+				r.Get("/", a.CustomersPage)
+				r.Get("/{id}", a.CustomerCard)
+
+				r.Group(func(r chi.Router) {
+					r.Use(RequireAdmin)
+					r.Post("/", a.CustomerSave)
+					r.Delete("/{id}", a.CustomerDelete)
+				})
+			})
+
+			// Organizations
 			r.Get("/organizations", a.OrganizationsPage)
 			r.Get("/organizations/new", a.OrganizationCard)
 			r.Post("/organizations", a.OrganizationSave)

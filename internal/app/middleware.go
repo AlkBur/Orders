@@ -82,6 +82,17 @@ func RequireAuth(store *sessions.Store, usersStore *users.Store, next http.Handl
 	})
 }
 
+func RequireAdmin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user := CurrentUser(r)
+		if user == nil || !user.IsAdmin {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func RequirePassword(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		user := CurrentUser(r)

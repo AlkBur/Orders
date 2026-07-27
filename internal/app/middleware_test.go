@@ -1,9 +1,12 @@
 package app
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"Orders/internal/users"
 )
 
 func okHandler(w http.ResponseWriter, r *http.Request) {
@@ -71,6 +74,50 @@ func TestRequireIntegration(t *testing.T) {
 				if integration.Name != tt.wantName {
 					t.Fatalf("expected integration name %q, got %q", tt.wantName, integration.Name)
 				}
+			}
+		})
+	}
+}
+
+func TestRequireAdmin(t *testing.T) {
+	tests := []struct {
+		name       string
+		user       *users.User
+		wantStatus int
+	}{
+		{
+			name:       "NoUser",
+			user:       nil,
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name:       "NonAdminUser",
+			user:       &users.User{ID: 1, Login: "user", IsAdmin: false},
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name:       "AdminUser",
+			user:       &users.User{ID: 2, Login: "admin", IsAdmin: true},
+			wantStatus: http.StatusOK,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := RequireAdmin(http.HandlerFunc(okHandler))
+
+			w := httptest.NewRecorder()
+			r := httptest.NewRequest(http.MethodGet, "/customers", nil)
+
+			if tt.user != nil {
+				ctx := context.WithValue(r.Context(), userContextKey, tt.user)
+				r = r.WithContext(ctx)
+			}
+
+			handler.ServeHTTP(w, r)
+
+			if w.Code != tt.wantStatus {
+				t.Fatalf("expected status %d, got %d", tt.wantStatus, w.Code)
 			}
 		})
 	}
