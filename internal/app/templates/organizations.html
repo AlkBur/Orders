@@ -12,7 +12,7 @@
 <div class="list-header">
 	<h1>{{.Title}}</h1>
 	<div class="toolbar">
-		<a href="#" role="button" aria-disabled="true" class="disabled">Добавить</a>
+		<a href="/organizations/new" role="button">Добавить</a>
 	</div>
 </div>
 
@@ -30,7 +30,7 @@
 			<tr>
 				<td>{{.Name}}</td>
 				<td>{{if .Active}}Активен{{else}}Неактивен{{end}}</td>
-				<td class="col-actions"><a href="#" aria-disabled="true" class="disabled">Открыть</a></td>
+				<td class="col-actions"><a href="/organizations/{{.UUID}}">Изменить</a></td>
 			</tr>
 			{{else}}
 			<tr>

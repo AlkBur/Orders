@@ -75,6 +75,7 @@ func New(configPath string) (*App, error) {
 		"set-password",
 		"menu",
 		"organizations",
+		"organization_card",
 	} {
 		tmpl, err := LoadTemplates(page)
 		if err != nil {
