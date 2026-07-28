@@ -243,7 +243,7 @@ PDF-файлы                    | Внешняя система
 
 **Организация является корнем бизнес-модели Orders.** Все бизнес-объекты
 (справочники, документы и регистры) существуют в контексте организации
-и адресуются через маршрут `/organizations/{organization_id}/...`.
+и адресуются через маршрут `/organizations/{oid}/...`.
 
 **Идентификация:** Объект идентифицируется парой `(OrganizationID, ID)`.
 Составной первичный ключ. Никаких суррогатных ключей и ExternalID.
@@ -263,7 +263,7 @@ oid == NilUUID (создание из глобального списка).
 1. **Глобальный (администратор):** `GET /{resource}` — read-only список
    всех объектов. Создание через `/organizations/NilUUID/{resource}/NilUUID`.
 2. **Контекст организации (authenticated):** все мутации через
-   `/organizations/{organization_id}/{resource}`.
+   `/organizations/{oid}/{resource}`.
 
 **Права доступа:**
 
@@ -321,7 +321,7 @@ Customers — эталонная реализация данного шабло�
 
 ```
 Input:
-    organization_id (из URL)
+    oid (из URL)
     []Entity
 
 Rules:
