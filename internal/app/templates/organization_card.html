@@ -3,9 +3,11 @@
 <article class="page-card">
 	<h1 class="card-title">{{.Title}}</h1>
 
-	<form method="post" action="/organizations">
-		<label for="uuid">UUID</label>
-		<input id="uuid" name="uuid" type="text" value="{{.Org.UUID}}" required>
+	<form method="post" action="/organizations/{{.Org.UUID}}">
+		{{if not .IsNew}}
+		<label for="id">ID</label>
+		<input id="id" type="text" value="{{.Org.UUID}}" readonly disabled>
+		{{end}}
 
 		<label for="name">Наименование</label>
 		<input id="name" name="name" type="text" value="{{.Org.Name}}" required>

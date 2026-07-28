@@ -70,9 +70,8 @@ func (a *App) NewRouter() *chi.Mux {
 
 			// Organizations
 			r.Get("/organizations", a.OrganizationsPage)
-			r.Get("/organizations/new", a.OrganizationCard)
-			r.Post("/organizations", a.OrganizationSave)
-			r.Get("/organizations/{uuid}", a.OrganizationCard)
+			r.Get("/organizations/{id}", a.OrganizationCard)
+			r.Post("/organizations/{id}", a.OrganizationSave)
 		})
 	})
 

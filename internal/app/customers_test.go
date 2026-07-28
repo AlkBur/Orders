@@ -14,19 +14,10 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func insertOrg(t *testing.T, orgs *organizations.Store, id, name string) {
-	t.Helper()
-	if err := orgs.Save(context.Background(), &organizations.Organization{
-		UUID: id, Name: name, APIKey: "key_" + id,
-	}); err != nil {
-		t.Fatalf("insert org %s: %v", id, err)
-	}
-}
-
 func TestCustomersPage_Global(t *testing.T) {
 	db := testutil.NewTestDB(t, NewSchema())
 	orgs := organizations.NewStore(db)
-	insertOrg(t, orgs, "org1", "Org One")
+	insertOrg(t, db, "org1", "Org One", "key_org1")
 
 	app := &App{
 		customers:     customers.NewStore(db),
@@ -46,7 +37,7 @@ func TestCustomersPage_Global(t *testing.T) {
 func TestCustomersPage_Org(t *testing.T) {
 	db := testutil.NewTestDB(t, NewSchema())
 	orgs := organizations.NewStore(db)
-	insertOrg(t, orgs, "org1", "Org One")
+	insertOrg(t, db, "org1", "Org One", "key_org1")
 
 	app := &App{
 		customers:     customers.NewStore(db),
@@ -77,7 +68,7 @@ func TestCustomersPage_Org(t *testing.T) {
 func TestCustomerCard_NewFromGlobal(t *testing.T) {
 	db := testutil.NewTestDB(t, NewSchema())
 	orgs := organizations.NewStore(db)
-	insertOrg(t, orgs, "org1", "Org One")
+	insertOrg(t, db, "org1", "Org One", "key_org1")
 
 	app := &App{
 		customers:     customers.NewStore(db),
@@ -102,7 +93,7 @@ func TestCustomerCard_NewFromGlobal(t *testing.T) {
 func TestCustomerCard_NewInOrg(t *testing.T) {
 	db := testutil.NewTestDB(t, NewSchema())
 	orgs := organizations.NewStore(db)
-	insertOrg(t, orgs, "org1", "Org One")
+	insertOrg(t, db, "org1", "Org One", "key_org1")
 
 	app := &App{
 		customers:     customers.NewStore(db),
@@ -127,7 +118,7 @@ func TestCustomerCard_NewInOrg(t *testing.T) {
 func TestCustomerCard_Edit(t *testing.T) {
 	db := testutil.NewTestDB(t, NewSchema())
 	orgs := organizations.NewStore(db)
-	insertOrg(t, orgs, "org1", "Org One")
+	insertOrg(t, db, "org1", "Org One", "key_org1")
 
 	app := &App{
 		customers:     customers.NewStore(db),
@@ -183,7 +174,7 @@ func TestCustomerCard_NotFound(t *testing.T) {
 func TestCustomerSave_Create(t *testing.T) {
 	db := testutil.NewTestDB(t, NewSchema())
 	orgs := organizations.NewStore(db)
-	insertOrg(t, orgs, "org1", "Org One")
+	insertOrg(t, db, "org1", "Org One", "key_org1")
 
 	app := &App{
 		customers:     customers.NewStore(db),
@@ -218,7 +209,7 @@ func TestCustomerSave_Create(t *testing.T) {
 func TestCustomerSave_Update(t *testing.T) {
 	db := testutil.NewTestDB(t, NewSchema())
 	orgs := organizations.NewStore(db)
-	insertOrg(t, orgs, "org1", "Org One")
+	insertOrg(t, db, "org1", "Org One", "key_org1")
 
 	app := &App{
 		customers:     customers.NewStore(db),
@@ -257,7 +248,7 @@ func TestCustomerSave_Update(t *testing.T) {
 func TestCustomerDelete(t *testing.T) {
 	db := testutil.NewTestDB(t, NewSchema())
 	orgs := organizations.NewStore(db)
-	insertOrg(t, orgs, "org1", "Org One")
+	insertOrg(t, db, "org1", "Org One", "key_org1")
 
 	app := &App{
 		customers:     customers.NewStore(db),
