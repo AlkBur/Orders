@@ -34,6 +34,7 @@ func (a *App) NewRouter() *chi.Mux {
 	r.Route("/api/integration/organizations/{oid}", func(r chi.Router) {
 		r.Use(a.RequireOrganizationAPIKey)
 		r.Put("/customers", a.HandlePutCustomers)
+		r.Put("/products", a.HandlePutProducts)
 	})
 
 	r.Group(func(r chi.Router) {
@@ -63,6 +64,21 @@ func (a *App) NewRouter() *chi.Mux {
 					r.Use(RequireAdmin)
 					r.Post("/", a.CustomerSave)
 					r.Delete("/{id}", a.CustomerDelete)
+				})
+			})
+
+			// Products — глобальный список (admin)
+			r.Get("/products", a.ProductsPage)
+
+			// Products — организационный контекст
+			r.Route("/organizations/{oid}/products", func(r chi.Router) {
+				r.Get("/", a.ProductsPage)
+				r.Get("/{id}", a.ProductCard)
+
+				r.Group(func(r chi.Router) {
+					r.Use(RequireAdmin)
+					r.Post("/", a.ProductSave)
+					r.Delete("/{id}", a.ProductDelete)
 				})
 			})
 

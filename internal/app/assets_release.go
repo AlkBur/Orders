@@ -23,6 +23,14 @@ func LoadTemplates(page string) (*template.Template, error) {
 		)
 	}
 
+	if page == "products" {
+		return template.ParseFS(
+			templatesFS,
+			"templates/layout.html",
+			"templates/list.html",
+		)
+	}
+
 	content := "templates/" + page + ".html"
 
 	return template.ParseFS(

@@ -7,6 +7,7 @@ import (
 	"Orders/internal/customers"
 	"Orders/internal/database"
 	"Orders/internal/organizations"
+	"Orders/internal/products"
 	"Orders/internal/sessions"
 	"Orders/internal/users"
 )
@@ -24,6 +25,9 @@ func NewSchema() *database.Schema {
 		panic(err)
 	}
 	if err := s.Register(organizations.Table); err != nil {
+		panic(err)
+	}
+	if err := s.Register(products.Table); err != nil {
 		panic(err)
 	}
 
@@ -44,6 +48,17 @@ func registerMigrations(s *database.Schema) {
 				return err
 			}
 			if _, err := tx.ExecContext(ctx, customers.Table.CreateSQL()); err != nil {
+				return err
+			}
+			return nil
+		},
+	})
+
+	s.AddMigration(database.Migration{
+		Version: 3,
+		Name:    "Add products table",
+		Up: func(ctx context.Context, tx *sql.Tx) error {
+			if _, err := tx.ExecContext(ctx, products.Table.CreateSQL()); err != nil {
 				return err
 			}
 			return nil
