@@ -22,7 +22,7 @@ func TestCustomersPage_Global(t *testing.T) {
 	app := &App{
 		customers:     customers.NewStore(db),
 		organizations: orgs,
-		integrations:  map[string]*Integration{"test-key": {Name: "Test"}},
+		orgKeys:       map[string]string{"org1": "key_org1"},
 	}
 
 	w := httptest.NewRecorder()
@@ -42,7 +42,7 @@ func TestCustomersPage_Org(t *testing.T) {
 	app := &App{
 		customers:     customers.NewStore(db),
 		organizations: orgs,
-		integrations:  map[string]*Integration{"test-key": {Name: "Test"}},
+		orgKeys:       map[string]string{"org1": "key_org1"},
 	}
 
 	c := app.customers.New()
@@ -73,7 +73,7 @@ func TestCustomerCard_NewFromGlobal(t *testing.T) {
 	app := &App{
 		customers:     customers.NewStore(db),
 		organizations: orgs,
-		integrations:  map[string]*Integration{"test-key": {Name: "Test"}},
+		orgKeys:       map[string]string{"org1": "key_org1"},
 	}
 
 	w := httptest.NewRecorder()
@@ -98,7 +98,7 @@ func TestCustomerCard_NewInOrg(t *testing.T) {
 	app := &App{
 		customers:     customers.NewStore(db),
 		organizations: orgs,
-		integrations:  map[string]*Integration{"test-key": {Name: "Test"}},
+		orgKeys:       map[string]string{"org1": "key_org1"},
 	}
 
 	w := httptest.NewRecorder()
@@ -123,7 +123,7 @@ func TestCustomerCard_Edit(t *testing.T) {
 	app := &App{
 		customers:     customers.NewStore(db),
 		organizations: orgs,
-		integrations:  map[string]*Integration{"test-key": {Name: "Test"}},
+		orgKeys:       map[string]string{"org1": "key_org1"},
 	}
 
 	c := app.customers.New()
@@ -154,7 +154,7 @@ func TestCustomerCard_NotFound(t *testing.T) {
 	app := &App{
 		customers:     customers.NewStore(db),
 		organizations: orgs,
-		integrations:  map[string]*Integration{"test-key": {Name: "Test"}},
+		orgKeys:       map[string]string{"org1": "key_org1"},
 	}
 
 	w := httptest.NewRecorder()
@@ -179,7 +179,7 @@ func TestCustomerSave_Create(t *testing.T) {
 	app := &App{
 		customers:     customers.NewStore(db),
 		organizations: orgs,
-		integrations:  map[string]*Integration{"test-key": {Name: "Test"}},
+		orgKeys:       map[string]string{"org1": "key_org1"},
 	}
 
 	body := `name=New+Customer&id=00000000-0000-0000-0000-000000000000`
@@ -214,7 +214,7 @@ func TestCustomerSave_Update(t *testing.T) {
 	app := &App{
 		customers:     customers.NewStore(db),
 		organizations: orgs,
-		integrations:  map[string]*Integration{"test-key": {Name: "Test"}},
+		orgKeys:       map[string]string{"org1": "key_org1"},
 	}
 
 	c := app.customers.New()
@@ -253,7 +253,7 @@ func TestCustomerDelete(t *testing.T) {
 	app := &App{
 		customers:     customers.NewStore(db),
 		organizations: orgs,
-		integrations:  map[string]*Integration{"test-key": {Name: "Test"}},
+		orgKeys:       map[string]string{"org1": "key_org1"},
 	}
 
 	c := app.customers.New()

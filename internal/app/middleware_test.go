@@ -7,73 +7,77 @@ import (
 	"testing"
 
 	"Orders/internal/users"
+
+	"github.com/go-chi/chi/v5"
 )
 
 func okHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func TestRequireIntegration(t *testing.T) {
+func TestRequireOrganizationAPIKey(t *testing.T) {
 	app := &App{
-		integrations: map[string]*Integration{
-			"test-key": {Name: "Test"},
+		orgKeys: map[string]string{
+			"org1": "valid-key",
 		},
 	}
 
 	tests := []struct {
 		name       string
+		oid        string
 		apiKey     string
 		wantStatus int
-		wantName   string
 	}{
 		{
 			name:       "NoKey",
+			oid:        "org1",
 			apiKey:     "",
 			wantStatus: http.StatusUnauthorized,
-			wantName:   "",
 		},
 		{
 			name:       "WrongKey",
+			oid:        "org1",
 			apiKey:     "wrong",
 			wantStatus: http.StatusUnauthorized,
-			wantName:   "",
 		},
 		{
 			name:       "ValidKey",
-			apiKey:     "test-key",
+			oid:        "org1",
+			apiKey:     "valid-key",
 			wantStatus: http.StatusOK,
-			wantName:   "Test",
+		},
+		{
+			name:       "UnknownOrg",
+			oid:        "nonexistent",
+			apiKey:     "valid-key",
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name:       "EmptyOID",
+			oid:        "",
+			apiKey:     "valid-key",
+			wantStatus: http.StatusUnauthorized,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var gotRequest *http.Request
-
-			handler := app.RequireIntegration(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				gotRequest = r
-				w.WriteHeader(http.StatusOK)
-			}))
+			handler := app.RequireOrganizationAPIKey(http.HandlerFunc(okHandler))
 
 			w := httptest.NewRecorder()
-			r := httptest.NewRequest(http.MethodPut, "/api/integration/customers", nil)
+			r := httptest.NewRequest(http.MethodPut, "/api/integration/organizations/"+tt.oid+"/customers", nil)
 			if tt.apiKey != "" {
 				r.Header.Set("X-API-Key", tt.apiKey)
 			}
+
+			rctx := chi.NewRouteContext()
+			rctx.URLParams.Add("oid", tt.oid)
+			r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+
 			handler.ServeHTTP(w, r)
 
 			if w.Code != tt.wantStatus {
 				t.Fatalf("expected status %d, got %d", tt.wantStatus, w.Code)
-			}
-
-			if tt.wantName != "" {
-				integration := CurrentIntegration(gotRequest)
-				if integration == nil {
-					t.Fatal("expected Integration in context")
-				}
-				if integration.Name != tt.wantName {
-					t.Fatalf("expected integration name %q, got %q", tt.wantName, integration.Name)
-				}
 			}
 		})
 	}

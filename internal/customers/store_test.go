@@ -74,6 +74,9 @@ func TestSave_Create(t *testing.T) {
 	if !got.Active {
 		t.Fatal("expected active")
 	}
+	if got.OrganizationName != "Test Org" {
+		t.Fatalf("expected 'Test Org', got '%s'", got.OrganizationName)
+	}
 }
 
 func TestSave_Update(t *testing.T) {
@@ -312,6 +315,11 @@ func TestList_AllOrganizations(t *testing.T) {
 	}
 	if len(list) != 2 {
 		t.Fatalf("expected 2 customers, got %d", len(list))
+	}
+	for _, c := range list {
+		if c.OrganizationName != "Test Org" {
+			t.Fatalf("expected 'Test Org', got '%s' for customer %s", c.OrganizationName, c.ID)
+		}
 	}
 }
 

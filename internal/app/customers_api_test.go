@@ -34,7 +34,7 @@ func TestCustomersAPI_SyncInsert(t *testing.T) {
 	app := &App{
 		customers:     customers.NewStore(db),
 		organizations: orgs,
-		integrations:  map[string]*Integration{"test-key": {Name: "Test"}},
+		orgKeys:       map[string]string{"org1": "k1"},
 	}
 
 	body := `[{"id":"ext-1","name":"From 1C"}]`
@@ -42,12 +42,12 @@ func TestCustomersAPI_SyncInsert(t *testing.T) {
 	r := httptest.NewRequest(http.MethodPut, "/api/integration/organizations/org1/customers",
 		strings.NewReader(body))
 	r.Header.Set("Content-Type", "application/json")
-	r.Header.Set("X-API-Key", "test-key")
+	r.Header.Set("X-API-Key", "k1")
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("oid", "org1")
 	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
 
-	app.RequireIntegration(http.HandlerFunc(app.HandlePutCustomers)).ServeHTTP(w, r)
+	app.RequireOrganizationAPIKey(http.HandlerFunc(app.HandlePutCustomers)).ServeHTTP(w, r)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
@@ -76,7 +76,7 @@ func TestCustomersAPI_SyncUpdate(t *testing.T) {
 	app := &App{
 		customers:     customers.NewStore(db),
 		organizations: orgs,
-		integrations:  map[string]*Integration{"test-key": {Name: "Test"}},
+		orgKeys:       map[string]string{"org1": "k1"},
 	}
 
 	// Pre-insert via sync
@@ -85,11 +85,11 @@ func TestCustomersAPI_SyncUpdate(t *testing.T) {
 	r := httptest.NewRequest(http.MethodPut, "/api/integration/organizations/org1/customers",
 		strings.NewReader(body))
 	r.Header.Set("Content-Type", "application/json")
-	r.Header.Set("X-API-Key", "test-key")
+	r.Header.Set("X-API-Key", "k1")
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("oid", "org1")
 	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
-	app.RequireIntegration(http.HandlerFunc(app.HandlePutCustomers)).ServeHTTP(w, r)
+	app.RequireOrganizationAPIKey(http.HandlerFunc(app.HandlePutCustomers)).ServeHTTP(w, r)
 	if w.Code != http.StatusOK {
 		t.Fatalf("pre-insert: expected 200, got %d", w.Code)
 	}
@@ -100,11 +100,11 @@ func TestCustomersAPI_SyncUpdate(t *testing.T) {
 	r = httptest.NewRequest(http.MethodPut, "/api/integration/organizations/org1/customers",
 		strings.NewReader(body))
 	r.Header.Set("Content-Type", "application/json")
-	r.Header.Set("X-API-Key", "test-key")
+	r.Header.Set("X-API-Key", "k1")
 	rctx = chi.NewRouteContext()
 	rctx.URLParams.Add("oid", "org1")
 	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
-	app.RequireIntegration(http.HandlerFunc(app.HandlePutCustomers)).ServeHTTP(w, r)
+	app.RequireOrganizationAPIKey(http.HandlerFunc(app.HandlePutCustomers)).ServeHTTP(w, r)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
@@ -133,7 +133,7 @@ func TestCustomersAPI_ValidationErrors(t *testing.T) {
 	app := &App{
 		customers:     customers.NewStore(db),
 		organizations: orgs,
-		integrations:  map[string]*Integration{"test-key": {Name: "Test"}},
+		orgKeys:       map[string]string{"org1": "k1"},
 	}
 
 	tests := []struct {
@@ -170,12 +170,12 @@ func TestCustomersAPI_ValidationErrors(t *testing.T) {
 			if tt.contentTyp != "" {
 				r.Header.Set("Content-Type", tt.contentTyp)
 			}
-			r.Header.Set("X-API-Key", "test-key")
+			r.Header.Set("X-API-Key", "k1")
 			rctx := chi.NewRouteContext()
 			rctx.URLParams.Add("oid", "org1")
 			r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
 
-			app.RequireIntegration(http.HandlerFunc(app.HandlePutCustomers)).ServeHTTP(w, r)
+			app.RequireOrganizationAPIKey(http.HandlerFunc(app.HandlePutCustomers)).ServeHTTP(w, r)
 
 			if w.Code != tt.wantStatus {
 				t.Fatalf("expected status %d, got %d", tt.wantStatus, w.Code)
@@ -193,7 +193,7 @@ func TestCustomersAPI_SyncToDifferentOrgs(t *testing.T) {
 	app := &App{
 		customers:     customers.NewStore(db),
 		organizations: orgs,
-		integrations:  map[string]*Integration{"test-key": {Name: "Test"}},
+		orgKeys:       map[string]string{"org1": "k1", "org2": "k2"},
 	}
 
 	sync := func(oid, body string) {
@@ -201,11 +201,11 @@ func TestCustomersAPI_SyncToDifferentOrgs(t *testing.T) {
 		r := httptest.NewRequest(http.MethodPut, "/api/integration/organizations/"+oid+"/customers",
 			strings.NewReader(body))
 		r.Header.Set("Content-Type", "application/json")
-		r.Header.Set("X-API-Key", "test-key")
+		r.Header.Set("X-API-Key", map[string]string{"org1": "k1", "org2": "k2"}[oid])
 		rctx := chi.NewRouteContext()
 		rctx.URLParams.Add("oid", oid)
 		r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
-		app.RequireIntegration(http.HandlerFunc(app.HandlePutCustomers)).ServeHTTP(w, r)
+		app.RequireOrganizationAPIKey(http.HandlerFunc(app.HandlePutCustomers)).ServeHTTP(w, r)
 		if w.Code != http.StatusOK {
 			t.Fatalf("sync to %s: expected 200, got %d", oid, w.Code)
 		}

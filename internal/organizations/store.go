@@ -142,6 +142,31 @@ func (s *Store) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
+func (s *Store) LoadAPIKeys(ctx context.Context) (map[string]string, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT uuid, api_key
+		FROM organizations
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	keys := make(map[string]string)
+	for rows.Next() {
+		var uuid, apiKey string
+		if err := rows.Scan(&uuid, &apiKey); err != nil {
+			return nil, err
+		}
+		keys[uuid] = apiKey
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return keys, nil
+}
+
 func generateAPIKey() (string, error) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {

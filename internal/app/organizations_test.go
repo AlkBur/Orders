@@ -21,7 +21,7 @@ func TestOrganizationsPage(t *testing.T) {
 	app := &App{
 		organizations: orgs,
 		customers:     customers.NewStore(db),
-		integrations:  make(map[string]*Integration),
+		orgKeys:       make(map[string]string),
 	}
 
 	w := httptest.NewRecorder()
@@ -40,7 +40,7 @@ func TestOrganizationCard_New(t *testing.T) {
 	app := &App{
 		organizations: orgs,
 		customers:     customers.NewStore(db),
-		integrations:  make(map[string]*Integration),
+		orgKeys:       make(map[string]string),
 	}
 
 	w := httptest.NewRecorder()
@@ -64,7 +64,7 @@ func TestOrganizationCard_Edit(t *testing.T) {
 	app := &App{
 		organizations: orgs,
 		customers:     customers.NewStore(db),
-		integrations:  make(map[string]*Integration),
+		orgKeys:       make(map[string]string),
 	}
 
 	w := httptest.NewRecorder()
@@ -87,7 +87,7 @@ func TestOrganizationCard_NotFound(t *testing.T) {
 	app := &App{
 		organizations: orgs,
 		customers:     customers.NewStore(db),
-		integrations:  make(map[string]*Integration),
+		orgKeys:       make(map[string]string),
 	}
 
 	w := httptest.NewRecorder()
@@ -110,7 +110,7 @@ func TestOrganizationSave_Create(t *testing.T) {
 	app := &App{
 		organizations: orgs,
 		customers:     customers.NewStore(db),
-		integrations:  make(map[string]*Integration),
+		orgKeys:       make(map[string]string),
 	}
 
 	body := "name=New+Org&active=on"
@@ -153,7 +153,7 @@ func TestOrganizationSave_Update(t *testing.T) {
 	app := &App{
 		organizations: orgs,
 		customers:     customers.NewStore(db),
-		integrations:  make(map[string]*Integration),
+		orgKeys:       make(map[string]string),
 	}
 
 	body := "name=Updated"
@@ -187,7 +187,7 @@ func TestOrganizationSave_UpdateNotFound(t *testing.T) {
 	app := &App{
 		organizations: orgs,
 		customers:     customers.NewStore(db),
-		integrations:  make(map[string]*Integration),
+		orgKeys:       make(map[string]string),
 	}
 
 	body := "name=Nope"

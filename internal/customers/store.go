@@ -29,11 +29,12 @@ func (s *Store) New() *Customer {
 func (s *Store) Get(ctx context.Context, organizationID, id string) (*Customer, error) {
 	c := &Customer{}
 	err := s.db.QueryRowContext(ctx, `
-		SELECT organization_id, id, name, active, created_at, updated_at
-		FROM customers
-		WHERE organization_id = ? AND id = ?
+		SELECT c.organization_id, c.id, c.name, c.active, c.created_at, c.updated_at, o.name
+		FROM customers c
+		JOIN organizations o ON o.uuid = c.organization_id
+		WHERE c.organization_id = ? AND c.id = ?
 	`, organizationID, id).Scan(
-		&c.OrganizationID, &c.ID, &c.Name, &c.Active, &c.CreatedAt, &c.UpdatedAt,
+		&c.OrganizationID, &c.ID, &c.Name, &c.Active, &c.CreatedAt, &c.UpdatedAt, &c.OrganizationName,
 	)
 	if err == sql.ErrNoRows {
 		return nil, ErrNotFound
@@ -48,20 +49,19 @@ func (s *Store) List(ctx context.Context, organizationID string) ([]*Customer, e
 	var rows *sql.Rows
 	var err error
 
-	if common.IsNilUUID(organizationID) {
-		rows, err = s.db.QueryContext(ctx, `
-			SELECT organization_id, id, name, active, created_at, updated_at
-			FROM customers
-			ORDER BY name
-		`)
-	} else {
-		rows, err = s.db.QueryContext(ctx, `
-			SELECT organization_id, id, name, active, created_at, updated_at
-			FROM customers
-			WHERE organization_id = ?
-			ORDER BY name
-		`, organizationID)
+	query := `
+		SELECT c.organization_id, c.id, c.name, c.active, c.created_at, c.updated_at, o.name
+		FROM customers c
+		JOIN organizations o ON o.uuid = c.organization_id
+	`
+	args := []interface{}{}
+	if !common.IsNilUUID(organizationID) {
+		query += ` WHERE c.organization_id = ?`
+		args = append(args, organizationID)
 	}
+	query += ` ORDER BY c.name`
+
+	rows, err = s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +71,7 @@ func (s *Store) List(ctx context.Context, organizationID string) ([]*Customer, e
 	for rows.Next() {
 		c := &Customer{}
 		if err := rows.Scan(
-			&c.OrganizationID, &c.ID, &c.Name, &c.Active, &c.CreatedAt, &c.UpdatedAt,
+			&c.OrganizationID, &c.ID, &c.Name, &c.Active, &c.CreatedAt, &c.UpdatedAt, &c.OrganizationName,
 		); err != nil {
 			return nil, err
 		}
