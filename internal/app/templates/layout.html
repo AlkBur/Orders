@@ -16,7 +16,24 @@
 
 <body>
 
-	{{block "header" .}}{{end}}
+	{{block "header" .}}
+	<header class="app-header">
+		<div class="app-header__content">
+			<div class="app-header__left">
+				{{block "header_left" .}}
+				<a href="/">Главная</a>
+				{{end}}
+			</div>
+			<div class="app-header__right">
+				{{block "header_right" .}}
+				<form method="post" action="/logout">
+					<button type="submit" class="outline secondary">Выход</button>
+				</form>
+				{{end}}
+			</div>
+		</div>
+	</header>
+	{{end}}
 
 	<main class="container">
 
