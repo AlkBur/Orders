@@ -337,11 +337,41 @@ tools/
 
 ## Rules
 
+### Go Build Cache
+
+Go Build Cache is part of the normal development workflow.
+
+Assume it is valid.
+
+Do not invalidate it for benchmarking, profiling, verification,
+or troubleshooting.
+
+If you believe a clean build or cache invalidation is required,
+stop and explain why. Wait for explicit user approval before
+running any `go clean` command.
+
+
 ### No `go clean`
 
-Do not run `go clean` (with any flags: `-cache`, `-modcache`, `-testcache`)
-without explicit user permission. It clears the build cache and makes
-the next build extremely slow due to `modernc.org/sqlite`.
+Never run `go clean` with any flags (`go clean`, `go clean -cache`,
+`go clean -testcache`, `go clean -modcache`) unless the user explicitly
+requests cache cleaning.
+
+Do not use cache cleaning as part of benchmarking, profiling,
+troubleshooting, or verification.
+
+Go Build Cache is part of the normal development workflow.
+Destroying it forces a full recompilation of dependencies
+(including `modernc.org/sqlite`), which can take several minutes
+and consume significant memory.
+
+If you believe cache cleaning is necessary, stop and explain why.
+Wait for explicit user approval before running any `go clean` command.
+
+Never run `go clean` automatically.
+
+The project must be built and tested using the existing Go build cache.
+Assume the cache is valid unless the user explicitly requests a clean build.
 
 ### Temporary files
 
@@ -368,6 +398,12 @@ the next build extremely slow due to `modernc.org/sqlite`.
 Only terminate processes that were started by the current task and whose
 PID is stored in `tools/agent/run/server.json`. Never kill unknown
 processes.
+
+Never search for or terminate processes using `pkill`, `killall`,
+or pattern-based commands (`kill $(pgrep ...)`, `ps | grep | kill`, etc.).
+
+Only terminate the process whose PID is stored in
+`tools/agent/run/server.json`.
 
 Before starting a new agent server, check whether the PID stored in
 `tools/agent/run/server.json` is still running. If it is running, reuse

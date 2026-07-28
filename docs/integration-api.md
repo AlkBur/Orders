@@ -47,10 +47,10 @@ X-API-Key: <ключ интеграции>
 ### Организация в URL
 
 ```
-PUT /api/integration/organizations/{organization_id}/customers
+PUT /api/integration/organizations/{oid}/customers
 ```
 
-`organization_id` извлекается из URL и используется как контекст
+`oid` извлекается из URL и используется как контекст
 для всех операций синхронизации.
 
 ---
@@ -77,14 +77,14 @@ PUT /api/integration/organizations/{organization_id}/customers
 
 ## 5. Endpoints
 
-### 5.1 PUT /api/integration/organizations/{organization_id}/customers
+### 5.1 PUT /api/integration/organizations/{oid}/customers
 
 Синхронизация справочника контрагентов.
 
 #### Request
 
 ```
-PUT /api/integration/organizations/{organization_id}/customers
+PUT /api/integration/organizations/{oid}/customers
 Content-Type: application/json
 X-API-Key: <ключ>
 ```
