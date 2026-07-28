@@ -31,11 +31,9 @@ func (a *App) NewRouter() *chi.Mux {
 	)
 
 	// Integration API — обмен между системами
-	r.Route("/api/integration", func(r chi.Router) {
-		r.Use(a.RequireIntegration)
-		r.Route("/organizations/{oid}", func(r chi.Router) {
-			r.Put("/customers", a.HandlePutCustomers)
-		})
+	r.Route("/api/integration/organizations/{oid}", func(r chi.Router) {
+		r.Use(a.RequireOrganizationAPIKey)
+		r.Put("/customers", a.HandlePutCustomers)
 	})
 
 	r.Group(func(r chi.Router) {

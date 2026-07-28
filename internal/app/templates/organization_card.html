@@ -17,6 +17,11 @@
 			Активна
 		</label>
 
+		{{if not .IsNew}}
+		<label for="apikey">API Key</label>
+		<input id="apikey" type="text" value="{{.Org.APIKey}}" readonly>
+		{{end}}
+
 		<button type="submit">Сохранить</button>
 		<a href="/organizations" role="button" class="outline">Назад</a>
 	</form>

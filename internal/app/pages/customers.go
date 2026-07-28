@@ -6,9 +6,10 @@ import (
 )
 
 type CustomersPage struct {
-	Title          string
-	Customers      []*customers.Customer
-	OrganizationID string
+	Title            string
+	Customers        []*customers.Customer
+	OrganizationID   string
+	ShowOrganization bool
 }
 
 type CustomerCardPage struct {

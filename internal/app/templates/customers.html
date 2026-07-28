@@ -11,6 +11,9 @@
 		<thead>
 			<tr>
 				<th scope="col">Наименование</th>
+				{{if .ShowOrganization}}
+				<th scope="col">Организация</th>
+				{{end}}
 				<th scope="col">Статус</th>
 				<th scope="col" class="col-actions"></th>
 			</tr>
@@ -19,12 +22,15 @@
 			{{range .Customers}}
 			<tr>
 				<td>{{.Name}}</td>
+				{{if $.ShowOrganization}}
+				<td>{{.OrganizationName}}</td>
+				{{end}}
 				<td>{{if .Active}}Активен{{else}}Неактивен{{end}}</td>
 				<td class="col-actions"><a href="/organizations/{{.OrganizationID}}/customers/{{.ID}}">Открыть</a></td>
 			</tr>
 			{{else}}
 			<tr>
-				<td colspan="3">Нет контрагентов</td>
+				<td colspan="4">Нет контрагентов</td>
 			</tr>
 			{{end}}
 		</tbody>

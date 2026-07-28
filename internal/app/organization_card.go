@@ -68,5 +68,9 @@ func (a *App) OrganizationSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	a.orgKeysMu.Lock()
+	a.orgKeys[org.UUID] = org.APIKey
+	a.orgKeysMu.Unlock()
+
 	http.Redirect(w, r, "/organizations/"+org.UUID, http.StatusSeeOther)
 }

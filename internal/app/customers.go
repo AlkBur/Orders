@@ -42,9 +42,10 @@ func (a *App) CustomersPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.Render(w, "customers", pages.CustomersPage{
-		Title:          title,
-		Customers:      list,
-		OrganizationID: oid,
+		Title:            title,
+		Customers:        list,
+		OrganizationID:   oid,
+		ShowOrganization: common.IsNilUUID(oid),
 	})
 }
 

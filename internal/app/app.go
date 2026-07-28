@@ -1,9 +1,11 @@
 package app
 
 import (
+	"context"
 	"database/sql"
 	"html/template"
 	"net/http"
+	"sync"
 
 	"Orders/internal/customers"
 	"Orders/internal/database"
@@ -13,10 +15,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 )
-
-type Integration struct {
-	Name string
-}
 
 type App struct {
 	config *Config
@@ -30,8 +28,10 @@ type App struct {
 	router *chi.Mux
 	server *http.Server
 
-	templates    map[string]*template.Template
-	integrations map[string]*Integration
+	templates map[string]*template.Template
+
+	orgKeys   map[string]string
+	orgKeysMu sync.RWMutex
 }
 
 func New(configPath string) (*App, error) {
@@ -58,10 +58,12 @@ func New(configPath string) (*App, error) {
 	}
 
 	sessionStore := sessions.NewStore(db)
+	orgStore := organizations.NewStore(db)
 
-	integrations := make(map[string]*Integration, len(config.API.Keys))
-	for _, k := range config.API.Keys {
-		integrations[k.Key] = &Integration{Name: k.Name}
+	orgKeys, err := orgStore.LoadAPIKeys(context.Background())
+	if err != nil {
+		db.Close()
+		return nil, err
 	}
 
 	app := &App{
@@ -70,9 +72,9 @@ func New(configPath string) (*App, error) {
 		users:         usersStore,
 		sessions:      sessionStore,
 		customers:     customers.NewStore(db),
-		organizations: organizations.NewStore(db),
+		organizations: orgStore,
 		templates:     make(map[string]*template.Template),
-		integrations:  integrations,
+		orgKeys:       orgKeys,
 	}
 
 	for _, page := range []string{
