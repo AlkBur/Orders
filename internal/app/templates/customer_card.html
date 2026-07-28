@@ -6,6 +6,11 @@
 	<form method="post" action="/organizations/{{.OrganizationID}}/customers">
 		<input id="id" name="id" type="hidden" value="{{.Customer.ID}}">
 
+		{{if not .IsNew}}
+		<label for="id">ID</label>
+		<input id="id" type="text" value="{{.Customer.ID}}" readonly disabled>
+		{{end}}
+
 		{{if .IsNew}}
 			{{if eq .Customer.OrganizationID "00000000-0000-0000-0000-000000000000"}}
 			<label for="organization_id">Организация</label>
@@ -25,6 +30,11 @@
 
 		<label for="name">Наименование</label>
 		<input id="name" name="name" type="text" value="{{.Customer.Name}}" required>
+
+		<label for="active">
+			<input id="active" name="active" type="checkbox"{{if .Customer.Active}} checked{{end}}>
+			Активен
+		</label>
 
 		<button type="submit">Сохранить</button>
 		{{if eq .OrganizationID "00000000-0000-0000-0000-000000000000"}}

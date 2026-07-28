@@ -23,7 +23,7 @@ func NewStore(db *sql.DB) *Store {
 }
 
 func (s *Store) New() *Customer {
-	return &Customer{ID: common.NilUUID, Active: true}
+	return &Customer{ID: common.NilUUID, OrganizationID: common.NilUUID, Active: true}
 }
 
 func (s *Store) Get(ctx context.Context, organizationID, id string) (*Customer, error) {

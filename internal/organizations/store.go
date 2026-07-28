@@ -4,14 +4,9 @@ import (
 	"context"
 	"crypto/rand"
 	"database/sql"
-	"errors"
 	"fmt"
-	"strings"
-)
 
-var (
-	ErrUUIDRequired = errors.New("uuid is required")
-	ErrNameRequired = errors.New("name is required")
+	"Orders/internal/common"
 )
 
 type Store struct {
@@ -20,6 +15,38 @@ type Store struct {
 
 func NewStore(db *sql.DB) *Store {
 	return &Store{db: db}
+}
+
+func (s *Store) New() *Organization {
+	return &Organization{
+		UUID:   common.NilUUID,
+		Active: true,
+	}
+}
+
+func (s *Store) Get(ctx context.Context, id string) (*Organization, error) {
+	o := &Organization{}
+
+	err := s.db.QueryRowContext(ctx, `
+		SELECT uuid, name, api_key, active, created_at, updated_at
+		FROM organizations
+		WHERE uuid = ?
+	`, id).Scan(
+		&o.UUID,
+		&o.Name,
+		&o.APIKey,
+		&o.Active,
+		&o.CreatedAt,
+		&o.UpdatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return o, nil
 }
 
 func (s *Store) List(ctx context.Context) ([]*Organization, error) {
@@ -63,15 +90,27 @@ func (s *Store) List(ctx context.Context) ([]*Organization, error) {
 	return orgs, nil
 }
 
-func (s *Store) New() *Organization {
-	return &Organization{
-		Active: true,
-	}
-}
-
 func (s *Store) Save(ctx context.Context, org *Organization) error {
-	if strings.TrimSpace(org.UUID) == "" {
-		return ErrUUIDRequired
+	if common.IsNilUUID(org.UUID) {
+		id, err := common.GenerateUUID()
+		if err != nil {
+			return err
+		}
+		org.UUID = id
+
+		if org.APIKey == "" {
+			key, err := generateAPIKey()
+			if err != nil {
+				return err
+			}
+			org.APIKey = key
+		}
+
+		_, err = s.db.ExecContext(ctx, `
+			INSERT INTO organizations (uuid, name, api_key, active, created_at, updated_at)
+			VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+		`, org.UUID, org.Name, org.APIKey, org.Active)
+		return err
 	}
 
 	result, err := s.db.ExecContext(ctx, `
@@ -82,47 +121,25 @@ func (s *Store) Save(ctx context.Context, org *Organization) error {
 	if err != nil {
 		return err
 	}
-
 	n, _ := result.RowsAffected()
-	if n > 0 {
-		return nil
+	if n == 0 {
+		return ErrNotFound
 	}
-
-	if org.APIKey == "" {
-		key, err := generateAPIKey()
-		if err != nil {
-			return err
-		}
-		org.APIKey = key
-	}
-
-	_, err = s.db.ExecContext(ctx, `
-		INSERT INTO organizations (uuid, name, api_key, active, created_at, updated_at)
-		VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-	`, org.UUID, org.Name, org.APIKey, org.Active)
-	return err
+	return nil
 }
 
-func (s *Store) GetByUUID(ctx context.Context, uuid string) (*Organization, error) {
-	o := &Organization{}
-
-	err := s.db.QueryRowContext(ctx, `
-		SELECT uuid, name, api_key, active, created_at, updated_at
-		FROM organizations
-		WHERE uuid = ?
-	`, uuid).Scan(
-		&o.UUID,
-		&o.Name,
-		&o.APIKey,
-		&o.Active,
-		&o.CreatedAt,
-		&o.UpdatedAt,
-	)
+func (s *Store) Delete(ctx context.Context, id string) error {
+	result, err := s.db.ExecContext(ctx, `
+		DELETE FROM organizations WHERE uuid = ?
+	`, id)
 	if err != nil {
-		return nil, err
+		return err
 	}
-
-	return o, nil
+	n, _ := result.RowsAffected()
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func generateAPIKey() (string, error) {

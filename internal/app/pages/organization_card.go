@@ -5,4 +5,5 @@ import "Orders/internal/organizations"
 type OrganizationCardPage struct {
 	Title string
 	Org   *organizations.Organization
+	IsNew bool
 }

@@ -106,8 +106,9 @@ func (a *App) CustomerSave(w http.ResponseWriter, r *http.Request) {
 	oid := chi.URLParam(r, "oid")
 
 	customer := &customers.Customer{
-		ID:   r.FormValue("id"),
-		Name: r.FormValue("name"),
+		ID:     r.FormValue("id"),
+		Name:   r.FormValue("name"),
+		Active: r.FormValue("active") == "on",
 	}
 
 	if common.IsNilUUID(oid) {

@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -15,14 +16,20 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+func insertOrg(t *testing.T, db *sql.DB, id, name, apiKey string) {
+	t.Helper()
+	if _, err := db.Exec(`
+		INSERT INTO organizations (uuid, name, api_key, active, created_at, updated_at)
+		VALUES (?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+	`, id, name, apiKey); err != nil {
+		t.Fatalf("insert org %s: %v", id, err)
+	}
+}
+
 func TestCustomersAPI_SyncInsert(t *testing.T) {
 	db := testutil.NewTestDB(t, NewSchema())
 	orgs := organizations.NewStore(db)
-	if err := orgs.Save(context.Background(), &organizations.Organization{
-		UUID: "org1", Name: "Org", APIKey: "k1",
-	}); err != nil {
-		t.Fatal(err)
-	}
+	insertOrg(t, db, "org1", "Org", "k1")
 
 	app := &App{
 		customers:     customers.NewStore(db),
@@ -64,11 +71,7 @@ func TestCustomersAPI_SyncInsert(t *testing.T) {
 func TestCustomersAPI_SyncUpdate(t *testing.T) {
 	db := testutil.NewTestDB(t, NewSchema())
 	orgs := organizations.NewStore(db)
-	if err := orgs.Save(context.Background(), &organizations.Organization{
-		UUID: "org1", Name: "Org", APIKey: "k1",
-	}); err != nil {
-		t.Fatal(err)
-	}
+	insertOrg(t, db, "org1", "Org", "k1")
 
 	app := &App{
 		customers:     customers.NewStore(db),
@@ -125,11 +128,7 @@ func TestCustomersAPI_SyncUpdate(t *testing.T) {
 func TestCustomersAPI_ValidationErrors(t *testing.T) {
 	db := testutil.NewTestDB(t, NewSchema())
 	orgs := organizations.NewStore(db)
-	if err := orgs.Save(context.Background(), &organizations.Organization{
-		UUID: "org1", Name: "Org", APIKey: "k1",
-	}); err != nil {
-		t.Fatal(err)
-	}
+	insertOrg(t, db, "org1", "Org", "k1")
 
 	app := &App{
 		customers:     customers.NewStore(db),
@@ -188,16 +187,8 @@ func TestCustomersAPI_ValidationErrors(t *testing.T) {
 func TestCustomersAPI_SyncToDifferentOrgs(t *testing.T) {
 	db := testutil.NewTestDB(t, NewSchema())
 	orgs := organizations.NewStore(db)
-	if err := orgs.Save(context.Background(), &organizations.Organization{
-		UUID: "org1", Name: "Org1", APIKey: "k1",
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := orgs.Save(context.Background(), &organizations.Organization{
-		UUID: "org2", Name: "Org2", APIKey: "k2",
-	}); err != nil {
-		t.Fatal(err)
-	}
+	insertOrg(t, db, "org1", "Org1", "k1")
+	insertOrg(t, db, "org2", "Org2", "k2")
 
 	app := &App{
 		customers:     customers.NewStore(db),
