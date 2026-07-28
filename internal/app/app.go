@@ -10,6 +10,7 @@ import (
 	"Orders/internal/customers"
 	"Orders/internal/database"
 	"Orders/internal/organizations"
+	"Orders/internal/products"
 	"Orders/internal/sessions"
 	"Orders/internal/users"
 
@@ -24,6 +25,7 @@ type App struct {
 	sessions      *sessions.Store
 	customers     *customers.Store
 	organizations *organizations.Store
+	products      *products.Store
 
 	router *chi.Mux
 	server *http.Server
@@ -73,6 +75,7 @@ func New(configPath string) (*App, error) {
 		sessions:      sessionStore,
 		customers:     customers.NewStore(db),
 		organizations: orgStore,
+		products:      products.NewStore(db),
 		templates:     make(map[string]*template.Template),
 		orgKeys:       orgKeys,
 	}
@@ -86,6 +89,8 @@ func New(configPath string) (*App, error) {
 		"organization_card",
 		"customers",
 		"customer_card",
+		"products",
+		"product_card",
 	} {
 		tmpl, err := LoadTemplates(page)
 		if err != nil {

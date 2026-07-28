@@ -1,0 +1,48 @@
+{{define "content"}}
+<article class="page-card">
+	<h1 class="card-title">{{.Title}}</h1>
+	<form method="post" action="/organizations/{{.OrganizationID}}/products">
+		<input id="id" name="id" type="hidden" value="{{.Product.ID}}">
+
+		{{if not .IsNew}}
+		<label for="id">ID</label>
+		<input id="id" type="text" value="{{.Product.ID}}" readonly disabled>
+		{{end}}
+
+		{{if .IsNew}}
+			{{if eq .Product.OrganizationID "00000000-0000-0000-0000-000000000000"}}
+			<label for="organization_id">Организация</label>
+			<select id="organization_id" name="organization_id" required>
+				<option value="">Выберите организацию</option>
+				{{range .Orgs}}
+				<option value="{{.UUID}}"{{if eq .UUID $.Product.OrganizationID}} selected{{end}}>{{.Name}}</option>
+				{{end}}
+			</select>
+			{{else}}
+			<input id="organization_id" name="organization_id" type="hidden" value="{{.Product.OrganizationID}}">
+			{{end}}
+		{{else}}
+		<label for="organization_id">Организация</label>
+		<input id="organization_id" type="text" value="{{.Product.OrganizationName}}" readonly disabled>
+		{{end}}
+
+		<label for="name">Наименование</label>
+		<input id="name" name="name" type="text" value="{{.Product.Name}}" required>
+
+		<label for="unit">Ед. изм</label>
+		<input id="unit" name="unit" type="text" value="{{.Product.Unit}}">
+
+		<label for="active">
+			<input id="active" name="active" type="checkbox"{{if .Product.Active}} checked{{end}}>
+			Активен
+		</label>
+
+		<button type="submit">Сохранить</button>
+		{{if eq .OrganizationID "00000000-0000-0000-0000-000000000000"}}
+		<a href="/products" role="button" class="outline">Назад</a>
+		{{else}}
+		<a href="/organizations/{{.OrganizationID}}/products" role="button" class="outline">Назад</a>
+		{{end}}
+	</form>
+</article>
+{{end}}

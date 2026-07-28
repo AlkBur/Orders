@@ -1,0 +1,40 @@
+{{define "content"}}
+<div class="list-header">
+	<h1>{{.Title}}</h1>
+	<div class="toolbar">
+		<a href="{{.NewURL}}" role="button">Добавить</a>
+	</div>
+</div>
+<div class="list-table">
+	<table>
+		<thead>
+			<tr>
+				{{range .Columns}}
+				<th scope="col">{{.Label}}</th>
+				{{end}}
+				<th scope="col" class="col-actions"></th>
+			</tr>
+		</thead>
+		<tbody>
+			{{range .Rows}}
+			<tr>
+				{{range .Cells}}
+				<td>{{.}}</td>
+				{{end}}
+				<td class="col-actions">
+				{{if .URL}}
+				<a href="{{.URL}}">{{$.RowAction.Label}}</a>
+				{{else}}
+				<a href="{{$.RowAction.BaseURL}}/{{.ID}}">{{$.RowAction.Label}}</a>
+				{{end}}
+				</td>
+			</tr>
+			{{else}}
+			<tr>
+				<td colspan="99">{{$.EmptyText}}</td>
+			</tr>
+			{{end}}
+		</tbody>
+	</table>
+</div>
+{{end}}
