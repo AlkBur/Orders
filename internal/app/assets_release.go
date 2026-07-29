@@ -22,7 +22,7 @@ func LoadTemplates(page string) (*template.Template, error) {
 		)
 	}
 
-	if page == "products" || page == "organizations" || page == "customers" || page == "users" {
+	if page == "products" || page == "organizations" || page == "customers" || page == "users" || page == "receipts" {
 		return template.ParseFS(
 			templatesFS,
 			"templates/layout.html",
