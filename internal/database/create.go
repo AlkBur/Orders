@@ -106,6 +106,8 @@ func sqliteType(t ColumnType) string {
 		return "TEXT"
 	case TypeInt:
 		return "INTEGER"
+	case TypeReal:
+		return "REAL"
 	case TypeBool:
 		return "INTEGER"
 	case TypeDateTime:

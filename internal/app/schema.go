@@ -8,6 +8,7 @@ import (
 	"Orders/internal/database"
 	"Orders/internal/organizations"
 	"Orders/internal/products"
+	"Orders/internal/receipts"
 	"Orders/internal/sessions"
 	"Orders/internal/users"
 )
@@ -28,6 +29,12 @@ func NewSchema() *database.Schema {
 		panic(err)
 	}
 	if err := s.Register(products.Table); err != nil {
+		panic(err)
+	}
+	if err := s.Register(receipts.Table); err != nil {
+		panic(err)
+	}
+	if err := s.Register(receipts.ItemsTable); err != nil {
 		panic(err)
 	}
 

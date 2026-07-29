@@ -11,6 +11,7 @@ import (
 	"Orders/internal/database"
 	"Orders/internal/organizations"
 	"Orders/internal/products"
+	"Orders/internal/receipts"
 	"Orders/internal/sessions"
 	"Orders/internal/users"
 
@@ -27,6 +28,7 @@ type App struct {
 	customers     *customers.Store
 	organizations *organizations.Store
 	products      *products.Store
+	receipts      *receipts.Store
 
 	router *chi.Mux
 	server *http.Server
@@ -84,15 +86,17 @@ func New(configPath string) (*App, error) {
 		customers:     customers.NewStore(db),
 		organizations: orgStore,
 		products:      products.NewStore(db),
+		receipts:      receipts.NewStore(db),
 		templates:     make(map[string]*template.Template),
 		orgKeys:       orgKeys,
 	}
 
 	for _, page := range []string{
 		"login",
-		"orders",
 		"set-password",
 		"menu",
+		"receipts",
+		"receipt_card",
 		"organizations",
 		"organization_card",
 		"customers",

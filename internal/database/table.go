@@ -7,6 +7,7 @@ type ColumnType string
 const (
 	TypeString   ColumnType = "string"
 	TypeInt      ColumnType = "int"
+	TypeReal     ColumnType = "real"
 	TypeBool     ColumnType = "bool"
 	TypeDateTime ColumnType = "datetime"
 )
@@ -72,6 +73,10 @@ func String(name string) Column {
 
 func Int(name string) Column {
 	return Column{Name: name, Type: TypeInt}
+}
+
+func Real(name string) Column {
+	return Column{Name: name, Type: TypeReal}
 }
 
 func Bool(name string) Column {
