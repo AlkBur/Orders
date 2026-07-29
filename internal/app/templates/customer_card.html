@@ -1,31 +1,24 @@
-
 {{define "content"}}
 <article class="page-card">
 	<h1 class="card-title">{{.Title}}</h1>
 
-	<form method="post" action="/organizations/{{.OrganizationID}}/customers">
-		<input id="id" name="id" type="hidden" value="{{.Customer.ID}}">
-
-		{{if not .IsNew}}
+	<form method="post" action="/organizations/{{.OrganizationID}}/customers/{{.Customer.ID}}">
+		{{if .Customer.ID}}
 		<label for="id">ID</label>
 		<input id="id" type="text" value="{{.Customer.ID}}" readonly disabled>
 		{{end}}
 
-		{{if .IsNew}}
-			{{if eq .Customer.OrganizationID "00000000-0000-0000-0000-000000000000"}}
-			<label for="organization_id">Организация</label>
-			<select id="organization_id" name="organization_id" required>
-				<option value="">Выберите организацию</option>
-				{{range .Orgs}}
-				<option value="{{.UUID}}"{{if eq .UUID $.Customer.OrganizationID}} selected{{end}}>{{.Name}}</option>
-				{{end}}
-			</select>
-			{{else}}
-			<input id="organization_id" name="organization_id" type="hidden" value="{{.Customer.OrganizationID}}">
-			{{end}}
-		{{else}}
+		<label for="uuid">UUID</label>
+		<input id="uuid" name="uuid" type="text" value="{{.Customer.UUID}}">
+
+		{{if .Orgs}}
 		<label for="organization_id">Организация</label>
-		<input id="organization_id" type="text" value="{{.Customer.OrganizationName}}" readonly disabled>
+		<select id="organization_id" name="organization_id" required>
+			<option value="">Выберите организацию</option>
+			{{range .Orgs}}
+			<option value="{{.UUID}}"{{if eq .UUID $.Customer.UUID}} selected{{end}}>{{.Name}}</option>
+			{{end}}
+		</select>
 		{{end}}
 
 		<label for="name">Наименование</label>
@@ -37,11 +30,7 @@
 		</label>
 
 		<button type="submit">Сохранить</button>
-		{{if eq .OrganizationID "00000000-0000-0000-0000-000000000000"}}
-		<a href="/customers" role="button" class="outline">Назад</a>
-		{{else}}
 		<a href="/organizations/{{.OrganizationID}}/customers" role="button" class="outline">Назад</a>
-		{{end}}
 	</form>
 </article>
 {{end}}

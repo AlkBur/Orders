@@ -6,6 +6,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"strconv"
 
 	"Orders/internal/app/pages"
 	"Orders/internal/common"
@@ -17,22 +18,28 @@ import (
 )
 
 type productSyncItem struct {
-	ID     string `json:"id"`
+	UUID   string `json:"id"`
 	Name   string `json:"name"`
 	Unit   string `json:"unit"`
 	Active *bool  `json:"active,omitempty"`
 }
 
+func orgIDFromURL(r *http.Request) int64 {
+	oidStr := chi.URLParam(r, "oid")
+	if oidStr == "" || oidStr == "new" {
+		return 0
+	}
+	id, err := strconv.ParseInt(oidStr, 10, 64)
+	if err != nil {
+		return 0
+	}
+	return id
+}
+
 func (a *App) ProductsPage(w http.ResponseWriter, r *http.Request) {
 	NoCache(w)
 
-	oid := chi.URLParam(r, "oid")
-	if common.IsNilUUID(oid) {
-		oid = common.NilUUID
-	}
-	if oid == "" {
-		oid = common.NilUUID
-	}
+	oid := orgIDFromURL(r)
 
 	list, err := a.products.List(r.Context(), oid)
 	if err != nil {
@@ -40,7 +47,7 @@ func (a *App) ProductsPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	showOrg := common.IsNilUUID(oid)
+	showOrg := oid == 0
 
 	fields := products.Descriptor.ListFields()
 	if !showOrg {
@@ -76,12 +83,15 @@ func (a *App) ProductsPage(w http.ResponseWriter, r *http.Request) {
 		}
 		rows = append(rows, pages.Row{
 			Cells: cells,
-			ID:    p.ID,
+			ID:    strconv.FormatInt(p.ID, 10),
 			URL:   p.URL(),
 		})
 	}
 
-	newURL := "/organizations/" + oid + "/products/" + common.NilUUID
+	newURL := "/organizations/" + chi.URLParam(r, "oid") + "/products/new"
+	if oid == 0 {
+		newURL = "/products/new"
+	}
 
 	page := pages.ListPage{
 		Title:   "Товары",
@@ -91,7 +101,7 @@ func (a *App) ProductsPage(w http.ResponseWriter, r *http.Request) {
 		NewURL: newURL,
 		RowAction: pages.RowAction{
 			Label:   "Открыть",
-			BaseURL: "/organizations/" + oid + "/products",
+			BaseURL: "/organizations/" + chi.URLParam(r, "oid") + "/products",
 		},
 
 		EmptyText: "Нет товаров",
@@ -100,25 +110,32 @@ func (a *App) ProductsPage(w http.ResponseWriter, r *http.Request) {
 	a.Render(w, "products", page)
 }
 
+func productIDFromURL(r *http.Request) int64 {
+	idStr := chi.URLParam(r, "id")
+	if idStr == "" || idStr == "new" {
+		return 0
+	}
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		return 0
+	}
+	return id
+}
+
 func (a *App) ProductCard(w http.ResponseWriter, r *http.Request) {
 	NoCache(w)
 
-	oid := chi.URLParam(r, "oid")
-	id := chi.URLParam(r, "id")
-
-	isNew := common.IsNilUUID(id)
+	oid := orgIDFromURL(r)
+	id := productIDFromURL(r)
 
 	var product *products.Product
 
-	if isNew {
+	if id == 0 {
 		product = a.products.New()
-
-		if !common.IsNilUUID(oid) {
-			product.OrganizationID = oid
-		}
+		product.OrganizationID = oid
 	} else {
 		var err error
-		product, err = a.products.Get(r.Context(), oid, id)
+		product, err = a.products.GetByID(r.Context(), id)
 		if err != nil {
 			a.InternalError(w, err)
 			return
@@ -134,10 +151,9 @@ func (a *App) ProductCard(w http.ResponseWriter, r *http.Request) {
 		Title:          title,
 		Product:        product,
 		OrganizationID: oid,
-		IsNew:          isNew,
 	}
 
-	if isNew && common.IsNilUUID(product.OrganizationID) {
+	if product.ID == 0 && oid == 0 {
 		orgs, err := a.organizations.List(r.Context())
 		if err != nil {
 			a.InternalError(w, err)
@@ -155,19 +171,35 @@ func (a *App) ProductSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	oid := chi.URLParam(r, "oid")
+	oid := orgIDFromURL(r)
+	id := productIDFromURL(r)
 
 	product := &products.Product{
-		ID:     r.FormValue("id"),
-		Name:   r.FormValue("name"),
-		Unit:   r.FormValue("unit"),
-		Active: r.FormValue("active") == "on",
+		ID:             id,
+		UUID:           r.FormValue("uuid"),
+		Name:           r.FormValue("name"),
+		Unit:           r.FormValue("unit"),
+		Active:         r.FormValue("active") == "on",
+		OrganizationID: oid,
 	}
 
-	if common.IsNilUUID(oid) {
-		product.OrganizationID = r.FormValue("organization_id")
-	} else {
-		product.OrganizationID = oid
+	if id == 0 && product.UUID == "" {
+		uuid, err := common.GenerateUUID()
+		if err != nil {
+			a.InternalError(w, err)
+			return
+		}
+		product.UUID = uuid
+	}
+
+	if oid == 0 {
+		orgUUID := r.FormValue("organization_id")
+		org, err := a.organizations.GetByUUID(r.Context(), orgUUID)
+		if err != nil {
+			a.InternalError(w, err)
+			return
+		}
+		product.OrganizationID = org.ID
 	}
 
 	if err := a.products.Save(r.Context(), product); err != nil {
@@ -180,22 +212,22 @@ func (a *App) ProductSave(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r,
-		"/organizations/"+product.OrganizationID+"/products/"+product.ID,
+		"/organizations/"+strconv.FormatInt(product.OrganizationID, 10)+"/products/"+strconv.FormatInt(product.ID, 10),
 		http.StatusSeeOther,
 	)
 }
 
 func (a *App) ProductDelete(w http.ResponseWriter, r *http.Request) {
-	oid := chi.URLParam(r, "oid")
-	id := chi.URLParam(r, "id")
+	id := productIDFromURL(r)
 
-	if err := a.products.Delete(r.Context(), oid, id); err != nil {
+	if err := a.products.DeleteByID(r.Context(), id); err != nil {
 		a.InternalError(w, err)
 		return
 	}
 
+	oid := orgIDFromURL(r)
 	http.Redirect(w, r,
-		"/organizations/"+oid+"/products",
+		"/organizations/"+strconv.FormatInt(oid, 10)+"/products",
 		http.StatusSeeOther,
 	)
 }
@@ -210,7 +242,13 @@ func (a *App) HandlePutProducts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	oid := chi.URLParam(r, "oid")
+	orgUUID := chi.URLParam(r, "oid")
+
+	org, err := a.organizations.GetByUUID(r.Context(), orgUUID)
+	if err != nil {
+		a.Unauthorized(w)
+		return
+	}
 
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
@@ -229,8 +267,8 @@ func (a *App) HandlePutProducts(w http.ResponseWriter, r *http.Request) {
 
 	models := make([]products.Product, len(items))
 	for i, item := range items {
-		if item.ID == "" || item.Name == "" {
-			a.BadRequest(w, "id and name are required")
+		if item.UUID == "" || item.Name == "" {
+			a.BadRequest(w, "uuid and name are required")
 			return
 		}
 		active := true
@@ -238,14 +276,14 @@ func (a *App) HandlePutProducts(w http.ResponseWriter, r *http.Request) {
 			active = *item.Active
 		}
 		models[i] = products.Product{
-			ID:     item.ID,
+			UUID:   item.UUID,
 			Name:   item.Name,
 			Unit:   item.Unit,
 			Active: active,
 		}
 	}
 
-	result, err := a.products.Synchronize(r.Context(), oid, models)
+	result, err := a.products.Synchronize(r.Context(), org.ID, models)
 	if err != nil {
 		a.InternalError(w, err)
 		return
@@ -254,5 +292,3 @@ func (a *App) HandlePutProducts(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)
 }
-
-

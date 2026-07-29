@@ -7,60 +7,40 @@ import (
 	"testing"
 
 	"Orders/internal/database"
-	_ "modernc.org/sqlite"
+	"Orders/internal/organizations"
+	"Orders/internal/testutil"
 )
 
-func orgsTable() database.Table {
-	return database.Must(database.NewTable("organizations",
-		database.String("uuid").NotNull().Unique(),
-		database.String("name").NotNull(),
-		database.String("api_key").NotNull().Default(""),
-		database.Bool("active").NotNull().Default(true),
-		database.DateTime("created_at").NotNull().Default("CURRENT_TIMESTAMP"),
-		database.DateTime("updated_at").NotNull().Default("CURRENT_TIMESTAMP"),
-	))
-}
-
-func newTestDB(t *testing.T) *sql.DB {
+func testDB(t *testing.T) *sql.DB {
 	t.Helper()
-
-	db, err := database.OpenPath(t.TempDir() + "/test.db")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { db.Close() })
-
 	s := database.NewSchema()
-	if err := s.Register(orgsTable()); err != nil {
+	if err := s.Register(organizations.Table); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Register(Table); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.RunMigrations(db); err != nil {
-		t.Fatal(err)
-	}
-
-	return db
+	return testutil.NewTestDB(t, s)
 }
 
-func insertOrg(t *testing.T, db *sql.DB, id, name string) {
+func insertOrg(t *testing.T, db *sql.DB, name, apiKey string) int64 {
 	t.Helper()
-	if _, err := db.Exec(`
-		INSERT INTO organizations (uuid, name, api_key, active, created_at, updated_at)
-		VALUES (?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-	`, id, name, "key_"+id); err != nil {
-		t.Fatalf("insert org %s: %v", id, err)
+	res, err := db.Exec(`INSERT INTO organizations (uuid, name, api_key, active, created_at, updated_at) VALUES (?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+		"uuid-"+name, name, apiKey)
+	if err != nil {
+		t.Fatalf("insert org %s: %v", name, err)
 	}
+	id, _ := res.LastInsertId()
+	return id
 }
 
 func TestStore_New(t *testing.T) {
-	db := newTestDB(t)
+	db := testDB(t)
 	store := NewStore(db)
 
 	p := store.New()
-	if p.ID != "00000000-0000-0000-0000-000000000000" {
-		t.Fatalf("expected nil UUID, got %s", p.ID)
+	if p.UUID != "" {
+		t.Fatalf("expected empty UUID, got %s", p.UUID)
 	}
 	if !p.Active {
 		t.Fatal("expected active by default")
@@ -68,24 +48,21 @@ func TestStore_New(t *testing.T) {
 }
 
 func TestStore_SaveInsert(t *testing.T) {
-	db := newTestDB(t)
+	db := testDB(t)
 	store := NewStore(db)
-	insertOrg(t, db, "org1", "Test Org")
+	orgID := insertOrg(t, db, "TestOrg", "key1")
 
 	p := store.New()
-	p.OrganizationID = "org1"
+	p.OrganizationID = orgID
 	p.Name = "Test Product"
 	p.Unit = "шт"
+	p.UUID = "prod-test-insert"
 
 	if err := store.Save(context.Background(), p); err != nil {
 		t.Fatal(err)
 	}
 
-	if p.ID == "00000000-0000-0000-0000-000000000000" {
-		t.Fatal("expected generated ID after insert")
-	}
-
-	got, err := store.Get(context.Background(), "org1", p.ID)
+	got, err := store.GetByExternal(context.Background(), orgID, p.UUID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,14 +72,15 @@ func TestStore_SaveInsert(t *testing.T) {
 }
 
 func TestStore_SaveUpdate(t *testing.T) {
-	db := newTestDB(t)
+	db := testDB(t)
 	store := NewStore(db)
-	insertOrg(t, db, "org1", "Test Org")
+	orgID := insertOrg(t, db, "TestOrg", "key1")
 
 	p := store.New()
-	p.OrganizationID = "org1"
+	p.OrganizationID = orgID
 	p.Name = "Original"
 	p.Unit = "шт"
+	p.UUID = "prod-test-update-1"
 	if err := store.Save(context.Background(), p); err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +91,7 @@ func TestStore_SaveUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := store.Get(context.Background(), "org1", p.ID)
+	got, err := store.GetByExternal(context.Background(), orgID, p.UUID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +101,7 @@ func TestStore_SaveUpdate(t *testing.T) {
 }
 
 func TestStore_SaveInsertWithoutOrg(t *testing.T) {
-	db := newTestDB(t)
+	db := testDB(t)
 	store := NewStore(db)
 
 	p := store.New()
@@ -134,44 +112,46 @@ func TestStore_SaveInsertWithoutOrg(t *testing.T) {
 }
 
 func TestStore_SaveOrgNotFound(t *testing.T) {
-	db := newTestDB(t)
+	db := testDB(t)
 	store := NewStore(db)
 
 	p := store.New()
-	p.OrganizationID = "nonexistent"
+	p.OrganizationID = 999
 	p.Name = "Bad Org"
 	if err := store.Save(context.Background(), p); err != ErrOrganizationNotFound {
 		t.Fatalf("expected ErrOrganizationNotFound, got %v", err)
 	}
 }
 
-func TestStore_GetNotFound(t *testing.T) {
-	db := newTestDB(t)
+func TestStore_GetByExternalNotFound(t *testing.T) {
+	db := testDB(t)
 	store := NewStore(db)
-	insertOrg(t, db, "org1", "Test Org")
+	orgID := insertOrg(t, db, "TestOrg", "key1")
 
-	if _, err := store.Get(context.Background(), "org1", "nonexistent"); err != ErrNotFound {
+	if _, err := store.GetByExternal(context.Background(), orgID, "nonexistent"); err != ErrNotFound {
 		t.Fatalf("expected ErrNotFound, got %v", err)
 	}
 }
 
 func TestStore_ListAll(t *testing.T) {
-	db := newTestDB(t)
+	db := testDB(t)
 	store := NewStore(db)
-	insertOrg(t, db, "org1", "Org One")
-	insertOrg(t, db, "org2", "Org Two")
+	orgID1 := insertOrg(t, db, "Org1", "key1")
+	orgID2 := insertOrg(t, db, "Org2", "key2")
 
 	p1 := store.New()
-	p1.OrganizationID = "org1"
+	p1.OrganizationID = orgID1
 	p1.Name = "Product A"
+	p1.UUID = "prod-list-all-a"
 	store.Save(context.Background(), p1)
 
 	p2 := store.New()
-	p2.OrganizationID = "org2"
+	p2.OrganizationID = orgID2
 	p2.Name = "Product B"
+	p2.UUID = "prod-list-all-b"
 	store.Save(context.Background(), p2)
 
-	list, err := store.List(context.Background(), "00000000-0000-0000-0000-000000000000")
+	list, err := store.List(context.Background(), 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,16 +161,17 @@ func TestStore_ListAll(t *testing.T) {
 }
 
 func TestStore_ListByOrg(t *testing.T) {
-	db := newTestDB(t)
+	db := testDB(t)
 	store := NewStore(db)
-	insertOrg(t, db, "org1", "Org One")
+	orgID := insertOrg(t, db, "Org1", "key1")
 
 	p := store.New()
-	p.OrganizationID = "org1"
+	p.OrganizationID = orgID
 	p.Name = "Only Product"
+	p.UUID = "prod-only"
 	store.Save(context.Background(), p)
 
-	list, err := store.List(context.Background(), "org1")
+	list, err := store.List(context.Background(), orgID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,43 +181,44 @@ func TestStore_ListByOrg(t *testing.T) {
 }
 
 func TestStore_Delete(t *testing.T) {
-	db := newTestDB(t)
+	db := testDB(t)
 	store := NewStore(db)
-	insertOrg(t, db, "org1", "Test Org")
+	orgID := insertOrg(t, db, "TestOrg", "key1")
 
 	p := store.New()
-	p.OrganizationID = "org1"
+	p.OrganizationID = orgID
 	p.Name = "To Delete"
+	p.UUID = "prod-del-ext"
 	store.Save(context.Background(), p)
 
-	if err := store.Delete(context.Background(), "org1", p.ID); err != nil {
+	if err := store.DeleteByExternal(context.Background(), orgID, p.UUID); err != nil {
 		t.Fatal(err)
 	}
 
-	if _, err := store.Get(context.Background(), "org1", p.ID); err != ErrNotFound {
+	if _, err := store.GetByExternal(context.Background(), orgID, p.UUID); err != ErrNotFound {
 		t.Fatal("expected ErrNotFound after delete")
 	}
 }
 
 func TestStore_DeleteNotFound(t *testing.T) {
-	db := newTestDB(t)
+	db := testDB(t)
 	store := NewStore(db)
 
-	if err := store.Delete(context.Background(), "org1", "nonexistent"); err != ErrNotFound {
+	if err := store.DeleteByExternal(context.Background(), 1, "nonexistent"); err != ErrNotFound {
 		t.Fatalf("expected ErrNotFound, got %v", err)
 	}
 }
 
 func TestStore_SynchronizeInsert(t *testing.T) {
-	db := newTestDB(t)
+	db := testDB(t)
 	store := NewStore(db)
-	insertOrg(t, db, "org1", "Org")
+	orgID := insertOrg(t, db, "Org", "key1")
 
 	items := []Product{
-		{ID: "ext-1", Name: "From 1C", Unit: "шт", Active: true},
+		{UUID: "ext-1", Name: "From 1C", Unit: "шт", Active: true},
 	}
 
-	result, err := store.Synchronize(context.Background(), "org1", items)
+	result, err := store.Synchronize(context.Background(), orgID, items)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,7 +226,7 @@ func TestStore_SynchronizeInsert(t *testing.T) {
 		t.Fatalf("expected 1 inserted, got %d", result.Inserted)
 	}
 
-	got, err := store.Get(context.Background(), "org1", "ext-1")
+	got, err := store.GetByExternal(context.Background(), orgID, "ext-1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -254,16 +236,16 @@ func TestStore_SynchronizeInsert(t *testing.T) {
 }
 
 func TestStore_SynchronizeUpdate(t *testing.T) {
-	db := newTestDB(t)
+	db := testDB(t)
 	store := NewStore(db)
-	insertOrg(t, db, "org1", "Org")
+	orgID := insertOrg(t, db, "Org", "key1")
 
-	store.Synchronize(context.Background(), "org1", []Product{
-		{ID: "ext-1", Name: "Original", Unit: "шт", Active: true},
+	store.Synchronize(context.Background(), orgID, []Product{
+		{UUID: "ext-1", Name: "Original", Unit: "шт", Active: true},
 	})
 
-	result, err := store.Synchronize(context.Background(), "org1", []Product{
-		{ID: "ext-1", Name: "Updated", Unit: "кг", Active: false},
+	result, err := store.Synchronize(context.Background(), orgID, []Product{
+		{UUID: "ext-1", Name: "Updated", Unit: "кг", Active: false},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -272,53 +254,54 @@ func TestStore_SynchronizeUpdate(t *testing.T) {
 		t.Fatalf("expected 1 updated, got %d", result.Updated)
 	}
 
-	got, _ := store.Get(context.Background(), "org1", "ext-1")
+	got, _ := store.GetByExternal(context.Background(), orgID, "ext-1")
 	if got.Name != "Updated" || got.Unit != "кг" || got.Active {
 		t.Fatalf("unexpected product data: %+v", got)
 	}
 }
 
 func TestStore_SynchronizeDuplicateInRequest(t *testing.T) {
-	db := newTestDB(t)
+	db := testDB(t)
 	store := NewStore(db)
-	insertOrg(t, db, "org1", "Org")
+	orgID := insertOrg(t, db, "Org", "key1")
 
-	_, err := store.Synchronize(context.Background(), "org1", []Product{
-		{ID: "dup", Name: "A", Unit: "шт", Active: true},
-		{ID: "dup", Name: "B", Unit: "шт", Active: true},
+	_, err := store.Synchronize(context.Background(), orgID, []Product{
+		{UUID: "dup", Name: "A", Unit: "шт", Active: true},
+		{UUID: "dup", Name: "B", Unit: "шт", Active: true},
 	})
 	if err == nil || !strings.Contains(err.Error(), "duplicate") {
 		t.Fatalf("expected duplicate error, got %v", err)
 	}
 }
 
-func TestStore_SynchronizeRejectsEmptyID(t *testing.T) {
-	db := newTestDB(t)
+func TestStore_SynchronizeRejectsEmptyUUID(t *testing.T) {
+	db := testDB(t)
 	store := NewStore(db)
-	insertOrg(t, db, "org1", "Org")
+	orgID := insertOrg(t, db, "Org", "key1")
 
-	_, err := store.Synchronize(context.Background(), "org1", []Product{
-		{ID: "", Name: "Bad", Unit: "шт", Active: true},
+	_, err := store.Synchronize(context.Background(), orgID, []Product{
+		{UUID: "", Name: "Bad", Unit: "шт", Active: true},
 	})
 	if err == nil {
-		t.Fatal("expected error for empty ID")
+		t.Fatal("expected error for empty UUID")
 	}
 }
 
 func TestStore_GetOrganizationName(t *testing.T) {
-	db := newTestDB(t)
+	db := testDB(t)
 	store := NewStore(db)
-	insertOrg(t, db, "org1", "ООО Ромашка")
+	orgID := insertOrg(t, db, "ООО Ромашка", "key1")
 
 	p := store.New()
-	p.OrganizationID = "org1"
+	p.OrganizationID = orgID
 	p.Name = "Test"
 	p.Unit = "шт"
+	p.UUID = "prod-orgname"
 	if err := store.Save(context.Background(), p); err != nil {
 		t.Fatal(err)
 	}
 
-	got, err := store.Get(context.Background(), "org1", p.ID)
+	got, err := store.GetByExternal(context.Background(), orgID, p.UUID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -329,19 +312,20 @@ func TestStore_GetOrganizationName(t *testing.T) {
 }
 
 func TestStore_ListOrganizationName(t *testing.T) {
-	db := newTestDB(t)
+	db := testDB(t)
 	store := NewStore(db)
-	insertOrg(t, db, "org1", "ООО Ромашка")
+	orgID := insertOrg(t, db, "ООО Ромашка", "key1")
 
 	p := store.New()
-	p.OrganizationID = "org1"
+	p.OrganizationID = orgID
 	p.Name = "Test"
 	p.Unit = "шт"
+	p.UUID = "prod-list-orgname"
 	if err := store.Save(context.Background(), p); err != nil {
 		t.Fatal(err)
 	}
 
-	list, err := store.List(context.Background(), "org1")
+	list, err := store.List(context.Background(), orgID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -355,23 +339,63 @@ func TestStore_ListOrganizationName(t *testing.T) {
 }
 
 func TestStore_SynchronizeDifferentOrgs(t *testing.T) {
-	db := newTestDB(t)
+	db := testDB(t)
 	store := NewStore(db)
-	insertOrg(t, db, "org1", "Org1")
-	insertOrg(t, db, "org2", "Org2")
+	orgID1 := insertOrg(t, db, "Org1", "key1")
+	orgID2 := insertOrg(t, db, "Org2", "key2")
 
-	store.Synchronize(context.Background(), "org1", []Product{
-		{ID: "shared", Name: "In Org1", Unit: "шт", Active: true},
+	store.Synchronize(context.Background(), orgID1, []Product{
+		{UUID: "shared", Name: "In Org1", Unit: "шт", Active: true},
 	})
-	store.Synchronize(context.Background(), "org2", []Product{
-		{ID: "shared", Name: "In Org2", Unit: "шт", Active: true},
+	store.Synchronize(context.Background(), orgID2, []Product{
+		{UUID: "shared", Name: "In Org2", Unit: "шт", Active: true},
 	})
 
-	list, err := store.List(context.Background(), "00000000-0000-0000-0000-000000000000")
+	list, err := store.List(context.Background(), 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(list) != 2 {
 		t.Fatalf("expected 2 total, got %d", len(list))
+	}
+}
+
+func TestStore_GetByID(t *testing.T) {
+	db := testDB(t)
+	store := NewStore(db)
+	orgID := insertOrg(t, db, "TestOrg", "key1")
+
+	p := store.New()
+	p.OrganizationID = orgID
+	p.Name = "Test"
+	p.UUID = "prod-getbyid"
+	store.Save(context.Background(), p)
+
+	got, err := store.GetByID(context.Background(), p.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Name != "Test" {
+		t.Fatalf("expected 'Test', got '%s'", got.Name)
+	}
+}
+
+func TestStore_DeleteByID(t *testing.T) {
+	db := testDB(t)
+	store := NewStore(db)
+	orgID := insertOrg(t, db, "TestOrg", "key1")
+
+	p := store.New()
+	p.OrganizationID = orgID
+	p.Name = "To Delete"
+	p.UUID = "prod-del-id"
+	store.Save(context.Background(), p)
+
+	if err := store.DeleteByID(context.Background(), p.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := store.GetByID(context.Background(), p.ID); err != ErrNotFound {
+		t.Fatal("expected ErrNotFound after delete")
 	}
 }

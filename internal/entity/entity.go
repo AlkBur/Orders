@@ -18,9 +18,44 @@ type Field struct {
 	ReadOnly bool
 }
 
+type KeyKind int
+
+const (
+	KeyPrimary KeyKind = iota
+	KeyExternal
+)
+
+type Key struct {
+	Kind   KeyKind
+	Fields []*Field
+}
+
+func (k Key) IsComposite() bool {
+	return len(k.Fields) > 1
+}
+
 type Descriptor struct {
 	Type   reflect.Type
 	Fields []Field
+	Keys   []Key
+}
+
+func (d *Descriptor) PrimaryKey() *Key {
+	for i := range d.Keys {
+		if d.Keys[i].Kind == KeyPrimary {
+			return &d.Keys[i]
+		}
+	}
+	return nil
+}
+
+func (d *Descriptor) ExternalKey() *Key {
+	for i := range d.Keys {
+		if d.Keys[i].Kind == KeyExternal {
+			return &d.Keys[i]
+		}
+	}
+	return nil
 }
 
 func (d *Descriptor) ListFields() []Field {
@@ -48,7 +83,30 @@ var (
 	registryMu sync.Mutex
 )
 
-func Register[T any]() *Descriptor {
+type keyDef struct {
+	kind   KeyKind
+	fields []string
+}
+
+type registerConfig struct {
+	keys []keyDef
+}
+
+type RegisterOption func(cfg *registerConfig)
+
+func PrimaryKey(field string) RegisterOption {
+	return func(cfg *registerConfig) {
+		cfg.keys = append(cfg.keys, keyDef{kind: KeyPrimary, fields: []string{field}})
+	}
+}
+
+func ExternalKey(fields ...string) RegisterOption {
+	return func(cfg *registerConfig) {
+		cfg.keys = append(cfg.keys, keyDef{kind: KeyExternal, fields: fields})
+	}
+}
+
+func Register[T any](opts ...RegisterOption) *Descriptor {
 	var t T
 	typ := reflect.TypeOf(t)
 	if typ.Kind() == reflect.Ptr {
@@ -65,8 +123,14 @@ func Register[T any]() *Descriptor {
 		return cached
 	}
 
+	var cfg registerConfig
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+
 	var fields []Field
 	seenOrders := make(map[int]string)
+	fieldByName := make(map[string]int)
 
 	for i := range typ.NumField() {
 		f := typ.Field(i)
@@ -97,6 +161,7 @@ func Register[T any]() *Descriptor {
 		}
 		seenOrders[order] = f.Name
 
+		fieldByName[f.Name] = len(fields)
 		fields = append(fields, Field{
 			GoName:   f.Name,
 			DBName:   dbTag,
@@ -112,9 +177,58 @@ func Register[T any]() *Descriptor {
 		return fields[i].Order < fields[j].Order
 	})
 
+	// rebuild fieldByName after sort
+	for i := range fields {
+		fieldByName[fields[i].GoName] = i
+	}
+
+	// validate and resolve keys
+	var primaryCount int
+	var keys []Key
+
+	for _, kd := range cfg.keys {
+		if len(kd.fields) == 0 {
+			panic(fmt.Sprintf("entity: key with empty fields in %s", typ.Name()))
+		}
+
+		switch kd.kind {
+		case KeyPrimary:
+			primaryCount++
+			if len(kd.fields) != 1 {
+				panic(fmt.Sprintf("entity: PrimaryKey must have exactly one field in %s", typ.Name()))
+			}
+		case KeyExternal:
+			if len(kd.fields) < 1 {
+				panic(fmt.Sprintf("entity: ExternalKey must have at least one field in %s", typ.Name()))
+			}
+		}
+
+		var resolved []*Field
+		for _, name := range kd.fields {
+			idx, ok := fieldByName[name]
+			if !ok {
+				panic(fmt.Sprintf("entity: key field %q not found in %s", name, typ.Name()))
+			}
+			resolved = append(resolved, &fields[idx])
+		}
+
+		keys = append(keys, Key{
+			Kind:   kd.kind,
+			Fields: resolved,
+		})
+	}
+
+	if primaryCount == 0 {
+		panic(fmt.Sprintf("entity: %s has no PrimaryKey", typ.Name()))
+	}
+	if primaryCount > 1 {
+		panic(fmt.Sprintf("entity: %s has multiple PrimaryKeys", typ.Name()))
+	}
+
 	desc := &Descriptor{
 		Type:   typ,
 		Fields: fields,
+		Keys:   keys,
 	}
 	registry[typ] = desc
 	return desc

@@ -15,7 +15,9 @@ type noDBTag struct {
 }
 
 func TestRegister(t *testing.T) {
-	desc := Register[testEntity]()
+	desc := Register[testEntity](
+		PrimaryKey("ID"),
+	)
 
 	if desc == nil {
 		t.Fatal("expected non-nil descriptor")
@@ -31,7 +33,7 @@ func TestRegister(t *testing.T) {
 }
 
 func TestRegister_ReturnsCached(t *testing.T) {
-	d1 := Register[testEntity]()
+	d1 := Register[testEntity](PrimaryKey("ID"))
 	d2 := Register[testEntity]()
 
 	if d1 != d2 {
@@ -40,7 +42,7 @@ func TestRegister_ReturnsCached(t *testing.T) {
 }
 
 func TestListFields(t *testing.T) {
-	desc := Register[testEntity]()
+	desc := Register[testEntity](PrimaryKey("ID"))
 	fields := desc.ListFields()
 
 	if len(fields) != 2 {
@@ -57,7 +59,7 @@ func TestListFields(t *testing.T) {
 }
 
 func TestSearchFields(t *testing.T) {
-	desc := Register[testEntity]()
+	desc := Register[testEntity](PrimaryKey("ID"))
 	fields := desc.SearchFields()
 
 	if len(fields) != 1 {
@@ -70,14 +72,23 @@ func TestSearchFields(t *testing.T) {
 }
 
 func TestRegister_NoDBTags(t *testing.T) {
-	desc := Register[noDBTag]()
+	type withIgnored struct {
+		ID   string `db:"id" label:"ID" order:"10"`
+		Name string // no tag: should be ignored
+	}
+
+	desc := Register[withIgnored](PrimaryKey("ID"))
 
 	if desc == nil {
 		t.Fatal("expected non-nil descriptor")
 	}
 
-	if len(desc.Fields) != 0 {
-		t.Fatalf("expected 0 fields for struct without db tags, got %d", len(desc.Fields))
+	if len(desc.Fields) != 1 {
+		t.Fatalf("expected 1 field, got %d", len(desc.Fields))
+	}
+
+	if desc.Fields[0].GoName != "ID" {
+		t.Fatal("expected ID field")
 	}
 }
 
@@ -87,7 +98,9 @@ func TestRegister_ReadOnly(t *testing.T) {
 		Org  string `readonly:"true" label:"Organization" order:"20" list:"true"`
 	}
 
-	desc := Register[withReadOnly]()
+	desc := Register[withReadOnly](
+		PrimaryKey("Name"),
+	)
 
 	if desc == nil {
 		t.Fatal("expected non-nil descriptor")
@@ -123,5 +136,136 @@ func TestRegister_DuplicateOrder(t *testing.T) {
 		}
 	}()
 
-	Register[dupOrder]()
+	Register[dupOrder](PrimaryKey("A"))
+}
+
+type keyTestEntity struct {
+	ID   string `db:"id" label:"ID" order:"10" list:"true"`
+	UUID string `db:"uuid" label:"UUID" order:"20" list:"true"`
+}
+
+func TestRegister_Keys(t *testing.T) {
+	desc := Register[keyTestEntity](
+		PrimaryKey("ID"),
+		ExternalKey("UUID"),
+	)
+
+	if desc.PrimaryKey() == nil {
+		t.Fatal("expected PrimaryKey")
+	}
+	if desc.PrimaryKey().Kind != KeyPrimary {
+		t.Fatal("expected KeyPrimary kind")
+	}
+	if len(desc.PrimaryKey().Fields) != 1 {
+		t.Fatal("expected 1 field in PrimaryKey")
+	}
+	if desc.PrimaryKey().Fields[0].GoName != "ID" {
+		t.Fatal("expected PrimaryKey field ID")
+	}
+
+	if desc.ExternalKey() == nil {
+		t.Fatal("expected ExternalKey")
+	}
+	if desc.ExternalKey().Kind != KeyExternal {
+		t.Fatal("expected KeyExternal kind")
+	}
+	if len(desc.ExternalKey().Fields) != 1 {
+		t.Fatal("expected 1 field in ExternalKey")
+	}
+	if desc.ExternalKey().Fields[0].GoName != "UUID" {
+		t.Fatal("expected ExternalKey field UUID")
+	}
+}
+
+func TestRegister_CompositeExternalKey(t *testing.T) {
+	type compositeEntity struct {
+		ID             string `db:"id" label:"ID" order:"10"`
+		OrganizationID string `db:"organization_id" label:"Org" order:"20"`
+		UUID           string `db:"uuid" label:"UUID" order:"30"`
+	}
+
+	desc := Register[compositeEntity](
+		PrimaryKey("ID"),
+		ExternalKey("OrganizationID", "UUID"),
+	)
+
+	if desc.ExternalKey() == nil {
+		t.Fatal("expected ExternalKey")
+	}
+	if !desc.ExternalKey().IsComposite() {
+		t.Fatal("expected composite ExternalKey")
+	}
+	if len(desc.ExternalKey().Fields) != 2 {
+		t.Fatal("expected 2 fields in ExternalKey")
+	}
+	if desc.ExternalKey().Fields[0].GoName != "OrganizationID" {
+		t.Fatal("expected first field OrganizationID")
+	}
+	if desc.ExternalKey().Fields[1].GoName != "UUID" {
+		t.Fatal("expected second field UUID")
+	}
+}
+
+func TestRegister_PanicNoPrimaryKey(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("expected panic for missing PrimaryKey")
+		}
+	}()
+
+	type noPK struct {
+		UUID string `db:"uuid" label:"UUID" order:"10"`
+	}
+
+	Register[noPK]()
+}
+
+func TestRegister_MultipleExternalKeys(t *testing.T) {
+	type multiKey struct {
+		ID   string `db:"id" label:"ID" order:"10"`
+		UUID string `db:"uuid" label:"UUID" order:"20"`
+		Code string `db:"code" label:"Code" order:"30"`
+	}
+
+	desc := Register[multiKey](
+		PrimaryKey("ID"),
+		ExternalKey("UUID"),
+		ExternalKey("Code"),
+	)
+
+	if desc == nil {
+		t.Fatal("expected non-nil descriptor")
+	}
+
+	if len(desc.Keys) != 3 {
+		t.Fatalf("expected 3 keys (1 PK + 2 external), got %d", len(desc.Keys))
+	}
+
+	if desc.PrimaryKey() == nil {
+		t.Fatal("expected PrimaryKey")
+	}
+	if desc.PrimaryKey().Fields[0].GoName != "ID" {
+		t.Fatal("expected PrimaryKey field ID")
+	}
+
+	if desc.ExternalKey() == nil {
+		t.Fatal("expected ExternalKey")
+	}
+}
+
+func TestRegister_PanicUnknownField(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("expected panic for unknown field")
+		}
+	}()
+
+	type simple struct {
+		ID string `db:"id" label:"ID" order:"10"`
+	}
+
+	Register[simple](
+		PrimaryKey("ID"),
+		ExternalKey("Unknown"),
+	)
 }

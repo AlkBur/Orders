@@ -2,7 +2,7 @@ package pages
 
 import "Orders/internal/organizations"
 
-type OrganizationsPage struct {
+type OrganizationCardPage struct {
 	Title string
-	Orgs  []*organizations.Organization
+	Org   *organizations.Organization
 }

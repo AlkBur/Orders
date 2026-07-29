@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"testing"
 
-	"Orders/internal/common"
 	"Orders/internal/database"
 	"Orders/internal/testutil"
 )
@@ -26,8 +25,8 @@ func TestNew(t *testing.T) {
 	if o == nil {
 		t.Fatal("expected non-nil organization")
 	}
-	if !common.IsNilUUID(o.UUID) {
-		t.Fatal("expected nil UUID by default")
+	if o.UUID != "" {
+		t.Fatal("expected empty UUID by default")
 	}
 	if !o.Active {
 		t.Fatal("expected active by default")
@@ -40,16 +39,13 @@ func TestSave_Create(t *testing.T) {
 
 	o := store.New()
 	o.Name = "Test Org"
+	o.UUID = "org-test-save-create"
 
 	if err := store.Save(context.Background(), o); err != nil {
 		t.Fatal(err)
 	}
 
-	if common.IsNilUUID(o.UUID) {
-		t.Fatal("expected generated UUID")
-	}
-
-	got, err := store.Get(context.Background(), o.UUID)
+	got, err := store.GetByUUID(context.Background(), o.UUID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,6 +63,7 @@ func TestSave_Update(t *testing.T) {
 
 	o := store.New()
 	o.Name = "Original"
+	o.UUID = "org-test-update-1"
 	if err := store.Save(context.Background(), o); err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +74,7 @@ func TestSave_Update(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := store.Get(context.Background(), o.UUID)
+	got, err := store.GetByUUID(context.Background(), o.UUID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +91,8 @@ func TestSave_NotFound(t *testing.T) {
 	store := NewStore(db)
 
 	o := &Organization{
-		UUID:   "nonexistent-uuid",
+		ID:     999,
+		UUID:   "some-uuid",
 		Name:   "Nope",
 		Active: true,
 	}
@@ -103,41 +101,72 @@ func TestSave_NotFound(t *testing.T) {
 	}
 }
 
-func TestGet_NotFound(t *testing.T) {
+func TestGetByUUID_NotFound(t *testing.T) {
 	db := testDB(t)
 	store := NewStore(db)
 
-	_, err := store.Get(context.Background(), "nonexistent")
+	_, err := store.GetByUUID(context.Background(), "nonexistent")
 	if err != ErrNotFound {
 		t.Fatalf("expected ErrNotFound, got %v", err)
 	}
 }
 
-func TestDelete(t *testing.T) {
+func TestGetByID_NotFound(t *testing.T) {
+	db := testDB(t)
+	store := NewStore(db)
+
+	_, err := store.GetByID(context.Background(), 999)
+	if err != ErrNotFound {
+		t.Fatalf("expected ErrNotFound, got %v", err)
+	}
+}
+
+func TestDeleteByUUID(t *testing.T) {
 	db := testDB(t)
 	store := NewStore(db)
 
 	o := store.New()
 	o.Name = "To Delete"
+	o.UUID = "org-test-delete-uuid"
 	if err := store.Save(context.Background(), o); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := store.Delete(context.Background(), o.UUID); err != nil {
+	if err := store.DeleteByUUID(context.Background(), o.UUID); err != nil {
 		t.Fatal(err)
 	}
 
-	if _, err := store.Get(context.Background(), o.UUID); err != ErrNotFound {
+	if _, err := store.GetByUUID(context.Background(), o.UUID); err != ErrNotFound {
 		t.Fatal("expected ErrNotFound after delete")
 	}
 }
 
-func TestDelete_NotFound(t *testing.T) {
+func TestDeleteByUUID_NotFound(t *testing.T) {
 	db := testDB(t)
 	store := NewStore(db)
 
-	if err := store.Delete(context.Background(), "nonexistent"); err != ErrNotFound {
+	if err := store.DeleteByUUID(context.Background(), "nonexistent"); err != ErrNotFound {
 		t.Fatalf("expected ErrNotFound, got %v", err)
+	}
+}
+
+func TestDeleteByID(t *testing.T) {
+	db := testDB(t)
+	store := NewStore(db)
+
+	o := store.New()
+	o.Name = "To Delete"
+	o.UUID = "org-test-delete-id"
+	if err := store.Save(context.Background(), o); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := store.DeleteByID(context.Background(), o.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := store.GetByID(context.Background(), o.ID); err != ErrNotFound {
+		t.Fatal("expected ErrNotFound after delete")
 	}
 }
 
@@ -161,6 +190,7 @@ func TestList_OrderedByName(t *testing.T) {
 	for _, name := range []string{"C", "A", "B"} {
 		o := store.New()
 		o.Name = name
+		o.UUID = "org-" + name
 		if err := store.Save(context.Background(), o); err != nil {
 			t.Fatal(err)
 		}
@@ -184,6 +214,7 @@ func TestSave_GenerateAPIKey(t *testing.T) {
 
 	o := store.New()
 	o.Name = "With API Key"
+	o.UUID = "org-test-apikey"
 	if err := store.Save(context.Background(), o); err != nil {
 		t.Fatal(err)
 	}
@@ -192,7 +223,7 @@ func TestSave_GenerateAPIKey(t *testing.T) {
 		t.Fatal("expected generated API key")
 	}
 
-	got, err := store.Get(context.Background(), o.UUID)
+	got, err := store.GetByUUID(context.Background(), o.UUID)
 	if err != nil {
 		t.Fatal(err)
 	}

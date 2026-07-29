@@ -41,9 +41,6 @@ func registerMigrations(s *database.Schema) {
 		Version: 2,
 		Name:    "Redesign customers: composite PK (organization_id, id)",
 		Up: func(ctx context.Context, tx *sql.Tx) error {
-			// Временное решение для MVP: удаление таблицы customers.
-			// Данные восстанавливаются из 1С через API синхронизации.
-			// В следующих версиях миграции должны сохранять данные пользователей.
 			if _, err := tx.ExecContext(ctx, `DROP TABLE IF EXISTS customers`); err != nil {
 				return err
 			}
@@ -58,11 +55,38 @@ func registerMigrations(s *database.Schema) {
 		Version: 3,
 		Name:    "Add products table",
 		Up: func(ctx context.Context, tx *sql.Tx) error {
+			if _, err := tx.ExecContext(ctx, `DROP TABLE IF EXISTS products`); err != nil {
+				return err
+			}
 			if _, err := tx.ExecContext(ctx, products.Table.CreateSQL()); err != nil {
 				return err
 			}
 			return nil
 		},
 	})
-}
 
+	s.AddMigration(database.Migration{
+		Version: 4,
+		Name:    "Unified schema: internal ID (INTEGER PK) + external UUID for all dictionaries",
+		Up: func(ctx context.Context, tx *sql.Tx) error {
+			for _, name := range []string{"sessions", "customers", "products", "organizations", "users"} {
+				if _, err := tx.ExecContext(ctx, `DROP TABLE IF EXISTS `+name); err != nil {
+					return err
+				}
+			}
+			tables := []database.Table{
+				users.Table,
+				sessions.Table,
+				customers.Table,
+				products.Table,
+				organizations.Table,
+			}
+			for _, t := range tables {
+				if _, err := tx.ExecContext(ctx, t.CreateSQL()); err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+	})
+}

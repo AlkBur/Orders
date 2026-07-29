@@ -15,7 +15,6 @@ var templatesFS embed.FS
 var staticFS embed.FS
 
 func LoadTemplates(page string) (*template.Template, error) {
-
 	if page == "login" {
 		return template.ParseFS(
 			templatesFS,
@@ -23,7 +22,7 @@ func LoadTemplates(page string) (*template.Template, error) {
 		)
 	}
 
-	if page == "products" {
+	if page == "products" || page == "organizations" || page == "customers" || page == "users" {
 		return template.ParseFS(
 			templatesFS,
 			"templates/layout.html",

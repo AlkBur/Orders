@@ -1,13 +1,15 @@
-
 {{define "content"}}
 <article class="page-card">
 	<h1 class="card-title">{{.Title}}</h1>
 
-	<form method="post" action="/organizations/{{.Org.UUID}}">
-		{{if not .IsNew}}
+	<form method="post" action="/organizations/{{.Org.ID}}">
+		{{if .Org.ID}}
 		<label for="id">ID</label>
-		<input id="id" type="text" value="{{.Org.UUID}}" readonly disabled>
+		<input id="id" type="text" value="{{.Org.ID}}" readonly disabled>
 		{{end}}
+
+		<label for="uuid">UUID</label>
+		<input id="uuid" name="uuid" type="text" value="{{.Org.UUID}}">
 
 		<label for="name">Наименование</label>
 		<input id="name" name="name" type="text" value="{{.Org.Name}}" required>
@@ -17,7 +19,7 @@
 			Активна
 		</label>
 
-		{{if not .IsNew}}
+		{{if .Org.ID}}
 		<label for="apikey">API Key</label>
 		<input id="apikey" type="text" value="{{.Org.APIKey}}" readonly>
 		{{end}}

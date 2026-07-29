@@ -10,14 +10,13 @@ import (
 )
 
 func LoadTemplates(page string) (*template.Template, error) {
-
 	if page == "login" {
 		return template.ParseFiles(
 			filepath.Join("internal", "app", "templates", "login.html"),
 		)
 	}
 
-	if page == "products" {
+	if page == "products" || page == "organizations" || page == "customers" || page == "users" {
 		return template.ParseFiles(
 			filepath.Join("internal", "app", "templates", "layout.html"),
 			filepath.Join("internal", "app", "templates", "list.html"),

@@ -86,22 +86,22 @@ func TestRequireOrganizationAPIKey(t *testing.T) {
 func TestRequireAdmin(t *testing.T) {
 	tests := []struct {
 		name       string
-		user       *users.User
+		user       users.Identity
 		wantStatus int
 	}{
 		{
 			name:       "NoUser",
-			user:       nil,
+			user:       users.Identity{},
 			wantStatus: http.StatusForbidden,
 		},
 		{
 			name:       "NonAdminUser",
-			user:       &users.User{ID: 1, Login: "user", IsAdmin: false},
+			user:       users.Identity{ID: 1, Login: "user", IsAdmin: false},
 			wantStatus: http.StatusForbidden,
 		},
 		{
 			name:       "AdminUser",
-			user:       &users.User{ID: 2, Login: "admin", IsAdmin: true},
+			user:       users.Identity{ID: 2, Login: "admin", IsAdmin: true},
 			wantStatus: http.StatusOK,
 		},
 	}
@@ -113,10 +113,8 @@ func TestRequireAdmin(t *testing.T) {
 			w := httptest.NewRecorder()
 			r := httptest.NewRequest(http.MethodGet, "/customers", nil)
 
-			if tt.user != nil {
-				ctx := context.WithValue(r.Context(), userContextKey, tt.user)
-				r = r.WithContext(ctx)
-			}
+			ctx := context.WithValue(r.Context(), userContextKey, tt.user)
+			r = r.WithContext(ctx)
 
 			handler.ServeHTTP(w, r)
 

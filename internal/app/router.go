@@ -30,7 +30,7 @@ func (a *App) NewRouter() *chi.Mux {
 		),
 	)
 
-	// Integration API — обмен между системами
+	// Integration API — обмен между системами (UUID-based)
 	r.Route("/api/integration/organizations/{oid}", func(r chi.Router) {
 		r.Use(a.RequireOrganizationAPIKey)
 		r.Put("/customers", a.HandlePutCustomers)
@@ -39,7 +39,7 @@ func (a *App) NewRouter() *chi.Mux {
 
 	r.Group(func(r chi.Router) {
 		r.Use(func(next http.Handler) http.Handler {
-			return RequireAuth(a.sessions, a.users, next)
+			return RequireAuth(a.sessions, a.identity, next)
 		})
 
 		r.Get("/set-password", a.SetPasswordPage)
@@ -52,40 +52,57 @@ func (a *App) NewRouter() *chi.Mux {
 			r.Get("/", a.MenuPage)
 			r.Get("/orders", a.OrdersPage)
 
-			// Customers — глобальный список (admin)
+			// Customers
 			r.Get("/customers", a.CustomersPage)
-
-			// Customers — организационный контекст
+			r.Get("/customers/new", a.CustomerCard)
+			r.Post("/customers", a.CustomerSave)
 			r.Route("/organizations/{oid}/customers", func(r chi.Router) {
 				r.Get("/", a.CustomersPage)
+				r.Get("/new", a.CustomerCard)
+				r.Post("/", a.CustomerSave)
 				r.Get("/{id}", a.CustomerCard)
 
 				r.Group(func(r chi.Router) {
 					r.Use(RequireAdmin)
-					r.Post("/", a.CustomerSave)
+					r.Post("/{id}", a.CustomerSave)
 					r.Delete("/{id}", a.CustomerDelete)
 				})
 			})
 
-			// Products — глобальный список (admin)
+			// Products
 			r.Get("/products", a.ProductsPage)
-
-			// Products — организационный контекст
+			r.Get("/products/new", a.ProductCard)
+			r.Post("/products", a.ProductSave)
 			r.Route("/organizations/{oid}/products", func(r chi.Router) {
 				r.Get("/", a.ProductsPage)
+				r.Get("/new", a.ProductCard)
+				r.Post("/", a.ProductSave)
 				r.Get("/{id}", a.ProductCard)
 
 				r.Group(func(r chi.Router) {
 					r.Use(RequireAdmin)
-					r.Post("/", a.ProductSave)
+					r.Post("/{id}", a.ProductSave)
 					r.Delete("/{id}", a.ProductDelete)
 				})
 			})
 
 			// Organizations
 			r.Get("/organizations", a.OrganizationsPage)
+			r.Get("/organizations/new", a.OrganizationCard)
+			r.Post("/organizations", a.OrganizationSave)
 			r.Get("/organizations/{id}", a.OrganizationCard)
 			r.Post("/organizations/{id}", a.OrganizationSave)
+
+			// Users
+			r.Route("/users", func(r chi.Router) {
+				r.Use(RequireAdmin)
+				r.Get("/", a.UsersPage)
+				r.Get("/new", a.UserCard)
+				r.Post("/", a.UserSave)
+				r.Get("/{id}", a.UserCard)
+				r.Post("/{id}", a.UserSave)
+				r.Delete("/{id}", a.UserDelete)
+			})
 		})
 	})
 

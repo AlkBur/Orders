@@ -9,7 +9,7 @@ func (a *App) SetPasswordPage(w http.ResponseWriter, r *http.Request) {
 	NoCache(w)
 
 	user := CurrentUser(r)
-	if user == nil || !user.NeedsPasswordSetup() {
+	if user.ID == 0 || !user.NeedsPasswordSetup() {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
@@ -30,8 +30,8 @@ func (a *App) SetPasswordPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) SetPasswordSubmit(w http.ResponseWriter, r *http.Request) {
-	user := CurrentUser(r)
-	if user == nil || !user.NeedsPasswordSetup() {
+	identity := CurrentUser(r)
+	if identity.ID == 0 || !identity.NeedsPasswordSetup() {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
@@ -54,6 +54,12 @@ func (a *App) SetPasswordSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	user, err := a.users.GetByID(r.Context(), identity.ID)
+	if err != nil {
+		a.InternalError(w, err)
+		return
+	}
+
 	if err := user.SetPassword(password); err != nil {
 		a.InternalError(w, err)
 		return
@@ -63,6 +69,8 @@ func (a *App) SetPasswordSubmit(w http.ResponseWriter, r *http.Request) {
 		a.InternalError(w, err)
 		return
 	}
+
+	a.identity.Update(user)
 
 	if session := CurrentSession(r); session != nil {
 		a.sessions.Delete(session.ID)

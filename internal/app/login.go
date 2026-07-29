@@ -35,8 +35,8 @@ func (app *App) Login(w http.ResponseWriter, r *http.Request) {
 	page.Login = r.FormValue("login")
 	password := r.FormValue("password")
 
-	user, err := app.users.FindByLogin(page.Login)
-	if err != nil {
+	identity, ok := app.identity.GetByLogin(page.Login)
+	if !ok {
 		NoCache(w)
 		page.Error = "Invalid login or password"
 		app.Render(w, "login", page)
@@ -45,8 +45,8 @@ func (app *App) Login(w http.ResponseWriter, r *http.Request) {
 
 	var authenticated bool
 
-	if user.HasPassword() {
-		ok, err := user.VerifyPassword(password)
+	if identity.PasswordHash != "" {
+		ok, err := users.VerifyPassword(password, identity.PasswordHash)
 		authenticated = (err == nil && ok)
 	} else {
 		authenticated = users.VerifyBootstrapPassword(password, app.config.Auth.InitialPassword)
@@ -59,14 +59,14 @@ func (app *App) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	session, err := app.sessions.Create(user.ID, r.UserAgent())
+	session, err := app.sessions.Create(identity.ID, r.UserAgent())
 	if err != nil {
 		app.InternalError(w, err)
 		return
 	}
 	SetSessionCookie(w, session.ID)
 
-	if user.NeedsPasswordSetup() {
+	if identity.NeedsPasswordSetup() {
 		http.Redirect(w, r, "/set-password", http.StatusSeeOther)
 		return
 	}
