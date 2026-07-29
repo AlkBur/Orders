@@ -12,6 +12,15 @@ func (t Table) CreateSQL() string {
 	b.WriteString(t.Name)
 	b.WriteString(" (\n")
 
+	columnCount := len(t.Columns)
+	constraintCount := len(t.PrimaryKey)
+	for _, uc := range t.UniqueConstraints {
+		_ = uc
+		constraintCount++
+	}
+	hasConstraints := constraintCount > 0
+	needsExtraComma := hasConstraints
+
 	for i, col := range t.Columns {
 		b.WriteString("    ")
 		b.WriteString(col.Name)
@@ -46,7 +55,7 @@ func (t Table) CreateSQL() string {
 			}
 		}
 
-		if i < len(t.Columns)-1 || len(t.PrimaryKey) > 0 {
+		if i < columnCount-1 || needsExtraComma {
 			b.WriteString(",")
 		}
 		b.WriteString("\n")
@@ -60,7 +69,30 @@ func (t Table) CreateSQL() string {
 			}
 			b.WriteString(pk)
 		}
-		b.WriteString(")\n")
+		b.WriteString(")")
+
+		constraintCount--
+		if constraintCount > 0 {
+			b.WriteString(",")
+		}
+		b.WriteString("\n")
+	}
+
+	for _, uc := range t.UniqueConstraints {
+		b.WriteString("    UNIQUE (")
+		for i, col := range uc.Columns {
+			if i > 0 {
+				b.WriteString(", ")
+			}
+			b.WriteString(col)
+		}
+		b.WriteString(")")
+
+		constraintCount--
+		if constraintCount > 0 {
+			b.WriteString(",")
+		}
+		b.WriteString("\n")
 	}
 
 	b.WriteString(")")

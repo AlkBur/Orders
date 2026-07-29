@@ -5,12 +5,6 @@ import (
 	"fmt"
 )
 
-const NilUUID = "00000000-0000-0000-0000-000000000000"
-
-func IsNilUUID(s string) bool {
-	return s == NilUUID
-}
-
 func GenerateUUID() (string, error) {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {

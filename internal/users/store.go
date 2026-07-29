@@ -1,6 +1,7 @@
 package users
 
 import (
+	"context"
 	"database/sql"
 )
 
@@ -12,20 +13,124 @@ func NewStore(db *sql.DB) *Store {
 	return &Store{db: db}
 }
 
-// Create создает пользователя.
+func (s *Store) New() *User {
+	return &User{}
+}
+
+func (s *Store) GetByID(ctx context.Context, id int64) (*User, error) {
+	return s.FindByID(id)
+}
+
+func (s *Store) GetByUUID(ctx context.Context, uuid string) (*User, error) {
+	return scanUser(s.db.QueryRow(`
+		SELECT id, uuid, login, email, password_hash, is_admin, created_at, updated_at
+		FROM users
+		WHERE uuid = ?
+	`, uuid))
+}
+
+func (s *Store) List(ctx context.Context) ([]*User, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, uuid, login, email, password_hash, is_admin, created_at, updated_at
+		FROM users
+		ORDER BY login
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []*User
+	for rows.Next() {
+		u := &User{}
+		if err := rows.Scan(&u.ID, &u.UUID, &u.Login, &u.Email, &u.PasswordHash, &u.IsAdmin, &u.CreatedAt, &u.UpdatedAt); err != nil {
+			return nil, err
+		}
+		u.HasPassword = u.PasswordHash != ""
+		users = append(users, u)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if users == nil {
+		users = []*User{}
+	}
+
+	return users, nil
+}
+
+// Save inserts or updates a user.
+//
+// INSERT (ID == 0):
+//   - UUID must already be assigned.
+//   - Returns ErrEmptyUUID if UUID is empty.
+//
+// UPDATE (ID > 0):
+//   - Updates the existing record by ID.
+func (s *Store) Save(ctx context.Context, user *User) error {
+	if user.ID == 0 {
+		if user.UUID == "" {
+			return ErrEmptyUUID
+		}
+
+		result, err := s.db.ExecContext(ctx, `
+			INSERT INTO users (uuid, login, email, password_hash, is_admin, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+		`, user.UUID, user.Login, user.Email, user.PasswordHash, user.IsAdmin)
+		if err != nil {
+			return err
+		}
+
+		id, err := result.LastInsertId()
+		if err != nil {
+			return err
+		}
+		user.ID = id
+		return nil
+	}
+
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE users
+		SET uuid = ?, login = ?, email = ?, password_hash = ?, is_admin = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`, user.UUID, user.Login, user.Email, user.PasswordHash, user.IsAdmin, user.ID)
+	return err
+}
+
+func (s *Store) DeleteByID(ctx context.Context, id int64) error {
+	result, err := s.db.ExecContext(ctx, `DELETE FROM users WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	n, _ := result.RowsAffected()
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (s *Store) DeleteByUUID(ctx context.Context, uuid string) error {
+	result, err := s.db.ExecContext(ctx, `DELETE FROM users WHERE uuid = ?`, uuid)
+	if err != nil {
+		return err
+	}
+	n, _ := result.RowsAffected()
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (s *Store) Create(user *User) error {
+	if user.UUID == "" {
+		return ErrEmptyUUID
+	}
+
 	result, err := s.db.Exec(`
-		INSERT INTO users (
-			login,
-			password_hash,
-			is_admin
-		)
-		VALUES (?, ?, ?)
-	`,
-		user.Login,
-		user.PasswordHash,
-		user.IsAdmin,
-	)
+		INSERT INTO users (uuid, login, email, password_hash, is_admin)
+		VALUES (?, ?, ?, ?, ?)
+	`, user.UUID, user.Login, user.Email, user.PasswordHash, user.IsAdmin)
 	if err != nil {
 		return err
 	}
@@ -34,73 +139,38 @@ func (s *Store) Create(user *User) error {
 	return err
 }
 
-// Update сохраняет изменения пользователя.
 func (s *Store) Update(user *User) error {
 	_, err := s.db.Exec(`
 		UPDATE users
-		SET
-			login = ?,
-			password_hash = ?,
-			is_admin = ?,
-			updated_at = CURRENT_TIMESTAMP
+		SET uuid = ?, login = ?, email = ?, password_hash = ?, is_admin = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
-	`,
-		user.Login,
-		user.PasswordHash,
-		user.IsAdmin,
-		user.ID,
-	)
-
+	`, user.UUID, user.Login, user.Email, user.PasswordHash, user.IsAdmin, user.ID)
 	return err
 }
 
-// FindByLogin ищет пользователя по логину.
 func (s *Store) FindByLogin(login string) (*User, error) {
 	return scanUser(s.db.QueryRow(`
-		SELECT
-			id,
-			login,
-			password_hash,
-			is_admin,
-			created_at,
-			updated_at
+		SELECT id, uuid, login, email, password_hash, is_admin, created_at, updated_at
 		FROM users
 		WHERE login = ?
 	`, login))
 }
 
-// FindAdmin возвращает администратора.
+func (s *Store) FindByID(id int64) (*User, error) {
+	return scanUser(s.db.QueryRow(`
+		SELECT id, uuid, login, email, password_hash, is_admin, created_at, updated_at
+		FROM users
+		WHERE id = ?
+	`, id))
+}
+
 func (s *Store) FindAdmin() (*User, error) {
 	return scanUser(s.db.QueryRow(`
-		SELECT
-			id,
-			login,
-			password_hash,
-			is_admin,
-			created_at,
-			updated_at
+		SELECT id, uuid, login, email, password_hash, is_admin, created_at, updated_at
 		FROM users
 		WHERE is_admin = 1
 		LIMIT 1
 	`))
-}
-
-func scanUser(row *sql.Row) (*User, error) {
-	user := &User{}
-
-	err := row.Scan(
-		&user.ID,
-		&user.Login,
-		&user.PasswordHash,
-		&user.IsAdmin,
-		&user.CreatedAt,
-		&user.UpdatedAt,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	return user, nil
 }
 
 func (s *Store) Authenticate(login, password string) (*User, error) {
@@ -120,19 +190,23 @@ func (s *Store) Authenticate(login, password string) (*User, error) {
 	return user, nil
 }
 
-func (s *Store) FindByID(id int64) (*User, error) {
+func scanUser(row *sql.Row) (*User, error) {
+	user := &User{}
 
-	row := s.db.QueryRow(`
-		SELECT
-			id,
-			login,
-			password_hash,
-			is_admin,
-			created_at,
-			updated_at
-		FROM users
-		WHERE id = ?
-	`, id)
+	err := row.Scan(
+		&user.ID,
+		&user.UUID,
+		&user.Login,
+		&user.Email,
+		&user.PasswordHash,
+		&user.IsAdmin,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
 
-	return scanUser(row)
+	user.HasPassword = user.PasswordHash != ""
+	return user, nil
 }

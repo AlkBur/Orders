@@ -82,14 +82,24 @@ func DateTime(name string) Column {
 	return Column{Name: name, Type: TypeDateTime}
 }
 
+type UniqueConstraint struct {
+	Columns []string
+}
+
 type Table struct {
-	Name       string
-	Columns    []Column
-	PrimaryKey []string
+	Name              string
+	Columns           []Column
+	PrimaryKey        []string
+	UniqueConstraints []UniqueConstraint
 }
 
 func (t Table) SetPrimaryKey(columns ...string) Table {
 	t.PrimaryKey = columns
+	return t
+}
+
+func (t Table) AddUniqueConstraint(columns ...string) Table {
+	t.UniqueConstraints = append(t.UniqueConstraints, UniqueConstraint{Columns: columns})
 	return t
 }
 

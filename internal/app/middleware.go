@@ -18,8 +18,8 @@ const (
 	sessionContextKey
 )
 
-func CurrentUser(r *http.Request) *users.User {
-	user, _ := r.Context().Value(userContextKey).(*users.User)
+func CurrentUser(r *http.Request) users.Identity {
+	user, _ := r.Context().Value(userContextKey).(users.Identity)
 	return user
 }
 
@@ -57,7 +57,7 @@ func SessionMiddleware(store *sessions.Store) func(http.Handler) http.Handler {
 	}
 }
 
-func RequireAuth(store *sessions.Store, usersStore *users.Store, next http.Handler) http.Handler {
+func RequireAuth(store *sessions.Store, identity *users.IdentityService, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		session := CurrentSession(r)
 		if session == nil || session.UserID == nil {
@@ -65,8 +65,8 @@ func RequireAuth(store *sessions.Store, usersStore *users.Store, next http.Handl
 			return
 		}
 
-		user, err := usersStore.FindByID(*session.UserID)
-		if err != nil {
+		user, ok := identity.GetByID(*session.UserID)
+		if !ok {
 			store.Delete(session.ID)
 			DeleteSessionCookie(w)
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
@@ -81,7 +81,7 @@ func RequireAuth(store *sessions.Store, usersStore *users.Store, next http.Handl
 func RequireAdmin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		user := CurrentUser(r)
-		if user == nil || !user.IsAdmin {
+		if user.ID == 0 || !user.IsAdmin {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
@@ -92,7 +92,7 @@ func RequireAdmin(next http.Handler) http.Handler {
 func RequirePassword(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		user := CurrentUser(r)
-		if user != nil && user.NeedsPasswordSetup() {
+		if user.ID != 0 && user.NeedsPasswordSetup() {
 			http.Redirect(w, r, "/set-password", http.StatusSeeOther)
 			return
 		}

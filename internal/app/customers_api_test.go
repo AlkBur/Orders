@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -16,35 +15,25 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func insertOrg(t *testing.T, db *sql.DB, id, name, apiKey string) {
-	t.Helper()
-	if _, err := db.Exec(`
-		INSERT INTO organizations (uuid, name, api_key, active, created_at, updated_at)
-		VALUES (?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-	`, id, name, apiKey); err != nil {
-		t.Fatalf("insert org %s: %v", id, err)
-	}
-}
-
 func TestCustomersAPI_SyncInsert(t *testing.T) {
 	db := testutil.NewTestDB(t, NewSchema())
 	orgs := organizations.NewStore(db)
-	insertOrg(t, db, "org1", "Org", "k1")
+	_, orgUUID := insertOrg(t, db, "Org", "k1")
 
 	app := &App{
 		customers:     customers.NewStore(db),
 		organizations: orgs,
-		orgKeys:       map[string]string{"org1": "k1"},
+		orgKeys:       map[string]string{orgUUID: "k1"},
 	}
 
 	body := `[{"id":"ext-1","name":"From 1C"}]`
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodPut, "/api/integration/organizations/org1/customers",
+	r := httptest.NewRequest(http.MethodPut, "/api/integration/organizations/"+orgUUID+"/customers",
 		strings.NewReader(body))
 	r.Header.Set("Content-Type", "application/json")
 	r.Header.Set("X-API-Key", "k1")
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("oid", "org1")
+	rctx.URLParams.Add("oid", orgUUID)
 	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
 
 	app.RequireOrganizationAPIKey(http.HandlerFunc(app.HandlePutCustomers)).ServeHTTP(w, r)
@@ -59,7 +48,13 @@ func TestCustomersAPI_SyncInsert(t *testing.T) {
 		t.Fatalf("expected 1 inserted, got %d", result.Inserted)
 	}
 
-	got, err := app.customers.Get(context.Background(), "org1", "ext-1")
+	// Get org by UUID to find its int64 ID
+	org, err := app.organizations.GetByUUID(context.Background(), orgUUID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := app.customers.GetByExternal(context.Background(), org.ID, "ext-1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,23 +66,24 @@ func TestCustomersAPI_SyncInsert(t *testing.T) {
 func TestCustomersAPI_SyncUpdate(t *testing.T) {
 	db := testutil.NewTestDB(t, NewSchema())
 	orgs := organizations.NewStore(db)
-	insertOrg(t, db, "org1", "Org", "k1")
+	_, orgUUID := insertOrg(t, db, "Org", "k1")
+	org, _ := orgs.GetByUUID(context.Background(), orgUUID)
 
 	app := &App{
 		customers:     customers.NewStore(db),
 		organizations: orgs,
-		orgKeys:       map[string]string{"org1": "k1"},
+		orgKeys:       map[string]string{orgUUID: "k1"},
 	}
 
 	// Pre-insert via sync
 	body := `[{"id":"ext-1","name":"Original"}]`
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodPut, "/api/integration/organizations/org1/customers",
+	r := httptest.NewRequest(http.MethodPut, "/api/integration/organizations/"+orgUUID+"/customers",
 		strings.NewReader(body))
 	r.Header.Set("Content-Type", "application/json")
 	r.Header.Set("X-API-Key", "k1")
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("oid", "org1")
+	rctx.URLParams.Add("oid", orgUUID)
 	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
 	app.RequireOrganizationAPIKey(http.HandlerFunc(app.HandlePutCustomers)).ServeHTTP(w, r)
 	if w.Code != http.StatusOK {
@@ -97,12 +93,12 @@ func TestCustomersAPI_SyncUpdate(t *testing.T) {
 	// Update via sync
 	body = `[{"id":"ext-1","name":"Updated","active":false}]`
 	w = httptest.NewRecorder()
-	r = httptest.NewRequest(http.MethodPut, "/api/integration/organizations/org1/customers",
+	r = httptest.NewRequest(http.MethodPut, "/api/integration/organizations/"+orgUUID+"/customers",
 		strings.NewReader(body))
 	r.Header.Set("Content-Type", "application/json")
 	r.Header.Set("X-API-Key", "k1")
 	rctx = chi.NewRouteContext()
-	rctx.URLParams.Add("oid", "org1")
+	rctx.URLParams.Add("oid", orgUUID)
 	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
 	app.RequireOrganizationAPIKey(http.HandlerFunc(app.HandlePutCustomers)).ServeHTTP(w, r)
 
@@ -116,7 +112,7 @@ func TestCustomersAPI_SyncUpdate(t *testing.T) {
 		t.Fatalf("expected 1 updated, got %d", result.Updated)
 	}
 
-	got, _ := app.customers.Get(context.Background(), "org1", "ext-1")
+	got, _ := app.customers.GetByExternal(context.Background(), org.ID, "ext-1")
 	if got.Name != "Updated" {
 		t.Fatalf("expected 'Updated', got '%s'", got.Name)
 	}
@@ -128,12 +124,12 @@ func TestCustomersAPI_SyncUpdate(t *testing.T) {
 func TestCustomersAPI_ValidationErrors(t *testing.T) {
 	db := testutil.NewTestDB(t, NewSchema())
 	orgs := organizations.NewStore(db)
-	insertOrg(t, db, "org1", "Org", "k1")
+	_, orgUUID := insertOrg(t, db, "Org", "k1")
 
 	app := &App{
 		customers:     customers.NewStore(db),
 		organizations: orgs,
-		orgKeys:       map[string]string{"org1": "k1"},
+		orgKeys:       map[string]string{orgUUID: "k1"},
 	}
 
 	tests := []struct {
@@ -165,14 +161,14 @@ func TestCustomersAPI_ValidationErrors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
-			r := httptest.NewRequest(http.MethodPut, "/api/integration/organizations/org1/customers",
+			r := httptest.NewRequest(http.MethodPut, "/api/integration/organizations/"+orgUUID+"/customers",
 				strings.NewReader(tt.body))
 			if tt.contentTyp != "" {
 				r.Header.Set("Content-Type", tt.contentTyp)
 			}
 			r.Header.Set("X-API-Key", "k1")
 			rctx := chi.NewRouteContext()
-			rctx.URLParams.Add("oid", "org1")
+			rctx.URLParams.Add("oid", orgUUID)
 			r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
 
 			app.RequireOrganizationAPIKey(http.HandlerFunc(app.HandlePutCustomers)).ServeHTTP(w, r)
@@ -187,34 +183,34 @@ func TestCustomersAPI_ValidationErrors(t *testing.T) {
 func TestCustomersAPI_SyncToDifferentOrgs(t *testing.T) {
 	db := testutil.NewTestDB(t, NewSchema())
 	orgs := organizations.NewStore(db)
-	insertOrg(t, db, "org1", "Org1", "k1")
-	insertOrg(t, db, "org2", "Org2", "k2")
+	_, orgUUID1 := insertOrg(t, db, "Org1", "k1")
+	_, orgUUID2 := insertOrg(t, db, "Org2", "k2")
 
 	app := &App{
 		customers:     customers.NewStore(db),
 		organizations: orgs,
-		orgKeys:       map[string]string{"org1": "k1", "org2": "k2"},
+		orgKeys:       map[string]string{orgUUID1: "k1", orgUUID2: "k2"},
 	}
 
-	sync := func(oid, body string) {
+	sync := func(oUUID string, body string) {
 		w := httptest.NewRecorder()
-		r := httptest.NewRequest(http.MethodPut, "/api/integration/organizations/"+oid+"/customers",
+		r := httptest.NewRequest(http.MethodPut, "/api/integration/organizations/"+oUUID+"/customers",
 			strings.NewReader(body))
 		r.Header.Set("Content-Type", "application/json")
-		r.Header.Set("X-API-Key", map[string]string{"org1": "k1", "org2": "k2"}[oid])
+		r.Header.Set("X-API-Key", map[string]string{orgUUID1: "k1", orgUUID2: "k2"}[oUUID])
 		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("oid", oid)
+		rctx.URLParams.Add("oid", oUUID)
 		r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
 		app.RequireOrganizationAPIKey(http.HandlerFunc(app.HandlePutCustomers)).ServeHTTP(w, r)
 		if w.Code != http.StatusOK {
-			t.Fatalf("sync to %s: expected 200, got %d", oid, w.Code)
+			t.Fatalf("sync to %s: expected 200, got %d", oUUID, w.Code)
 		}
 	}
 
-	sync("org1", `[{"id":"shared","name":"In Org1"}]`)
-	sync("org2", `[{"id":"shared","name":"In Org2"}]`)
+	sync(orgUUID1, `[{"id":"shared","name":"In Org1"}]`)
+	sync(orgUUID2, `[{"id":"shared","name":"In Org2"}]`)
 
-	list, err := app.customers.List(context.Background(), "00000000-0000-0000-0000-000000000000")
+	list, err := app.customers.List(context.Background(), 0)
 	if err != nil {
 		t.Fatal(err)
 	}

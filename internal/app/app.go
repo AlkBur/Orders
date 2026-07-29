@@ -22,6 +22,7 @@ type App struct {
 
 	db            *sql.DB
 	users         *users.Store
+	identity      *users.IdentityService
 	sessions      *sessions.Store
 	customers     *customers.Store
 	organizations *organizations.Store
@@ -68,10 +69,17 @@ func New(configPath string) (*App, error) {
 		return nil, err
 	}
 
+	identity := users.NewIdentityService()
+	if err := identity.Load(context.Background(), usersStore); err != nil {
+		db.Close()
+		return nil, err
+	}
+
 	app := &App{
 		config:        config,
 		db:            db,
 		users:         usersStore,
+		identity:      identity,
 		sessions:      sessionStore,
 		customers:     customers.NewStore(db),
 		organizations: orgStore,
@@ -91,6 +99,8 @@ func New(configPath string) (*App, error) {
 		"customer_card",
 		"products",
 		"product_card",
+		"users",
+		"user_card",
 	} {
 		tmpl, err := LoadTemplates(page)
 		if err != nil {

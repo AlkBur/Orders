@@ -5,10 +5,10 @@ import (
 	"html/template"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
-	"Orders/internal/common"
 	"Orders/internal/organizations"
 	"Orders/internal/products"
 	"Orders/internal/testutil"
@@ -31,19 +31,19 @@ func loadPageTemplates(t *testing.T, a *App, page string) {
 func TestProductsPage_Global(t *testing.T) {
 	db := testutil.NewTestDB(t, NewSchema())
 	orgs := organizations.NewStore(db)
-	insertOrg(t, db, "org1", "Org One", "key_org1")
+	orgID, _ := insertOrg(t, db, "Org One", "key_org1")
 
 	app := &App{
 		products:      products.NewStore(db),
 		organizations: orgs,
-		orgKeys:       map[string]string{"org1": "key_org1"},
 	}
 	loadPageTemplates(t, app, "products")
 
 	p := app.products.New()
-	p.OrganizationID = "org1"
+	p.OrganizationID = orgID
 	p.Name = "Global Product"
 	p.Unit = "шт"
+	p.UUID = "app-prod-global"
 	if err := app.products.Save(context.Background(), p); err != nil {
 		t.Fatal(err)
 	}
@@ -63,35 +63,32 @@ func TestProductsPage_Global(t *testing.T) {
 	if !strings.Contains(body, "Активен") {
 		t.Fatal("expected active column in global product list")
 	}
-	if !strings.Contains(body, "/organizations/org1/products/"+p.ID) {
-		t.Fatal("expected product URL with org1, got nil UUID")
-	}
 }
 
 func TestProductsPage_Org(t *testing.T) {
 	db := testutil.NewTestDB(t, NewSchema())
 	orgs := organizations.NewStore(db)
-	insertOrg(t, db, "org1", "Org One", "key_org1")
+	orgID, _ := insertOrg(t, db, "Org One", "key_org1")
 
 	app := &App{
 		products:      products.NewStore(db),
 		organizations: orgs,
-		orgKeys:       map[string]string{"org1": "key_org1"},
 	}
 	loadPageTemplates(t, app, "products")
 
 	p := app.products.New()
-	p.OrganizationID = "org1"
+	p.OrganizationID = orgID
 	p.Name = "Test"
 	p.Unit = "шт"
+	p.UUID = "app-prod-org"
 	if err := app.products.Save(context.Background(), p); err != nil {
 		t.Fatal(err)
 	}
 
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodGet, "/organizations/org1/products", nil)
+	r := httptest.NewRequest(http.MethodGet, "/organizations/"+strconv.FormatInt(orgID, 10)+"/products", nil)
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("oid", "org1")
+	rctx.URLParams.Add("oid", strconv.FormatInt(orgID, 10))
 	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
 
 	app.ProductsPage(w, r)
@@ -112,19 +109,18 @@ func TestProductsPage_Org(t *testing.T) {
 func TestProductCard_NewFromGlobal(t *testing.T) {
 	db := testutil.NewTestDB(t, NewSchema())
 	orgs := organizations.NewStore(db)
-	insertOrg(t, db, "org1", "Org One", "key_org1")
+	insertOrg(t, db, "Org One", "key_org1")
 
 	app := &App{
 		products:      products.NewStore(db),
 		organizations: orgs,
-		orgKeys:       map[string]string{"org1": "key_org1"},
 	}
 
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodGet, "/organizations/"+common.NilUUID+"/products/"+common.NilUUID, nil)
+	r := httptest.NewRequest(http.MethodGet, "/organizations/0/products/new", nil)
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("oid", common.NilUUID)
-	rctx.URLParams.Add("id", common.NilUUID)
+	rctx.URLParams.Add("oid", "0")
+	rctx.URLParams.Add("id", "new")
 	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
 
 	app.ProductCard(w, r)
@@ -137,19 +133,18 @@ func TestProductCard_NewFromGlobal(t *testing.T) {
 func TestProductCard_NewInOrg(t *testing.T) {
 	db := testutil.NewTestDB(t, NewSchema())
 	orgs := organizations.NewStore(db)
-	insertOrg(t, db, "org1", "Org One", "key_org1")
+	orgID, _ := insertOrg(t, db, "Org One", "key_org1")
 
 	app := &App{
 		products:      products.NewStore(db),
 		organizations: orgs,
-		orgKeys:       map[string]string{"org1": "key_org1"},
 	}
 
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodGet, "/organizations/org1/products/"+common.NilUUID, nil)
+	r := httptest.NewRequest(http.MethodGet, "/organizations/"+strconv.FormatInt(orgID, 10)+"/products/new", nil)
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("oid", "org1")
-	rctx.URLParams.Add("id", common.NilUUID)
+	rctx.URLParams.Add("oid", strconv.FormatInt(orgID, 10))
+	rctx.URLParams.Add("id", "new")
 	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
 
 	app.ProductCard(w, r)
@@ -162,27 +157,27 @@ func TestProductCard_NewInOrg(t *testing.T) {
 func TestProductCard_Edit(t *testing.T) {
 	db := testutil.NewTestDB(t, NewSchema())
 	orgs := organizations.NewStore(db)
-	insertOrg(t, db, "org1", "Org One", "key_org1")
+	orgID, _ := insertOrg(t, db, "Org One", "key_org1")
 
 	app := &App{
 		products:      products.NewStore(db),
 		organizations: orgs,
-		orgKeys:       map[string]string{"org1": "key_org1"},
 	}
 
 	p := app.products.New()
-	p.OrganizationID = "org1"
+	p.OrganizationID = orgID
 	p.Name = "Edit Me"
 	p.Unit = "шт"
+	p.UUID = "app-prod-edit"
 	if err := app.products.Save(context.Background(), p); err != nil {
 		t.Fatal(err)
 	}
 
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodGet, "/organizations/org1/products/"+p.ID, nil)
+	r := httptest.NewRequest(http.MethodGet, "/organizations/"+strconv.FormatInt(orgID, 10)+"/products/"+strconv.FormatInt(p.ID, 10), nil)
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("oid", "org1")
-	rctx.URLParams.Add("id", p.ID)
+	rctx.URLParams.Add("oid", strconv.FormatInt(orgID, 10))
+	rctx.URLParams.Add("id", strconv.FormatInt(p.ID, 10))
 	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
 
 	app.ProductCard(w, r)
@@ -195,19 +190,18 @@ func TestProductCard_Edit(t *testing.T) {
 func TestProductCard_NotFound(t *testing.T) {
 	db := testutil.NewTestDB(t, NewSchema())
 	orgs := organizations.NewStore(db)
-	insertOrg(t, db, "org1", "Org One", "key_org1")
+	orgID, _ := insertOrg(t, db, "Org One", "key_org1")
 
 	app := &App{
 		products:      products.NewStore(db),
 		organizations: orgs,
-		orgKeys:       map[string]string{"org1": "key_org1"},
 	}
 
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodGet, "/organizations/org1/products/nonexistent", nil)
+	r := httptest.NewRequest(http.MethodGet, "/organizations/"+strconv.FormatInt(orgID, 10)+"/products/999", nil)
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("oid", "org1")
-	rctx.URLParams.Add("id", "nonexistent")
+	rctx.URLParams.Add("oid", strconv.FormatInt(orgID, 10))
+	rctx.URLParams.Add("id", "999")
 	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
 
 	app.ProductCard(w, r)
@@ -220,21 +214,20 @@ func TestProductCard_NotFound(t *testing.T) {
 func TestProductSave_Create(t *testing.T) {
 	db := testutil.NewTestDB(t, NewSchema())
 	orgs := organizations.NewStore(db)
-	insertOrg(t, db, "org1", "Org One", "key_org1")
+	orgID, _ := insertOrg(t, db, "Org One", "key_org1")
 
 	app := &App{
 		products:      products.NewStore(db),
 		organizations: orgs,
-		orgKeys:       map[string]string{"org1": "key_org1"},
 	}
 
-	body := `name=New+Product&unit=шт&id=` + common.NilUUID
+	body := `name=New+Product&unit=шт`
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodPost, "/organizations/org1/products",
+	r := httptest.NewRequest(http.MethodPost, "/organizations/"+strconv.FormatInt(orgID, 10)+"/products",
 		strings.NewReader(body))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("oid", "org1")
+	rctx.URLParams.Add("oid", strconv.FormatInt(orgID, 10))
 	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
 
 	app.ProductSave(w, r)
@@ -243,7 +236,7 @@ func TestProductSave_Create(t *testing.T) {
 		t.Fatalf("expected 303, got %d: %s", w.Code, w.Body.String())
 	}
 
-	list, _ := app.products.List(context.Background(), "org1")
+	list, _ := app.products.List(context.Background(), orgID)
 	if len(list) != 1 {
 		t.Fatalf("expected 1 product, got %d", len(list))
 	}
@@ -258,29 +251,29 @@ func TestProductSave_Create(t *testing.T) {
 func TestProductSave_Update(t *testing.T) {
 	db := testutil.NewTestDB(t, NewSchema())
 	orgs := organizations.NewStore(db)
-	insertOrg(t, db, "org1", "Org One", "key_org1")
+	orgID, _ := insertOrg(t, db, "Org One", "key_org1")
 
 	app := &App{
 		products:      products.NewStore(db),
 		organizations: orgs,
-		orgKeys:       map[string]string{"org1": "key_org1"},
 	}
 
 	p := app.products.New()
-	p.OrganizationID = "org1"
+	p.OrganizationID = orgID
 	p.Name = "Original"
 	p.Unit = "шт"
+	p.UUID = "app-prod-update"
 	if err := app.products.Save(context.Background(), p); err != nil {
 		t.Fatal(err)
 	}
 
-	body := "id=" + p.ID + "&name=Updated&unit=кг"
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodPost, "/organizations/org1/products",
-		strings.NewReader(body))
+	r := httptest.NewRequest(http.MethodPost, "/organizations/"+strconv.FormatInt(orgID, 10)+"/products/"+strconv.FormatInt(p.ID, 10),
+		strings.NewReader("uuid="+p.UUID+"&name=Updated&unit=кг"))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("oid", "org1")
+	rctx.URLParams.Add("oid", strconv.FormatInt(orgID, 10))
+	rctx.URLParams.Add("id", strconv.FormatInt(p.ID, 10))
 	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
 
 	app.ProductSave(w, r)
@@ -289,7 +282,10 @@ func TestProductSave_Update(t *testing.T) {
 		t.Fatalf("expected 303, got %d", w.Code)
 	}
 
-	got, _ := app.products.Get(context.Background(), "org1", p.ID)
+	got, err := app.products.GetByExternal(context.Background(), orgID, p.UUID)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if got.Name != "Updated" {
 		t.Fatalf("expected 'Updated', got '%s'", got.Name)
 	}
@@ -301,27 +297,27 @@ func TestProductSave_Update(t *testing.T) {
 func TestProductDelete(t *testing.T) {
 	db := testutil.NewTestDB(t, NewSchema())
 	orgs := organizations.NewStore(db)
-	insertOrg(t, db, "org1", "Org One", "key_org1")
+	orgID, _ := insertOrg(t, db, "Org One", "key_org1")
 
 	app := &App{
 		products:      products.NewStore(db),
 		organizations: orgs,
-		orgKeys:       map[string]string{"org1": "key_org1"},
 	}
 
 	p := app.products.New()
-	p.OrganizationID = "org1"
+	p.OrganizationID = orgID
 	p.Name = "To Delete"
 	p.Unit = "шт"
+	p.UUID = "app-prod-delete"
 	if err := app.products.Save(context.Background(), p); err != nil {
 		t.Fatal(err)
 	}
 
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodDelete, "/organizations/org1/products/"+p.ID, nil)
+	r := httptest.NewRequest(http.MethodDelete, "/organizations/"+strconv.FormatInt(orgID, 10)+"/products/"+strconv.FormatInt(p.ID, 10), nil)
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("oid", "org1")
-	rctx.URLParams.Add("id", p.ID)
+	rctx.URLParams.Add("oid", strconv.FormatInt(orgID, 10))
+	rctx.URLParams.Add("id", strconv.FormatInt(p.ID, 10))
 	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
 
 	app.ProductDelete(w, r)
@@ -330,7 +326,7 @@ func TestProductDelete(t *testing.T) {
 		t.Fatalf("expected 303, got %d", w.Code)
 	}
 
-	if _, err := app.products.Get(context.Background(), "org1", p.ID); err == nil {
+	if _, err := app.products.GetByID(context.Background(), p.ID); err == nil {
 		t.Fatal("expected not found after delete")
 	}
 }
@@ -338,21 +334,20 @@ func TestProductDelete(t *testing.T) {
 func TestProductSave_UpdateNotFound(t *testing.T) {
 	db := testutil.NewTestDB(t, NewSchema())
 	orgs := organizations.NewStore(db)
-	insertOrg(t, db, "org1", "Org One", "key_org1")
+	orgID, _ := insertOrg(t, db, "Org One", "key_org1")
 
 	app := &App{
 		products:      products.NewStore(db),
 		organizations: orgs,
-		orgKeys:       map[string]string{"org1": "key_org1"},
 	}
 
-	body := "id=nonexistent&name=Ghost"
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodPost, "/organizations/org1/products",
-		strings.NewReader(body))
+	r := httptest.NewRequest(http.MethodPost, "/organizations/"+strconv.FormatInt(orgID, 10)+"/products/999",
+		strings.NewReader("name=Ghost"))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("oid", "org1")
+	rctx.URLParams.Add("oid", strconv.FormatInt(orgID, 10))
+	rctx.URLParams.Add("id", "999")
 	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
 
 	app.ProductSave(w, r)
@@ -361,5 +356,3 @@ func TestProductSave_UpdateNotFound(t *testing.T) {
 		t.Fatalf("expected 404, got %d", w.Code)
 	}
 }
-
-

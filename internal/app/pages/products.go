@@ -9,6 +9,5 @@ type ProductCardPage struct {
 	Title          string
 	Product        *products.Product
 	Orgs           []*organizations.Organization
-	OrganizationID string
-	IsNew          bool
+	OrganizationID int64
 }

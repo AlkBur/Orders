@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -21,7 +22,6 @@ func TestOrganizationsPage(t *testing.T) {
 	app := &App{
 		organizations: orgs,
 		customers:     customers.NewStore(db),
-		orgKeys:       make(map[string]string),
 	}
 
 	w := httptest.NewRecorder()
@@ -40,13 +40,12 @@ func TestOrganizationCard_New(t *testing.T) {
 	app := &App{
 		organizations: orgs,
 		customers:     customers.NewStore(db),
-		orgKeys:       make(map[string]string),
 	}
 
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodGet, "/organizations/00000000-0000-0000-0000-000000000000", nil)
+	r := httptest.NewRequest(http.MethodGet, "/organizations/new", nil)
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", "00000000-0000-0000-0000-000000000000")
+	rctx.URLParams.Add("id", "new")
 	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
 
 	app.OrganizationCard(w, r)
@@ -59,18 +58,23 @@ func TestOrganizationCard_New(t *testing.T) {
 func TestOrganizationCard_Edit(t *testing.T) {
 	db := testutil.NewTestDB(t, NewSchema())
 	orgs := organizations.NewStore(db)
-	insertOrg(t, db, "org-uuid", "Test Org", "test-key")
+
+	o := orgs.New()
+	o.Name = "Test Org"
+	o.UUID = "app-org-card-edit"
+	if err := orgs.Save(context.Background(), o); err != nil {
+		t.Fatal(err)
+	}
 
 	app := &App{
 		organizations: orgs,
 		customers:     customers.NewStore(db),
-		orgKeys:       make(map[string]string),
 	}
 
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodGet, "/organizations/org-uuid", nil)
+	r := httptest.NewRequest(http.MethodGet, "/organizations/"+strconv.FormatInt(o.ID, 10), nil)
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", "org-uuid")
+	rctx.URLParams.Add("id", strconv.FormatInt(o.ID, 10))
 	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
 
 	app.OrganizationCard(w, r)
@@ -87,13 +91,12 @@ func TestOrganizationCard_NotFound(t *testing.T) {
 	app := &App{
 		organizations: orgs,
 		customers:     customers.NewStore(db),
-		orgKeys:       make(map[string]string),
 	}
 
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodGet, "/organizations/nonexistent", nil)
+	r := httptest.NewRequest(http.MethodGet, "/organizations/999", nil)
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", "nonexistent")
+	rctx.URLParams.Add("id", "999")
 	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
 
 	app.OrganizationCard(w, r)
@@ -110,16 +113,15 @@ func TestOrganizationSave_Create(t *testing.T) {
 	app := &App{
 		organizations: orgs,
 		customers:     customers.NewStore(db),
-		orgKeys:       make(map[string]string),
 	}
 
 	body := "name=New+Org&active=on"
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodPost, "/organizations/00000000-0000-0000-0000-000000000000",
+	r := httptest.NewRequest(http.MethodPost, "/organizations/0",
 		strings.NewReader(body))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", "00000000-0000-0000-0000-000000000000")
+	rctx.URLParams.Add("id", "0")
 	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
 
 	app.OrganizationSave(w, r)
@@ -146,6 +148,7 @@ func TestOrganizationSave_Update(t *testing.T) {
 
 	o := orgs.New()
 	o.Name = "Original"
+	o.UUID = "app-org-update"
 	if err := orgs.Save(context.Background(), o); err != nil {
 		t.Fatal(err)
 	}
@@ -153,16 +156,15 @@ func TestOrganizationSave_Update(t *testing.T) {
 	app := &App{
 		organizations: orgs,
 		customers:     customers.NewStore(db),
-		orgKeys:       make(map[string]string),
 	}
 
 	body := "name=Updated"
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodPost, "/organizations/"+o.UUID,
+	r := httptest.NewRequest(http.MethodPost, "/organizations/"+strconv.FormatInt(o.ID, 10),
 		strings.NewReader(body))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", o.UUID)
+	rctx.URLParams.Add("id", strconv.FormatInt(o.ID, 10))
 	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
 
 	app.OrganizationSave(w, r)
@@ -171,7 +173,7 @@ func TestOrganizationSave_Update(t *testing.T) {
 		t.Fatalf("expected 303, got %d", w.Code)
 	}
 
-	got, err := orgs.Get(context.Background(), o.UUID)
+	got, err := orgs.GetByID(context.Background(), o.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -187,16 +189,15 @@ func TestOrganizationSave_UpdateNotFound(t *testing.T) {
 	app := &App{
 		organizations: orgs,
 		customers:     customers.NewStore(db),
-		orgKeys:       make(map[string]string),
 	}
 
 	body := "name=Nope"
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodPost, "/organizations/nonexistent",
+	r := httptest.NewRequest(http.MethodPost, "/organizations/999",
 		strings.NewReader(body))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", "nonexistent")
+	rctx.URLParams.Add("id", "999")
 	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
 
 	app.OrganizationSave(w, r)

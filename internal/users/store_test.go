@@ -23,6 +23,7 @@ func TestStore_CreateAndFindByLogin(t *testing.T) {
 	store := NewStore(db)
 
 	user := &User{
+		UUID:         "test-user-admin",
 		Login:        "admin",
 		PasswordHash: "hash",
 		IsAdmin:      true,
@@ -74,6 +75,7 @@ func TestStore_FindAdmin(t *testing.T) {
 	store := NewStore(db)
 
 	admin := &User{
+		UUID:    "test-find-admin",
 		Login:   "admin",
 		IsAdmin: true,
 	}

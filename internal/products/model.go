@@ -2,15 +2,17 @@ package products
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 
 	"Orders/internal/entity"
 )
 
 type Product struct {
-	OrganizationID   string
-	OrganizationName string `readonly:"true" label:"Организация" order:"25" list:"true"`
-	ID               string `db:"id" label:"ID" order:"10"`
+	ID               int64  `db:"id" order:"2"`
+	UUID             string `db:"uuid" label:"ID" order:"5"`
+	OrganizationID   int64  `db:"organization_id" order:"3"`
+	OrganizationName string `readonly:"true" label:"Организация" order:"15" list:"true"`
 	Name             string `db:"name" label:"Наименование" order:"20" list:"true" search:"true"`
 	Unit             string `db:"unit" label:"Ед. изм" order:"30" list:"true"`
 	Active           bool   `db:"active" label:"Активен" order:"40" list:"true"`
@@ -18,14 +20,19 @@ type Product struct {
 	UpdatedAt        time.Time
 }
 
-var Descriptor = entity.Register[Product]()
+var Descriptor = entity.Register[Product](
+	entity.PrimaryKey("ID"),
+	entity.ExternalKey("OrganizationID", "UUID"),
+)
 
 func (p Product) DisplayValue(name string) (string, error) {
 	switch name {
-	case "Name":
-		return p.Name, nil
+	case "UUID":
+		return p.UUID, nil
 	case "OrganizationName":
 		return p.OrganizationName, nil
+	case "Name":
+		return p.Name, nil
 	case "Unit":
 		return p.Unit, nil
 	case "Active":
@@ -36,7 +43,7 @@ func (p Product) DisplayValue(name string) (string, error) {
 }
 
 func (p Product) URL() string {
-	return "/organizations/" + p.OrganizationID + "/products/" + p.ID
+	return "/organizations/" + strconv.FormatInt(p.OrganizationID, 10) + "/products/" + strconv.FormatInt(p.ID, 10)
 }
 
 func formatActive(v bool) string {

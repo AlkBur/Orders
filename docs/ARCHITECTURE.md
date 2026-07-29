@@ -1,6 +1,6 @@
 # Orders Server — Архитектура
 
-Версия: 0.1
+Версия: 1.0
 
 ---
 
@@ -133,6 +133,31 @@ SQLite является единственной базой данных при�
 
 ---
 
+## Dual-ID Architecture (ID + UUID)
+
+Все сущности (справочники, пользователи, организации) имеют два идентификатора:
+
+- `ID int64` — внутренний первичный ключ, автоинкремент. Используется в:
+  - URL веб-интерфейса (`/organizations/{oid}/customers/{id}`);
+  - внешних ключах (`user_id`, `organization_id`);
+  - JOIN и внутренних запросах.
+
+- `UUID string` — внешний идентификатор. Используется в:
+  - API-запросах (lookup по UUID);
+  - синхронизации с внешними системами (1С, API);
+  - идентификации на транспортном уровне.
+
+Организации и пользователи имеют `UNIQUE`-ограничение на UUID. Справочники
+в контексте организации — составной `UNIQUE(organization_id, uuid)`.
+
+Web UI никогда не использует UUID в URL. Интеграционное API никогда
+не использует int64 ID в запросах.
+
+**Исключение:** сессии имеют строковый первичный ключ (токен сессии)
+и не следуют dual-ID шаблону.
+
+---
+
 # 4. Используемые технологии
 
 | Компонент | Технология |
@@ -171,10 +196,13 @@ cmd/
 internal/
     app/          — composition root (сборка приложения)
     database/     — Schema Builder, миграции, OpenPath
+    entity/       — Descriptor, Register, Key (PrimaryKey, ExternalKey)
     users/        — домен пользователей
     sessions/     — домен сессий
     customers/    — домен контрагентов
+    products/     — домен товаров
     organizations/ — домен организаций
+    common/       — утилиты (GenerateUUID)
     ui/           — UI-компоненты
     testutil/     — утилиты для тестов
 data/             — SQLite базы данных
@@ -235,7 +263,66 @@ PDF-файлы                    | Внешняя система
 
 ---
 
-# 11. Справочники: единый шаблон
+# 11. Entity Descriptor и Key System
+
+## entity.Descriptor
+
+Каждый домен регистрирует свою модель через `entity.Register[T]()`.
+Descriptor содержит мета-информацию о полях, ключах и тегах.
+
+### Поля
+
+Поля модели помечаются тегом `db` с именем колонки. Поле без `db`
+игнорируется (кроме `readonly:"true"`).
+
+```go
+type Customer struct {
+    ID               int64  `db:"id" order:"2"`
+    UUID             string `db:"uuid" label:"ID" order:"5" list:"true"`
+    OrganizationID   int64  `db:"organization_id" order:"3"`
+    OrganizationName string `readonly:"true" label:"Организация" order:"15" list:"true"`
+    Name             string `db:"name" label:"Наименование" order:"20" list:"true" search:"true"`
+    Active           bool   `db:"active" label:"Активен" order:"30" list:"true"`
+    CreatedAt        time.Time
+    UpdatedAt        time.Time
+}
+```
+
+Теги:
+- `db` — имя колонки в БД.
+- `label` — отображаемое имя в UI.
+- `order` — порядок сортировки полей.
+- `list` — показывать в таблице списка.
+- `search` — участвует в поиске.
+- `readonly` — только для отображения, не сохраняется.
+
+### Key System
+
+Descriptor содержит два типа ключей:
+
+1. **PrimaryKey** — единственное поле, идентифицирующее внутренний int64 ID.
+   Обязателен. Должен ссылаться на поле с `db:"id"`.
+
+2. **ExternalKey** — одно или несколько полей, идентифицирующих запись
+   для внешнего API. Составной ключ (OrganizationID + UUID) для справочников,
+   простой (UUID) для организаций и пользователей.
+
+```go
+var Descriptor = entity.Register[Customer](
+    entity.PrimaryKey("ID"),
+    entity.ExternalKey("OrganizationID", "UUID"),
+)
+```
+
+Регистрация паникует при:
+- отсутствии PrimaryKey;
+- нескольких PrimaryKey;
+- ссылке на несуществующее поле;
+- дублировании order.
+
+---
+
+# 12. Справочники: единый шаблон
 
 Все справочники платформы Orders следуют единому шаблону.
 
@@ -245,23 +332,17 @@ PDF-файлы                    | Внешняя система
 (справочники, документы и регистры) существуют в контексте организации
 и адресуются через маршрут `/organizations/{oid}/...`.
 
-**Идентификация:** Объект идентифицируется парой `(OrganizationID, ID)`.
-Составной первичный ключ. Никаких суррогатных ключей и ExternalID.
+**Идентификация:** Объект имеет два идентификатора:
+- `ID int64` — внутренний автоинкрементный PK, используется в URL веб-интерфейса.
+- `UUID string` — внешний идентификатор, используется в API и синхронизации.
 
-**NilUUID** (`00000000-0000-0000-0000-000000000000`) — единственное
-специальное значение транспортного уровня (URL/UI). NilUUID никогда
-не сохраняется в базе данных:
-
-- URL, формы, DTO, модели до вызова `Save()` — разрешён.
-- Хранение в таблицах, `Synchronize()`, возврат из `Store.Get()` — запрещён.
-
-**URL — источник истины** для OrganizationID. Из формы — только при
-oid == NilUUID (создание из глобального списка).
+**Проверка организации:** OrganizationID (int64) является FK на organizations.id.
+При создании проверяется существование организации через `SELECT EXISTS`.
 
 **Два режима доступа:**
 
 1. **Глобальный (администратор):** `GET /{resource}` — read-only список
-   всех объектов. Создание через `/organizations/NilUUID/{resource}/NilUUID`.
+   всех объектов. Создание через `/organizations/0/{resource}/0`.
 2. **Контекст организации (authenticated):** все мутации через
    `/organizations/{oid}/{resource}`.
 
@@ -279,28 +360,38 @@ oid == NilUUID (создание из глобального списка).
 ```go
 // Model — чистая структура, без знаний о БД
 type Entity struct {
-    OrganizationID string
-    ID             string
-    Name           string
-    Active         bool
-    CreatedAt      time.Time
-    UpdatedAt      time.Time
+    ID               int64     `db:"id"`
+    UUID             string    `db:"uuid"`
+    OrganizationID   int64     `db:"organization_id"`
+    OrganizationName string    `readonly:"true"`
+    Name             string    `db:"name"`
+    Active           bool      `db:"active"`
+    CreatedAt        time.Time
+    UpdatedAt        time.Time
 }
 
-// Schema — Table через Schema Builder с composite PK
-// .SetPrimaryKey("organization_id", "id")
+// Descriptor — через entity.Register с PrimaryKey и ExternalKey
+var Descriptor = entity.Register[Entity](
+    entity.PrimaryKey("ID"),
+    entity.ExternalKey("OrganizationID", "UUID"),
+)
+
+// Schema — Table через Schema Builder с AUTOINCREMENT PK
+// .AddUniqueConstraint("organization_id", "uuid")
 
 // Store — единый интерфейс методов
 New() *T
-Get(ctx, organizationID, id) (*T, error)
-List(ctx, organizationID) ([]*T, error)    // NilUUID = все организации
-Save(ctx, *T) error                         // NilUUID → INSERT, иначе UPDATE
-Delete(ctx, organizationID, id) error
+GetByID(ctx, id) (*T, error)
+GetByExternal(ctx, organizationID, uuid) (*T, error)
+List(ctx, organizationID) ([]*T, error)           // 0 = все организации
+Save(ctx, *T) error                                // 0 = INSERT, иначе UPDATE
+DeleteByID(ctx, id) error
+DeleteByExternal(ctx, organizationID, uuid) error
 Synchronize(ctx, organizationID, items) (Result, error)  // upsert для интеграции
 
 // HTTP — nested маршруты
 GET    /{resource}                                    — глобальный список
-GET    /organizations/{oid}/{resource}/{id}            — карточка (NilUUID = создание)
+GET    /organizations/{oid}/{resource}/{id}            — карточка (0 = создание)
 POST   /organizations/{oid}/{resource}                 — сохранение (admin)
 DELETE /organizations/{oid}/{resource}/{id}            — удаление (admin)
 PUT    /api/integration/organizations/{oid}/{resource} — синхронизация (API key)
@@ -309,13 +400,13 @@ PUT    /api/integration/organizations/{oid}/{resource} — синхрониза�
 // Rights — RequireAdmin для мутаций
 ```
 
-Customers — эталонная реализация данного шаблона.
+Customers и Products — эталонные реализации данного шаблона.
 
 ## Правила Save
 
-- `ID == NilUUID` → `GenerateUUID()` → INSERT.
-- `ID != NilUUID` → UPDATE по `(OrganizationID, ID)`. 0 rows → `ErrNotFound`.
-- `OrganizationID` неизменяем после сохранения (обеспечивается URL source of truth).
+- `ID == 0` → `GenerateUUID()` → INSERT.
+- `ID != 0` → UPDATE по `id`. 0 rows → `ErrNotFound`.
+- `OrganizationID` проверяется через `SELECT EXISTS` — ошибка при отсутствии.
 
 ## Synchronize contract
 
@@ -326,10 +417,10 @@ Input:
 
 Rules:
     - одна транзакция (all-or-nothing)
-    - дубликаты ID в запросе → ошибка, полный откат
-    - NilUUID запрещён → ошибка
+    - дубликаты UUID в запросе → ошибка, полный откат
+    - пустой UUID запрещён → ошибка
     - OrganizationID из URL, не из тела запроса
-    - UPDATE по (OrganizationID, ID)
+    - UPDATE по (organization_id, uuid)
     - 0 rows → INSERT (upsert)
     - Нет DELETE
     - Нет deactivate
@@ -338,7 +429,160 @@ Rules:
 
 ---
 
-# 12. Будущее развитие
+# 13. Шаблон для организаций и пользователей
+
+Организации и пользователи — глобальные сущности, не привязанные к контексту
+организации. Они используют упрощённый шаблон:
+
+- `ExternalKey("UUID")` — один UUID, без OrganizationID.
+- `GetByUUID(ctx, uuid)` вместо `GetByExternal`.
+- `DeleteByUUID(ctx, uuid)` вместо `DeleteByExternal`.
+- `List(ctx)` без параметра организации.
+
+```go
+var Descriptor = entity.Register[Organization](
+    entity.PrimaryKey("ID"),
+    entity.ExternalKey("UUID"),
+)
+```
+
+---
+
+# 14. Store naming conventions
+
+| Сущность | Lookup по PK | Lookup по ExternalKey | Delete по PK | Delete по ExternalKey |
+|-----------|-------------|----------------------|-------------|----------------------|
+| Organization | GetByID | GetByUUID | DeleteByID | DeleteByUUID |
+| User | GetByID | GetByUUID | DeleteByID | DeleteByUUID |
+| Customer | GetByID | GetByExternal(orgID, uuid) | DeleteByID | DeleteByExternal(orgID, uuid) |
+| Product | GetByID | GetByExternal(orgID, uuid) | DeleteByID | DeleteByExternal(orgID, uuid) |
+
+- Единичные сущности (без OrganizationID): `GetByUUID` / `DeleteByUUID`.
+- Справочники в контексте организации: `GetByExternal(orgID, uuid)` / `DeleteByExternal(orgID, uuid)`.
+
+---
+
+# 15. IdentityService
+
+IdentityService — резидентный сервис аутентификации и авторизации.
+Содержит минимальный набор данных, необходимых для обработки каждого
+HTTP-запроса.
+
+## Инварианты
+
+### 1. Единственный источник хранения пользователей — UserStore
+
+IdentityService не записывает данные в БД.
+IdentityService является runtime-кэшем.
+Восстановление состояния выполняется через `Load()` или `Reload()`.
+
+### 2. HTTP-запросы не обращаются к таблице users
+
+После запуска приложения обычные HTTP-запросы не обращаются к таблице `users`:
+
+- аутентификация использует IdentityService;
+- авторизация (RequireAdmin, RequirePassword) использует IdentityService;
+- построение Layout использует IdentityService.
+
+### 3. Все изменения пользователей синхронно отражаются в IdentityService
+
+- Создание → `Add()`
+- Изменение → `Update()`
+- Удаление → `Remove()`
+- Массовые изменения → `Reload()`
+
+### 4. Identity — неизменяемое представление пользователя
+
+Внешний код получает копию (value type), а не указатель.
+Изменение полученной Identity не влияет на состояние сервиса.
+
+### 5. Нормализация логина — единообразно через NormalizeLogin()
+
+Поиск всегда ведётся по нормализованному логину.
+Отображение использует оригинальный логин.
+
+### 6. Инвариант: последний администратор
+
+После любой операции создания, изменения или удаления пользователей
+в системе должен существовать хотя бы один пользователь с правами
+администратора.
+
+Проверка должна выполняться **перед любой операцией, которая может
+уменьшить количество администраторов** (удаление пользователя, снятие
+прав администратора и другие подобные операции).
+
+Нарушение возвращает `ErrLastAdministrator`.
+
+Поиск всегда ведётся по нормализованному логину.
+Отображение использует оригинальный логин.
+
+## Startup Flow
+
+```
+app.New()
+    │
+    ├── database.Open()
+    ├── schema.RunMigrations()
+    ├── users.NewStore(db)
+    ├── users.Seed(store)              — создаёт admin при необходимости
+    ├── users.NewIdentityService()
+    ├── identity.Load(ctx, store)      — SELECT всех пользователей в память
+    ├── sessions.NewStore(db)
+    ├── organizations.NewStore(db)
+    └── ...
+```
+
+После `identity.Load()` таблица `users` участвует только в CRUD-операциях
+(UserSave, UserDelete, SetPasswordSubmit) и больше не читается на hot path.
+
+## Request Flow
+
+```
+Request
+    │
+    ├── SessionMiddleware (cookie → session)
+    │
+    ├── RequireAuth (session → identity.GetByID → context)
+    │
+    ├── RequireAdmin (context → Identity.IsAdmin)
+    │
+    └── Handler (context → Identity.Login, .IsAdmin, .NeedsPasswordSetup)
+```
+
+## Data
+
+```go
+type Identity struct {
+    ID              int64
+    UUID            string
+    Login           string    // оригинал (отображается в UI)
+    NormalizedLogin string    // для поиска (NormalizeLogin)
+    PasswordHash    string
+    IsAdmin         bool
+}
+
+type IdentityService struct {
+    mu      sync.RWMutex
+    byID    map[int64]Identity
+    byLogin map[string]Identity  // key: NormalizedLogin
+}
+```
+
+## Принцип восстанавливаемости
+
+IdentityService полностью восстанавливается из persistent-слоя:
+
+```
+SQLite → IdentityService.Load() → Runtime
+```
+
+Никаких уникальных данных только в памяти.
+Перезапуск приложения безопасен: состояние полностью восстанавливается
+из UserStore.
+
+---
+
+# 16. Будущее развитие
 
 Архитектура должна позволять:
 

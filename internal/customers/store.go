@@ -5,8 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
-
-	"Orders/internal/common"
 )
 
 type SyncResult struct {
@@ -23,18 +21,18 @@ func NewStore(db *sql.DB) *Store {
 }
 
 func (s *Store) New() *Customer {
-	return &Customer{ID: common.NilUUID, OrganizationID: common.NilUUID, Active: true}
+	return &Customer{Active: true}
 }
 
-func (s *Store) Get(ctx context.Context, organizationID, id string) (*Customer, error) {
+func (s *Store) GetByID(ctx context.Context, id int64) (*Customer, error) {
 	c := &Customer{}
 	err := s.db.QueryRowContext(ctx, `
-		SELECT c.organization_id, c.id, c.name, c.active, c.created_at, c.updated_at, o.name
+		SELECT c.id, c.uuid, c.organization_id, c.name, c.active, c.created_at, c.updated_at, o.name
 		FROM customers c
-		JOIN organizations o ON o.uuid = c.organization_id
-		WHERE c.organization_id = ? AND c.id = ?
-	`, organizationID, id).Scan(
-		&c.OrganizationID, &c.ID, &c.Name, &c.Active, &c.CreatedAt, &c.UpdatedAt, &c.OrganizationName,
+		JOIN organizations o ON o.id = c.organization_id
+		WHERE c.id = ?
+	`, id).Scan(
+		&c.ID, &c.UUID, &c.OrganizationID, &c.Name, &c.Active, &c.CreatedAt, &c.UpdatedAt, &c.OrganizationName,
 	)
 	if err == sql.ErrNoRows {
 		return nil, ErrNotFound
@@ -45,17 +43,36 @@ func (s *Store) Get(ctx context.Context, organizationID, id string) (*Customer, 
 	return c, nil
 }
 
-func (s *Store) List(ctx context.Context, organizationID string) ([]*Customer, error) {
+func (s *Store) GetByExternal(ctx context.Context, organizationID int64, uuid string) (*Customer, error) {
+	c := &Customer{}
+	err := s.db.QueryRowContext(ctx, `
+		SELECT c.id, c.uuid, c.organization_id, c.name, c.active, c.created_at, c.updated_at, o.name
+		FROM customers c
+		JOIN organizations o ON o.id = c.organization_id
+		WHERE c.organization_id = ? AND c.uuid = ?
+	`, organizationID, uuid).Scan(
+		&c.ID, &c.UUID, &c.OrganizationID, &c.Name, &c.Active, &c.CreatedAt, &c.UpdatedAt, &c.OrganizationName,
+	)
+	if err == sql.ErrNoRows {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
+func (s *Store) List(ctx context.Context, organizationID int64) ([]*Customer, error) {
 	var rows *sql.Rows
 	var err error
 
 	query := `
-		SELECT c.organization_id, c.id, c.name, c.active, c.created_at, c.updated_at, o.name
+		SELECT c.id, c.uuid, c.organization_id, c.name, c.active, c.created_at, c.updated_at, o.name
 		FROM customers c
-		JOIN organizations o ON o.uuid = c.organization_id
+		JOIN organizations o ON o.id = c.organization_id
 	`
 	args := []interface{}{}
-	if !common.IsNilUUID(organizationID) {
+	if organizationID > 0 {
 		query += ` WHERE c.organization_id = ?`
 		args = append(args, organizationID)
 	}
@@ -71,7 +88,7 @@ func (s *Store) List(ctx context.Context, organizationID string) ([]*Customer, e
 	for rows.Next() {
 		c := &Customer{}
 		if err := rows.Scan(
-			&c.OrganizationID, &c.ID, &c.Name, &c.Active, &c.CreatedAt, &c.UpdatedAt, &c.OrganizationName,
+			&c.ID, &c.UUID, &c.OrganizationID, &c.Name, &c.Active, &c.CreatedAt, &c.UpdatedAt, &c.OrganizationName,
 		); err != nil {
 			return nil, err
 		}
@@ -88,14 +105,25 @@ func (s *Store) List(ctx context.Context, organizationID string) ([]*Customer, e
 	return customers, nil
 }
 
+// Save inserts or updates a customer.
+//
+// INSERT (ID == 0):
+//   - UUID must already be assigned.
+//   - Returns ErrEmptyUUID if UUID is empty.
+//   - OrganizationID must be set. Returns ErrOrganizationRequired if not.
+//   - Returns ErrOrganizationNotFound if the organization does not exist.
+//
+// UPDATE (ID > 0):
+//   - Updates the existing record by ID.
+//   - Returns ErrNotFound if the record does not exist.
 func (s *Store) Save(ctx context.Context, c *Customer) error {
-	if common.IsNilUUID(c.OrganizationID) {
+	if c.OrganizationID == 0 {
 		return ErrOrganizationRequired
 	}
 
 	var exists bool
 	if err := s.db.QueryRowContext(ctx,
-		`SELECT EXISTS(SELECT 1 FROM organizations WHERE uuid = ?)`, c.OrganizationID,
+		`SELECT EXISTS(SELECT 1 FROM organizations WHERE id = ?)`, c.OrganizationID,
 	).Scan(&exists); err != nil {
 		return fmt.Errorf("check organization: %w", err)
 	}
@@ -103,25 +131,32 @@ func (s *Store) Save(ctx context.Context, c *Customer) error {
 		return ErrOrganizationNotFound
 	}
 
-	if common.IsNilUUID(c.ID) {
-		id, err := common.GenerateUUID()
+	if c.ID == 0 {
+		if c.UUID == "" {
+			return ErrEmptyUUID
+		}
+
+		result, err := s.db.ExecContext(ctx, `
+			INSERT INTO customers (uuid, organization_id, name, active, created_at, updated_at)
+			VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+		`, c.UUID, c.OrganizationID, c.Name, c.Active)
+		if err != nil {
+			return err
+		}
+
+		id, err := result.LastInsertId()
 		if err != nil {
 			return err
 		}
 		c.ID = id
-
-		_, err = s.db.ExecContext(ctx, `
-			INSERT INTO customers (organization_id, id, name, active, created_at, updated_at)
-			VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-		`, c.OrganizationID, c.ID, c.Name, c.Active)
-		return err
+		return nil
 	}
 
 	result, err := s.db.ExecContext(ctx, `
 		UPDATE customers
-		SET name = ?, active = ?, updated_at = CURRENT_TIMESTAMP
-		WHERE organization_id = ? AND id = ?
-	`, c.Name, c.Active, c.OrganizationID, c.ID)
+		SET uuid = ?, name = ?, active = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`, c.UUID, c.Name, c.Active, c.ID)
 	if err != nil {
 		return err
 	}
@@ -132,11 +167,22 @@ func (s *Store) Save(ctx context.Context, c *Customer) error {
 	return nil
 }
 
-func (s *Store) Delete(ctx context.Context, organizationID, id string) error {
+func (s *Store) DeleteByID(ctx context.Context, id int64) error {
+	result, err := s.db.ExecContext(ctx, `DELETE FROM customers WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	n, _ := result.RowsAffected()
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (s *Store) DeleteByExternal(ctx context.Context, organizationID int64, uuid string) error {
 	result, err := s.db.ExecContext(ctx, `
-		DELETE FROM customers
-		WHERE organization_id = ? AND id = ?
-	`, organizationID, id)
+		DELETE FROM customers WHERE organization_id = ? AND uuid = ?
+	`, organizationID, uuid)
 	if err != nil {
 		return err
 	}
@@ -147,22 +193,21 @@ func (s *Store) Delete(ctx context.Context, organizationID, id string) error {
 	return nil
 }
 
-func (s *Store) Synchronize(ctx context.Context, organizationID string, items []Customer) (SyncResult, error) {
+func (s *Store) Synchronize(ctx context.Context, organizationID int64, items []Customer) (SyncResult, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return SyncResult{}, err
 	}
 	defer tx.Rollback()
 
-	// Validate: no duplicates in request
 	seen := make(map[string]bool)
 	for _, item := range items {
-		if common.IsNilUUID(item.ID) {
-			return SyncResult{}, fmt.Errorf("customer id is required")
+		if item.UUID == "" {
+			return SyncResult{}, fmt.Errorf("customer uuid is required")
 		}
-		key := organizationID + ":" + item.ID
+		key := fmt.Sprintf("%d:%s", organizationID, item.UUID)
 		if seen[key] {
-			return SyncResult{}, fmt.Errorf("duplicate customer id: %s", item.ID)
+			return SyncResult{}, fmt.Errorf("duplicate customer uuid: %s", item.UUID)
 		}
 		seen[key] = true
 	}
@@ -175,8 +220,8 @@ func (s *Store) Synchronize(ctx context.Context, organizationID string, items []
 		res, err := tx.ExecContext(ctx, `
 			UPDATE customers
 			SET name = ?, active = ?, updated_at = CURRENT_TIMESTAMP
-			WHERE organization_id = ? AND id = ?
-		`, item.Name, active, organizationID, item.ID)
+			WHERE organization_id = ? AND uuid = ?
+		`, item.Name, active, organizationID, item.UUID)
 		if err != nil {
 			return SyncResult{}, err
 		}
@@ -187,12 +232,12 @@ func (s *Store) Synchronize(ctx context.Context, organizationID string, items []
 		}
 
 		_, err = tx.ExecContext(ctx, `
-			INSERT INTO customers (organization_id, id, name, active, created_at, updated_at)
+			INSERT INTO customers (uuid, organization_id, name, active, created_at, updated_at)
 			VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-		`, organizationID, item.ID, item.Name, active)
+		`, item.UUID, organizationID, item.Name, active)
 		if err != nil {
 			if strings.Contains(err.Error(), "UNIQUE constraint failed") {
-				return SyncResult{}, fmt.Errorf("duplicate customer id in organization: %s", item.ID)
+				return SyncResult{}, fmt.Errorf("duplicate customer uuid in organization: %s", item.UUID)
 			}
 			return SyncResult{}, err
 		}

@@ -1,0 +1,33 @@
+{{define "content"}}
+<article class="page-card">
+	<h1 class="card-title">{{.Title}}</h1>
+
+	<form method="post" action="/users/{{.User.ID}}">
+		{{if .User.ID}}
+		<label for="id">ID</label>
+		<input id="id" type="text" value="{{.User.ID}}" readonly disabled>
+		{{end}}
+
+		<label for="uuid">UUID</label>
+		<input id="uuid" name="uuid" type="text" value="{{.User.UUID}}">
+
+		<label for="login">Логин</label>
+		<input id="login" name="login" type="text" value="{{.User.Login}}" required>
+
+		<label for="email">Email</label>
+		<input id="email" name="email" type="email" value="{{.User.Email}}">
+
+		<label for="is_admin">
+			<input id="is_admin" name="is_admin" type="checkbox"{{if .User.IsAdmin}} checked{{end}}>
+			Администратор
+		</label>
+
+		{{if .User.ID}}
+		<p>Пароль: {{if .User.HasPassword}}установлен{{else}}не установлен{{end}}</p>
+		{{end}}
+
+		<button type="submit">Сохранить</button>
+		<a href="/users" role="button" class="outline">Назад</a>
+	</form>
+</article>
+{{end}}

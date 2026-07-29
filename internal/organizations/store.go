@@ -5,8 +5,6 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"fmt"
-
-	"Orders/internal/common"
 )
 
 type Store struct {
@@ -18,20 +16,44 @@ func NewStore(db *sql.DB) *Store {
 }
 
 func (s *Store) New() *Organization {
-	return &Organization{
-		UUID:   common.NilUUID,
-		Active: true,
-	}
+	return &Organization{Active: true}
 }
 
-func (s *Store) Get(ctx context.Context, id string) (*Organization, error) {
+func (s *Store) GetByID(ctx context.Context, id int64) (*Organization, error) {
 	o := &Organization{}
 
 	err := s.db.QueryRowContext(ctx, `
-		SELECT uuid, name, api_key, active, created_at, updated_at
+		SELECT id, uuid, name, api_key, active, created_at, updated_at
+		FROM organizations
+		WHERE id = ?
+	`, id).Scan(
+		&o.ID,
+		&o.UUID,
+		&o.Name,
+		&o.APIKey,
+		&o.Active,
+		&o.CreatedAt,
+		&o.UpdatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return o, nil
+}
+
+func (s *Store) GetByUUID(ctx context.Context, uuid string) (*Organization, error) {
+	o := &Organization{}
+
+	err := s.db.QueryRowContext(ctx, `
+		SELECT id, uuid, name, api_key, active, created_at, updated_at
 		FROM organizations
 		WHERE uuid = ?
-	`, id).Scan(
+	`, uuid).Scan(
+		&o.ID,
 		&o.UUID,
 		&o.Name,
 		&o.APIKey,
@@ -51,12 +73,7 @@ func (s *Store) Get(ctx context.Context, id string) (*Organization, error) {
 
 func (s *Store) List(ctx context.Context) ([]*Organization, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT
-			uuid,
-			name,
-			active,
-			created_at,
-			updated_at
+		SELECT id, uuid, name, active, created_at, updated_at
 		FROM organizations
 		ORDER BY name
 	`)
@@ -69,6 +86,7 @@ func (s *Store) List(ctx context.Context) ([]*Organization, error) {
 	for rows.Next() {
 		o := &Organization{}
 		if err := rows.Scan(
+			&o.ID,
 			&o.UUID,
 			&o.Name,
 			&o.Active,
@@ -90,13 +108,20 @@ func (s *Store) List(ctx context.Context) ([]*Organization, error) {
 	return orgs, nil
 }
 
+// Save inserts or updates an organization.
+//
+// INSERT (ID == 0):
+//   - UUID must already be assigned.
+//   - Returns ErrEmptyUUID if UUID is empty.
+//
+// UPDATE (ID > 0):
+//   - Updates the existing record by ID.
+//   - Returns ErrNotFound if the record does not exist.
 func (s *Store) Save(ctx context.Context, org *Organization) error {
-	if common.IsNilUUID(org.UUID) {
-		id, err := common.GenerateUUID()
-		if err != nil {
-			return err
+	if org.ID == 0 {
+		if org.UUID == "" {
+			return ErrEmptyUUID
 		}
-		org.UUID = id
 
 		if org.APIKey == "" {
 			key, err := generateAPIKey()
@@ -106,18 +131,27 @@ func (s *Store) Save(ctx context.Context, org *Organization) error {
 			org.APIKey = key
 		}
 
-		_, err = s.db.ExecContext(ctx, `
+		result, err := s.db.ExecContext(ctx, `
 			INSERT INTO organizations (uuid, name, api_key, active, created_at, updated_at)
 			VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 		`, org.UUID, org.Name, org.APIKey, org.Active)
-		return err
+		if err != nil {
+			return err
+		}
+
+		id, err := result.LastInsertId()
+		if err != nil {
+			return err
+		}
+		org.ID = id
+		return nil
 	}
 
 	result, err := s.db.ExecContext(ctx, `
 		UPDATE organizations
-		SET name = ?, active = ?, updated_at = CURRENT_TIMESTAMP
-		WHERE uuid = ?
-	`, org.Name, org.Active, org.UUID)
+		SET uuid = ?, name = ?, active = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`, org.UUID, org.Name, org.Active, org.ID)
 	if err != nil {
 		return err
 	}
@@ -128,10 +162,20 @@ func (s *Store) Save(ctx context.Context, org *Organization) error {
 	return nil
 }
 
-func (s *Store) Delete(ctx context.Context, id string) error {
-	result, err := s.db.ExecContext(ctx, `
-		DELETE FROM organizations WHERE uuid = ?
-	`, id)
+func (s *Store) DeleteByID(ctx context.Context, id int64) error {
+	result, err := s.db.ExecContext(ctx, `DELETE FROM organizations WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	n, _ := result.RowsAffected()
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (s *Store) DeleteByUUID(ctx context.Context, uuid string) error {
+	result, err := s.db.ExecContext(ctx, `DELETE FROM organizations WHERE uuid = ?`, uuid)
 	if err != nil {
 		return err
 	}

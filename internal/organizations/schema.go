@@ -3,7 +3,8 @@ package organizations
 import "Orders/internal/database"
 
 var Table = database.Must(database.NewTable("organizations",
-	database.String("uuid").PrimaryKey(),
+	database.Int("id").PrimaryKey().AutoIncrement(),
+	database.String("uuid").NotNull().Unique(),
 	database.String("name").NotNull(),
 	database.String("api_key").NotNull().Unique(),
 	database.Bool("active").NotNull().Default(true),
