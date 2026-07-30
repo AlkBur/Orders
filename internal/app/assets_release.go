@@ -19,6 +19,7 @@ func LoadTemplates(page string) (*template.Template, error) {
 		return template.ParseFS(
 			templatesFS,
 			"templates/login.html",
+			"templates/icons.html",
 		)
 	}
 
@@ -27,6 +28,7 @@ func LoadTemplates(page string) (*template.Template, error) {
 			templatesFS,
 			"templates/layout.html",
 			"templates/list.html",
+			"templates/icons.html",
 		)
 	}
 
@@ -36,6 +38,7 @@ func LoadTemplates(page string) (*template.Template, error) {
 		templatesFS,
 		"templates/layout.html",
 		content,
+		"templates/icons.html",
 	)
 }
 

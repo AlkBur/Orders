@@ -4,7 +4,7 @@
 	{{if not .PickerMode}}
 	<div class="toolbar">
 		<a href="{{.NewURL}}" class="icon-button icon-button--labeled">
-			<img src="/static/icons/plus.svg" alt="">Добавить
+			{{template "icon_plus" .}}Добавить
 		</a>
 	</div>
 	{{end}}
@@ -28,12 +28,12 @@
 				<td class="col-actions">
 				{{if $.PickerMode}}
 					<a href="{{$.ReturnURL}}?select_id={{.ID}}&select_field={{$.PickerField}}&return_to={{$.ReturnURL}}" class="icon-button" aria-label="Выбрать">
-						<img src="/static/icons/search.svg" alt="">
+						{{template "icon_search" $}}
 					</a>
 				{{else if .URL}}
-					<a href="{{.URL}}">{{$.RowAction.Label}}</a>
+					<a href="{{.URL}}" class="icon-button" aria-label="Изменить">{{template "icon_file_pen" $}}</a>
 				{{else}}
-					<a href="{{$.RowAction.BaseURL}}/{{.ID}}">{{$.RowAction.Label}}</a>
+					<a href="{{$.RowAction.BaseURL}}/{{.ID}}" class="icon-button" aria-label="Изменить">{{template "icon_file_pen" $}}</a>
 				{{end}}
 				</td>
 			</tr>
