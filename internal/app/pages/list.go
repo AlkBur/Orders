@@ -25,9 +25,13 @@ type ListPage struct {
 	Columns   []Column
 	Rows      []Row
 
-	NewURL    string
-	RowAction RowAction
-	SearchURL string
+	NewURL      string
+	RowAction   RowAction
+	SearchURL   string
+	PickerMode  bool
+	PickerField string
+	PickerOrgID int64
+	ReturnURL   string
 
 	EmptyText string
 }

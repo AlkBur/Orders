@@ -75,23 +75,32 @@ func (a *App) CustomersPage(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	newURL := "/organizations/" + chi.URLParam(r, "oid") + "/customers/new"
-	if oid == 0 {
-		newURL = "/customers/new"
-	}
+	mode := r.URL.Query().Get("mode")
+	pickerField := r.URL.Query().Get("field")
 
 	page := pages.ListPage{
 		Title:   "Контрагенты",
 		Columns: pageColumns,
 		Rows:    rows,
 
-		NewURL: newURL,
-		RowAction: pages.RowAction{
+		EmptyText: "Нет контрагентов",
+	}
+
+	if mode == "picker" && pickerField != "" {
+		page.PickerMode = true
+		page.PickerField = pickerField
+		page.ReturnURL = r.URL.Query().Get("return_to")
+		page.RowAction = pages.RowAction{Label: "Выбрать"}
+	} else {
+		newURL := "/organizations/" + chi.URLParam(r, "oid") + "/customers/new"
+		if oid == 0 {
+			newURL = "/customers/new"
+		}
+		page.NewURL = newURL
+		page.RowAction = pages.RowAction{
 			Label:   "Открыть",
 			BaseURL: "/organizations/" + chi.URLParam(r, "oid") + "/customers",
-		},
-
-		EmptyText: "Нет контрагентов",
+		}
 	}
 
 	a.Render(w, "customers", page)

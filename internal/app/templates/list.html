@@ -1,9 +1,11 @@
 {{define "content"}}
 <div class="list-header">
 	<h1>{{.Title}}</h1>
+	{{if not .PickerMode}}
 	<div class="toolbar">
 		<a href="{{.NewURL}}" role="button">Добавить</a>
 	</div>
+	{{end}}
 </div>
 <div class="list-table">
 	<table>
@@ -22,10 +24,12 @@
 				<td>{{.}}</td>
 				{{end}}
 				<td class="col-actions">
-				{{if .URL}}
-				<a href="{{.URL}}">{{$.RowAction.Label}}</a>
+				{{if $.PickerMode}}
+					<a href="{{$.ReturnURL}}?select_id={{.ID}}&select_field={{$.PickerField}}&return_to={{$.ReturnURL}}">Выбрать</a>
+				{{else if .URL}}
+					<a href="{{.URL}}">{{$.RowAction.Label}}</a>
 				{{else}}
-				<a href="{{$.RowAction.BaseURL}}/{{.ID}}">{{$.RowAction.Label}}</a>
+					<a href="{{$.RowAction.BaseURL}}/{{.ID}}">{{$.RowAction.Label}}</a>
 				{{end}}
 				</td>
 			</tr>

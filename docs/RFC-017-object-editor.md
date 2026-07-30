@@ -37,9 +37,36 @@ Editor Context (Alpine)
 HTML + htmx
 ```
 
+### 0. Разграничение: Entity Descriptor vs Object Descriptor
+
+В проекте уже существует `entity.Descriptor`, который описывает доменную
+модель: таблицу БД, ключи, отображаемые поля в списках, метаданные
+сущности. Он используется Store, Schema, Integration API.
+
+**Object Descriptor — другой уровень.** Он описывает не модель данных,
+а её представление в конкретной форме редактирования: какие поля,
+какого типа, как зависят друг от друга, какие действия доступны.
+
+```
+Customer (доменная сущность)
+        │
+        ▼
+Entity Descriptor (модель, БД, ключи, инфраструктура)
+        │
+        ▼
+Object Descriptor (карточка: поля, типы, зависимости, действия)
+        │
+        ▼
+Object Editor (рендер, валидация, контекст)
+```
+
+Это разные обязанности. Object Editor не заменяет Entity Descriptor
+и не дублирует его. Они сосуществуют на разных слоях абстракции.
+
 ### 1. Object Descriptor
 
-Метаданные объекта. Единственное место, где описывается состав карточки.
+Метаданные формы редактирования. Единственное место, где описывается
+состав карточки.
 
 ```go
 type ObjectDescriptor struct {
@@ -50,7 +77,7 @@ type ObjectDescriptor struct {
 
 type FieldDescriptor struct {
     Name      string
-    Type      FieldType  // Lookup, Text, Number, Date, Boolean, Table
+    Type      FieldType  // Lookup, Text, Number, Date, Boolean
     Label     string
     Required  bool
     ReadOnly  bool
@@ -62,6 +89,7 @@ type FieldDescriptor struct {
 type LookupConfig struct {
     Entity      string // "customer", "product", "organization"
     FilterField string // "organization_id"
+    Display     string // "name" — поле сущности для отображения
 }
 
 type ActionDescriptor struct {
@@ -76,12 +104,16 @@ const (
     FieldNumber
     FieldDate
     FieldBoolean
-    FieldTable
 )
 ```
 
 Descriptor не знает URL пикеров и не содержит бизнес-логики.
-Он только описывает структуру объекта.
+Он только описывает структуру формы.
+
+Поле `Display` в `LookupConfig` указывает, какое поле сущности
+показывать пользователю. По умолчанию — `"name"`. Это избавляет
+от специальных случаев (например, логин пользователя вместо имени,
+или `"Наименование (ед. изм.)"` для товара).
 
 ### 2. Editor Engine
 
@@ -90,13 +122,15 @@ Descriptor не знает URL пикеров и не содержит бизн�
 
 - Итерирует `Descriptor.Fields`
 - Для каждого поля выбирает FieldComponent по `Type`
-- Применяет `DependsOn` — поведение определяется типом поля и его
-  метаданными (очистка значения, блокировка, смена фильтра Lookup и т.п.)
-- Применяет `ReadOnly`
+- Интерпретирует метаданные поля:
+  - `DependsOn` — уведомляет поле о зависимостях; конкретное поведение
+    (очистка значения, блокировка, смена фильтра Lookup) определяется
+    типом поля и его метаданными, **не Engine**
+  - `ReadOnly` — блокирует ввод
 - Отображает `errors` рядом с полем
 
-Editor Engine не знает конкретных сущностей. Он работает только
-с Descriptor.
+Editor Engine не знает конкретных сущностей и не содержит бизнес-правил.
+Он интерпретирует метаданные Descriptor.
 
 ### 3. Editor Context (Alpine)
 
@@ -163,6 +197,7 @@ Picker mode — режим list page, где:
 | Editor Session | Когда full-url picker перестанет справляться — отдельный RFC |
 | Библиотека Field Components | Появится при втором пользователе Editor |
 | `canSave` в Alpine | Только на сервере |
+| `Table` (TableField) | Не включается до появления первой реализации, требующей табличного поля |
 | `tables`/`lookups` в Editor Context | Добавлять по мере необходимости |
 
 ## Первый пользователь

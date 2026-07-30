@@ -88,23 +88,32 @@ func (a *App) ProductsPage(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	newURL := "/organizations/" + chi.URLParam(r, "oid") + "/products/new"
-	if oid == 0 {
-		newURL = "/products/new"
-	}
+	mode := r.URL.Query().Get("mode")
+	pickerField := r.URL.Query().Get("field")
 
 	page := pages.ListPage{
 		Title:   "Товары",
 		Columns: pageColumns,
 		Rows:    rows,
 
-		NewURL: newURL,
-		RowAction: pages.RowAction{
+		EmptyText: "Нет товаров",
+	}
+
+	if mode == "picker" && pickerField != "" {
+		page.PickerMode = true
+		page.PickerField = pickerField
+		page.ReturnURL = r.URL.Query().Get("return_to")
+		page.RowAction = pages.RowAction{Label: "Выбрать"}
+	} else {
+		newURL := "/organizations/" + chi.URLParam(r, "oid") + "/products/new"
+		if oid == 0 {
+			newURL = "/products/new"
+		}
+		page.NewURL = newURL
+		page.RowAction = pages.RowAction{
 			Label:   "Открыть",
 			BaseURL: "/organizations/" + chi.URLParam(r, "oid") + "/products",
-		},
-
-		EmptyText: "Нет товаров",
+		}
 	}
 
 	a.Render(w, "products", page)

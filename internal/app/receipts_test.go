@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -9,6 +10,7 @@ import (
 	"testing"
 
 	"Orders/internal/organizations"
+	"Orders/internal/products"
 	"Orders/internal/receipts"
 	"Orders/internal/testutil"
 
@@ -20,15 +22,24 @@ func TestReceiptSubmit_FullCycle(t *testing.T) {
 	orgs := organizations.NewStore(db)
 	orgID, _ := insertOrg(t, db, "Org One", "key_org1")
 
+	prodStore := products.NewStore(db)
+	prodID, _ := insertProduct(t, db, orgID, "Test Product", "pcs")
+
 	app := &App{
 		receipts:      receipts.NewStore(db),
 		organizations: orgs,
+		products:      prodStore,
 	}
 	loadPageTemplates(t, app, "receipt_card")
 
 	// 1. Create via ReceiptSave (id=0)
 	body := "number=001&organization_id=" + strconv.FormatInt(orgID, 10) +
-		"&user_id=1&customer_id=1&total=1000&date=2026-07-29&status=&status_color="
+		"&user_id=1&customer_id=1&total=1000&date=2026-07-29" +
+		"&items[0][product_id]=" + strconv.FormatInt(prodID, 10) +
+		"&items[0][unit]=pcs" +
+		"&items[0][quantity]=2" +
+		"&items[0][price]=500" +
+		"&items[0][amount]=1000"
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodPost, "/receipts", strings.NewReader(body))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -136,6 +147,20 @@ func TestReceiptSubmit_FullCycle(t *testing.T) {
 	if doc.Receipt.SentAt == nil {
 		t.Fatal("step 8: expected SentAt to be set after submit")
 	}
+}
+
+func insertProduct(t *testing.T, dbt *sql.DB, orgID int64, name, unit string) (int64, string) {
+	t.Helper()
+	uuid := "uuid-" + name
+	res, err := dbt.Exec(`
+		INSERT INTO products (uuid, organization_id, name, unit, created_at, updated_at)
+		VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+	`, uuid, orgID, name, unit)
+	if err != nil {
+		t.Fatalf("insert product %s: %v", name, err)
+	}
+	id, _ := res.LastInsertId()
+	return id, name
 }
 
 

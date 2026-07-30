@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -9,6 +10,7 @@ import (
 	"Orders/internal/app/pages"
 	"Orders/internal/common"
 	"Orders/internal/receipts"
+	"Orders/internal/ui"
 	"Orders/internal/ui/display"
 
 	"github.com/go-chi/chi/v5"
@@ -88,7 +90,37 @@ func (a *App) ReceiptCard(w http.ResponseWriter, r *http.Request) {
 	var doc *receipts.Document
 	if id == 0 {
 		rec := a.receipts.New()
-		doc = &receipts.Document{Receipt: rec}
+		var items []receipts.ReceiptItem
+
+		if lookup, ok := ui.ReadLookup(r); ok {
+			switch lookup.FieldName {
+			case ui.LookupCustomer:
+				if a.customers != nil {
+					cust, err := a.customers.GetByID(r.Context(), lookup.ID)
+					if err == nil {
+						rec.CustomerID = cust.ID
+						rec.CustomerName = cust.Name
+					}
+				}
+			case ui.LookupProduct:
+				if a.products != nil {
+					prod, err := a.products.GetByID(r.Context(), lookup.ID)
+					if err == nil {
+						items = append(items, receipts.ReceiptItem{
+							LineNum:     1,
+							ProductID:   prod.ID,
+							ProductName: prod.Name,
+							Unit:        prod.Unit,
+							Quantity:    1,
+							Price:       0,
+							Amount:      0,
+						})
+					}
+				}
+			}
+		}
+
+		doc = &receipts.Document{Receipt: rec, Items: items}
 	} else {
 		var err error
 		doc, err = a.receipts.GetByID(r.Context(), id)
@@ -107,10 +139,18 @@ func (a *App) ReceiptCard(w http.ResponseWriter, r *http.Request) {
 		title = "Новый товарный чек"
 	}
 
+	itemsJSON, _ := toJSON(doc.Items)
+
 	page := pages.ReceiptCardPage{
-		Title:   title,
-		Receipt: doc.Receipt,
-		Items:   doc.Items,
+		Title:          title,
+		Receipt:        doc.Receipt,
+		Items:          doc.Items,
+		CustomerID:     doc.Receipt.CustomerID,
+		CustomerName:   doc.Receipt.CustomerName,
+		OrganizationID: doc.Receipt.OrganizationID,
+		Errors:         make(map[string]string),
+		ErrorsJSON:     "{}",
+		ItemsJSON:      itemsJSON,
 	}
 
 	if doc.Receipt.ID == 0 && a.organizations != nil {
@@ -132,14 +172,21 @@ func (a *App) ReceiptCard(w http.ResponseWriter, r *http.Request) {
 	a.Render(w, "receipt_card", page)
 }
 
+func toJSON(v any) (string, error) {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
 func (a *App) ReceiptSave(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		a.BadRequest(w, "Invalid request")
 		return
 	}
 
-	idStr := chi.URLParam(r, "id")
-	id, _ := strconv.ParseInt(idStr, 10, 64)
+	id := receiptIDFromURL(r)
 
 	if id > 0 {
 		existing, err := a.receipts.GetByID(r.Context(), id)
@@ -157,6 +204,29 @@ func (a *App) ReceiptSave(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	orgID := parseInt64(r.FormValue("organization_id"))
+	customerID := parseInt64(r.FormValue("customer_id"))
+	total := parseFloat(r.FormValue("total"))
+
+	var items []receipts.ReceiptItem
+	for i := 0; ; i++ {
+		productID := parseInt64(r.FormValue("items[" + strconv.Itoa(i) + "][product_id]"))
+		if productID == 0 && i > 0 {
+			break
+		}
+		if productID == 0 {
+			continue
+		}
+		items = append(items, receipts.ReceiptItem{
+			LineNum:   i + 1,
+			ProductID: productID,
+			Unit:      r.FormValue("items[" + strconv.Itoa(i) + "][unit]"),
+			Quantity:  parseFloat(r.FormValue("items[" + strconv.Itoa(i) + "][quantity]")),
+			Price:     parseFloat(r.FormValue("items[" + strconv.Itoa(i) + "][price]")),
+			Amount:    parseFloat(r.FormValue("items[" + strconv.Itoa(i) + "][amount]")),
+		})
+	}
+
 	dateStr := r.FormValue("date")
 	if dateStr == "" {
 		dateStr = time.Now().Format("2006-01-02")
@@ -167,19 +237,46 @@ func (a *App) ReceiptSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var customerName string
+	if customerID > 0 && a.customers != nil {
+		if c, err := a.customers.GetByID(r.Context(), customerID); err == nil {
+			customerName = c.Name
+		}
+	}
+
+	userID := CurrentUser(r).ID
+	if userID == 0 {
+		userID = parseInt64(r.FormValue("user_id"))
+	}
+
 	rec := &receipts.Receipt{
 		ID:             id,
 		Number:         r.FormValue("number"),
 		Date:           date,
-		OrganizationID: parseInt64(r.FormValue("organization_id")),
-		UserID:         parseInt64(r.FormValue("user_id")),
-		CustomerID:     parseInt64(r.FormValue("customer_id")),
-		Total:          parseFloat(r.FormValue("total")),
-		Status:         r.FormValue("status"),
-		StatusColor:    r.FormValue("status_color"),
+		OrganizationID: orgID,
+		UserID:         userID,
+		CustomerID:     customerID,
+		CustomerName:   customerName,
+		Total:          total,
 	}
 
 	if id == 0 {
+		if orgID == 0 || customerID == 0 {
+			errs := map[string]string{}
+			if orgID == 0 {
+				errs["organization_id"] = "Выберите организацию"
+			}
+			if customerID == 0 {
+				errs["customer_id"] = "Выберите клиента"
+			}
+			renderReceiptFormWithErrors(w, r, a, errs, items)
+			return
+		}
+		if len(items) == 0 {
+			renderReceiptFormWithErrors(w, r, a, map[string]string{"": "Добавьте хотя бы одну позицию"}, items)
+			return
+		}
+
 		uuid, err := common.GenerateUUID()
 		if err != nil {
 			a.InternalError(w, err)
@@ -188,12 +285,56 @@ func (a *App) ReceiptSave(w http.ResponseWriter, r *http.Request) {
 		rec.ExchangeID = uuid
 	}
 
-	if err := a.receipts.Save(r.Context(), &receipts.Document{Receipt: rec}); err != nil {
+	doc := &receipts.Document{Receipt: rec, Items: items}
+	if err := a.receipts.Save(r.Context(), doc); err != nil {
 		a.InternalError(w, err)
 		return
 	}
 
+	if isHtmxRequest(r) {
+		w.Header().Set("HX-Redirect", "/receipts/"+strconv.FormatInt(rec.ID, 10))
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 	http.Redirect(w, r, "/receipts/"+strconv.FormatInt(rec.ID, 10), http.StatusSeeOther)
+}
+
+func renderReceiptFormWithErrors(w http.ResponseWriter, r *http.Request, a *App, errs map[string]string, items []receipts.ReceiptItem) {
+	itemsJSON, _ := toJSON(items)
+	customerID := parseInt64(r.FormValue("customer_id"))
+	var customerName string
+	if customerID > 0 && a.customers != nil {
+		if c, err := a.customers.GetByID(r.Context(), customerID); err == nil {
+			customerName = c.Name
+		}
+	}
+
+	page := pages.ReceiptCardPage{
+		Title:          "Новый товарный чек",
+		Receipt:        a.receipts.New(),
+		Errors:         errs,
+		OrganizationID: parseInt64(r.FormValue("organization_id")),
+		CustomerID:     customerID,
+		CustomerName:   customerName,
+		Items:          items,
+		ItemsJSON:      itemsJSON,
+	}
+	if a.organizations != nil {
+		orgs, err := a.organizations.List(r.Context())
+		if err == nil {
+			page.Orgs = orgs
+		}
+	}
+	page.ErrorsJSON, _ = toJSON(errs)
+	if page.ErrorsJSON == "" {
+		page.ErrorsJSON = "{}"
+	}
+	w.WriteHeader(http.StatusUnprocessableEntity)
+	a.Render(w, "receipt_card", page)
+}
+
+func isHtmxRequest(r *http.Request) bool {
+	return r.Header.Get("HX-Request") == "true"
 }
 
 func (a *App) ReceiptDelete(w http.ResponseWriter, r *http.Request) {
