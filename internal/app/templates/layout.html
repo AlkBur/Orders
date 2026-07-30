@@ -30,7 +30,9 @@
 			<div class="app-header__right">
 				{{block "header_right" .}}
 				<form method="post" action="/logout">
-					<button type="submit" class="outline secondary">Выход</button>
+					<button type="submit" class="icon-button outline secondary" aria-label="Выход">
+						<img src="/static/icons/log-out.svg" alt="">
+					</button>
 				</form>
 				{{end}}
 			</div>
