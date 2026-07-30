@@ -500,6 +500,136 @@ Current list pages using `pages.ListPage`:
 
 ---
 
+---
+
+# Component Library (UI Showcase)
+
+## Architecture
+
+The showcase demonstrates a platform component library with three layers:
+
+```
+Layout          →  layout/base.html
+Components      →  components/*.html
+Pages           →  pages/*.html
+Theme           →  themes/<name>/theme.css
+```
+
+### Layout
+
+`layout/base.html` — каркас страницы (HTML document, `<head>`, `<body>`).
+
+Допустимо использовать классы темы для инфраструктуры (`container`, `section`).
+
+### Components
+
+| Компонент   | Файл                  | API                             | Внутренняя реализация |
+|-------------|-----------------------|---------------------------------|-----------------------|
+| Header      | `components/header.html` | `HeaderData{Title, Username}`   | Bulma navbar          |
+| Toolbar     | `components/toolbar.html` | `ToolbarData{Title, Buttons}` | Bulma level + button |
+| Card        | `components/card.html`   | `card_open` / `card_close` (title) | Bulma card        |
+| List        | `components/list.html`   | `ListData{Columns, Rows, RenderMode, Preset}` | Semantic Classes |
+| Form        | `components/form.html`   | `Field{Name, Label, Type, Value}` | Bulma field/control/input |
+| Dialog      | `components/dialog.html` | `DialogData{ID, Title}`         | Bulma modal           |
+
+### Pages
+
+Страницы собираются только из компонентов. Не используют CSS-классы темы напрямую.
+Страницы могут содержать локальные элементы навигации (Breadcrumb), не выделяемые в компоненты.
+
+### Theme
+
+`themes/bulma/theme.css` — реализация внешнего вида компонентов и страниц.
+
+Использует CSS-переменные Bulma (`var(--bulma-*)`) для консистентности.
+
+## Principles
+
+### 1. Компонент платформы
+
+Компонент платформы — это законченный функциональный блок интерфейса со своей моделью данных. Внутри компонента допускается использовать возможности выбранной темы (Bulma), но страницы работают только с компонентами платформы, а не с CSS-фреймворком.
+
+### 2. Единая модель представления
+
+Компонент должен иметь одну доминирующую модель представления. Дополнительные семантические классы допускаются, если они не подменяют и не дублируют структуру темы. Не смешивать Bulma и собственную семантику внутри одного компонента (либо Bulma, либо semantic — но не оба одновременно в одном элементе).
+
+### 3. Компонент не навязывает содержимое
+
+Компонент отвечает только за собственную область ответственности. Содержимое компонента остаётся ответственностью страницы или другого компонента.
+
+Пример: Card отвечает за обёртку (`.card > .card-header + .card-content`), но не знает, что внутри: число, график, список или форма.
+
+### 4. Один файл — один компонент
+
+Каждый компонент размещается в одном файле шаблона. Если компонент состоит из нескольких частей, они оформляются как несколько `define` внутри этого файла.
+
+### 5. Компоненты не закрытый список
+
+Новые компоненты добавляются при появлении самостоятельной функциональной ответственности.
+
+## Template Loading
+
+Layout и компоненты загружаются через маску (не требуют изменения кода при добавлении):
+
+```go
+template.ParseFS(tmplFS,
+    "layout/*.html",
+    "components/*.html",
+    "pages/"+page+".html",
+)
+```
+
+Страницы загружаются индивидуально, так каждая определяет `define "page_content"`.
+Добавление нового компонента не требует изменения кода — достаточно положить `.html` файл в `components/`.
+
+### FAB
+
+| Компонент | Файл | API | Внутренняя реализация |
+|-----------|------|-----|----------------------|
+| FAB | `components/fab.html` | `FAB{Icon, Text, URL}` | Semantic (`app-fab`) |
+
+Правила:
+- FAB — платформенный компонент (не Button).
+- Только для главного действия страницы списка (Create).
+- Отображается только на mobile (<769px).
+- На desktop действие остаётся в Toolbar.
+- Не использует классы Bulma (`button`, `is-*`).
+- Использует собственные классы (`app-fab`) и токены темы (`--app-fab-*`).
+
+---
+
+## Platform Components
+
+Header
+Toolbar
+FAB
+Card
+List
+Form
+Dialog
+
+## Bulma Components Used
+
+- button
+- input
+- field
+- table
+- icon
+
+---
+
+### Rules
+
+Platform components must not depend on Bulma layout components (`navbar`, `level`, `hero`, etc.).
+
+Допускается использование Bulma как:
+- дизайн-токенов (`--bulma-*`);
+- базовых элементов (`button`, `input`, `table`, `field`).
+
+Компоновка платформенных компонентов реализуется собственными классами.
+
+---
+
 # Login Page
 
 The login page is the application entry point.

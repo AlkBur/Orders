@@ -1,0 +1,314 @@
+/* ================================================================
+   Theme: Bulma
+   Maps semantic Orders component classes to Bulma styles.
+   Uses Bulma CSS variables for consistency.
+   ================================================================ */
+
+/* --- Header: custom semantic component --- */
+/* Independent from Bulma navbar — our own flex layout. */
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--bulma-border);
+}
+.app-header-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--bulma-text-strong);
+  text-decoration: none;
+  flex-shrink: 0;
+}
+.app-header-actions {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+}
+.app-header-user {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--bulma-text);
+  white-space: nowrap;
+}
+.app-header-logout.button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* --- List: Desktop rows --- */
+.list-desktop {
+  display: block;
+}
+.list-mobile,
+.list-cards {
+  display: none;
+}
+
+.list-row {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem 0.5rem;
+  border-bottom: 1px solid var(--bulma-border);
+  gap: 0.75rem;
+  text-decoration: none;
+  color: var(--bulma-text);
+  transition: background-color 0.15s ease;
+}
+.list-row:hover:not(.is-header) {
+  background-color: var(--bulma-background);
+}
+.list-row.is-header {
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--bulma-text-light);
+  border-bottom: 2px solid var(--bulma-border-strong);
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+.list-cell {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.list-cell.is-actions {
+  flex: 0 0 2rem;
+  text-align: right;
+}
+.list-row.is-empty .list-cell {
+  text-align: center;
+  color: var(--bulma-text-light);
+  font-style: italic;
+  padding: 1.5rem 0;
+}
+.list-row .icon {
+  color: var(--bulma-text-light);
+}
+
+/* --- List: Mobile cards --- */
+.list-card {
+  margin-bottom: 0.75rem;
+}
+.list-card-body {
+  padding: 0.75rem;
+  background: var(--bulma-scheme-main);
+  border-radius: var(--bulma-radius);
+  box-shadow: var(--bulma-shadow);
+}
+.list-card-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--bulma-text-strong);
+  margin-bottom: 0.25rem;
+}
+.list-card-subtitle {
+  font-size: 0.875rem;
+  color: var(--bulma-text-light);
+  margin-bottom: 0.5rem;
+}
+.list-card-row {
+  display: flex;
+  padding: 0.25rem 0;
+  font-size: 0.875rem;
+}
+.list-card-row.is-actions {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--bulma-border);
+  justify-content: flex-end;
+}
+.list-card-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.875rem;
+  color: var(--bulma-link);
+  text-decoration: none;
+}
+.list-card-action .icon {
+  width: 1rem;
+  height: 1rem;
+}
+.list-card-action:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 768px) {
+  .list-desktop {
+    display: none;
+  }
+  .list-mobile {
+    display: block;
+  }
+  .list-cards {
+    display: block;
+  }
+}
+
+/* --- Preset modifiers --- */
+.list--organizations .list-row.is-header .list-cell:nth-child(1) { flex: 2; }
+.list--organizations .list-row .list-cell:nth-child(1) { flex: 2; }
+.list--employees .list-row.is-header .list-cell:nth-child(1) { flex: 1.5; }
+
+/* --- Stats grid (Dashboard + Organization) --- */
+.stats-grid,
+.info-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+.stats-card,
+.info-card {
+  flex: 1;
+  min-width: 200px;
+}
+.stats-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--bulma-text-strong);
+  margin: 0;
+}
+
+/* --- Badges (Organization status) --- */
+.badge {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: var(--bulma-radius);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.badge--success {
+  background-color: var(--bulma-success);
+  color: var(--bulma-success-invert);
+}
+.badge--danger {
+  background-color: var(--bulma-danger);
+  color: var(--bulma-danger-invert);
+}
+
+/* --- Page heading (Organization) --- */
+.page-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.page-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--bulma-text-strong);
+  width: 100%;
+  margin: 0;
+}
+.page-subtitle {
+  font-size: 1.125rem;
+  color: var(--bulma-text-light);
+  flex: 1;
+  margin: 0;
+}
+.page-actions {
+  flex-shrink: 0;
+}
+
+/* --- Button (page-level actions, themed) --- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.5rem 1rem;
+  border-radius: var(--bulma-radius);
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  border: 1px solid var(--bulma-border);
+  background: var(--bulma-scheme-main);
+  color: var(--bulma-text);
+  transition: all 0.15s ease;
+}
+.btn:hover {
+  border-color: var(--bulma-text);
+}
+.btn .icon {
+  width: 1rem;
+  height: 1rem;
+}
+.btn--primary {
+  background: var(--bulma-primary);
+  border-color: var(--bulma-primary);
+  color: var(--bulma-primary-invert);
+}
+.btn--primary:hover {
+  background: var(--bulma-primary-active);
+  border-color: var(--bulma-primary-active);
+  color: var(--bulma-primary-invert);
+}
+
+/* --- Section heading (page-level) --- */
+.section-heading {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--bulma-text-strong);
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+
+/* --- Card component extras --- */
+.card-content .stats-value {
+  margin-top: 0.25rem;
+}
+
+/* --- FAB: платформенный компонент, не Bulma --- */
+:root {
+  --app-fab-background: var(--bulma-primary);
+  --app-fab-color: var(--bulma-primary-invert);
+}
+
+.app-fab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: fixed;
+  right: 1.5rem;
+  bottom: 1.5rem;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--app-fab-background);
+  color: var(--app-fab-color);
+  text-decoration: none;
+  box-shadow: 0 4px 12px rgba(0,0,0,.25);
+  z-index: 1000;
+  transition: transform 0.15s;
+}
+.app-fab:hover {
+  transform: scale(1.08);
+}
+.app-fab:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+@media (max-width: 768px) {
+  .has-fab .toolbar-actions {
+    display: none;
+  }
+  .has-fab main {
+    padding-bottom: 5rem;
+  }
+}
+@media (min-width: 769px) {
+  .app-fab {
+    display: none;
+  }
+}

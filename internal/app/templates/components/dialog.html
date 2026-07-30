@@ -1,0 +1,20 @@
+{{define "dialog"}}
+<div class="modal" id="{{.ID}}">
+  <div class="modal-background"></div>
+  <div class="modal-card">
+    <header class="modal-card-head">
+      <p class="modal-card-title">{{.Title}}</p>
+      <button class="delete" aria-label="close"></button>
+    </header>
+    <section class="modal-card-body">
+      {{.Content}}
+    </section>
+    <footer class="modal-card-foot">
+      <div class="buttons is-right">
+        <button class="button is-primary">Подтвердить</button>
+        <button class="button">Отмена</button>
+      </div>
+    </footer>
+  </div>
+</div>
+{{end}}

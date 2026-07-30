@@ -1,0 +1,61 @@
+{{define "form_field"}}
+<div class="field">
+  <label class="label" for="{{.Name}}">{{.Label}}</label>
+  <div class="control">
+    {{if eq .Type.String "text"}}
+      <input class="input" type="text" id="{{.Name}}" name="{{.Name}}" value="{{.Value}}">
+    {{else if eq .Type.String "number"}}
+      <input class="input" type="number" id="{{.Name}}" name="{{.Name}}" value="{{.Value}}">
+    {{else if eq .Type.String "select"}}
+      <div class="select is-fullwidth">
+        <select id="{{.Name}}" name="{{.Name}}">
+          <option value="">Выберите...</option>
+        </select>
+      </div>
+    {{else if eq .Type.String "checkbox"}}
+      <label class="checkbox">
+        <input type="checkbox" id="{{.Name}}" name="{{.Name}}"{{if eq .Value "true"}} checked{{end}}>
+        {{.Label}}
+      </label>
+    {{end}}
+  </div>
+</div>
+{{end}}
+
+{{define "form_group"}}
+<div class="columns is-multiline">
+  {{range .}}
+    <div class="column is-half">
+      {{template "form_field" .}}
+    </div>
+  {{end}}
+</div>
+{{end}}
+
+{{define "lookup"}}
+<div class="field">
+  <label class="label" for="{{.Name}}">{{.Label}}</label>
+  <div class="field has-addons">
+    <div class="control is-expanded">
+      <input class="input" type="text" id="{{.Name}}" value="{{.Value}}" readonly>
+    </div>
+    <div class="control">
+      <a class="button is-outlined" href="{{.URL}}" aria-label="Выбрать">
+        <span class="icon">{{icon "search"}}</span>
+      </a>
+    </div>
+  </div>
+</div>
+{{end}}
+
+{{define "search"}}
+<div class="field has-addons">
+  <div class="control has-icons-left is-expanded">
+    <input class="input" type="search" placeholder="{{.Placeholder}}">
+    <span class="icon is-left is-small">{{icon "search"}}</span>
+  </div>
+  <div class="control">
+    <button class="button is-outlined" type="submit">Найти</button>
+  </div>
+</div>
+{{end}}

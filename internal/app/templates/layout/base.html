@@ -1,0 +1,22 @@
+{{define "base"}}
+{{$fab := getFAB .}}
+<!DOCTYPE html>
+<html lang="ru" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Title}} — Orders UI</title>
+  <link rel="stylesheet" href="/static/css/bulma.min.css">
+  <link rel="stylesheet" href="/static/themes/bulma/theme.css">
+</head>
+<body class="{{if $fab}}has-fab{{end}}">
+  <div class="container is-fluid p-3">
+  {{template "header" .Header}}
+  <main class="section pt-3">
+    {{template "page_content" .}}
+  </main>
+  </div>
+  {{if $fab}}{{template "fab" $fab}}{{end}}
+</body>
+</html>
+{{end}}
