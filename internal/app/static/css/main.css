@@ -61,7 +61,7 @@ body {
 	margin-bottom: 0;
 }
 
-.app-header button {
+.app-header button:not(.icon-button) {
 	width: auto;
 	margin-bottom: 0;
 }
@@ -104,7 +104,8 @@ a[aria-disabled="true"] {
 	opacity: 0.5;
 }
 
-.icon-button {
+button.icon-button,
+a.icon-button {
 	width: var(--icon-button-size);
 	height: var(--icon-button-size);
 	display: inline-flex;
@@ -119,10 +120,12 @@ a[aria-disabled="true"] {
 .icon-button:focus-visible {
 	outline: var(--pico-primary-focus, auto);
 }
-.icon-button img {
+.icon-button svg,
+.icon-button--labeled svg {
 	width: var(--icon-size);
 	height: var(--icon-size);
 	display: block;
+	flex-shrink: 0;
 }
 .icon-button:disabled,
 .icon-button[aria-disabled="true"] {
@@ -131,10 +134,26 @@ a[aria-disabled="true"] {
 	pointer-events: none;
 }
 
-.icon-button--labeled {
+button.icon-button--labeled,
+a.icon-button--labeled {
+	display: inline-flex;
+	align-items: center;
+
 	width: auto;
+	height: var(--icon-button-size);
+
 	gap: 0.4rem;
 	padding: 0.5rem 0.75rem;
+
+	border: var(--pico-border-width) solid var(--pico-secondary);
+	border-radius: var(--pico-border-radius);
+	background: transparent;
+}
+
+a.icon-button,
+a.icon-button--labeled {
+	text-decoration: none;
+	color: inherit;
 }
 
 .lookup-field {

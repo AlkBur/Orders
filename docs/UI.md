@@ -80,23 +80,38 @@ Icons are stored locally in `static/icons/`.
 
 ### Standard set
 
-| Action   | Icon     | Text |
-| -------- | -------- | ---- |
-| Lookup   | Search   | no   |
-| Add      | Plus     | yes  |
-| Delete   | Trash2   | no   |
-| Save     | Save     | yes  |
-| Send     | Send     | yes  |
-| Logout   | LogOut   | no   |
+| Действие  | Lucide   | Template      | Использование |
+| --------- | -------- | ------------- | ------------- |
+| Главная   | house    | icon_house    | Header        |
+| Создать   | plus     | icon_plus     | Toolbar       |
+| Найти     | search   | icon_search   | Lookup        |
+| Сохранить | save     | icon_save     | Toolbar, формы |
+| Отправить | send     | icon_send     | Формы         |
+| Изменить  | file-pen | icon_file_pen | Таблицы       |
+| Удалить   | trash-2  | icon_trash_2  | Таблицы       |
+| Выход     | log-out  | icon_log_out  | Header        |
+
+### Правила использования кнопок с иконками
+
+| Паттерн                | Использовать                      | Применение                                                                  |
+| ---------------------- | --------------------------------- | --------------------------------------------------------------------------- |
+| `icon-button`          | Компактная кнопка (только иконка) | Таблицы, lookup, панели с ограниченным пространством                        |
+| `icon-button--labeled` | Кнопка с иконкой и текстом        | Header, Toolbar, панели действий и другие места, где есть место для подписи |
+
+Правило: `aria-label` добавляется только тогда, когда у кнопки нет видимого текста.
+Если есть видимый текст (как в `icon-button--labeled`), `aria-label` избыточен.
 
 New icons are added only when a new action appears.
 
 ### Component
 
-All icon-only buttons use the `.icon-button` class (2.5rem square, CSS variable `--icon-button-size`). Buttons with text use `.icon-button--labeled`. Icons use the CSS variable `--icon-size` (default 1rem). Disabled state is handled via `:disabled` or `[aria-disabled="true"]` with reduced opacity.
+All icon-only buttons use the `.icon-button` class (2.75rem square, CSS variable `--icon-button-size`). Buttons with text use `.icon-button--labeled`. Icons use the CSS variable `--icon-size` (default 1rem). Disabled state is handled via `:disabled` or `[aria-disabled="true"]` with reduced opacity.
 
-**Current implementation:** standalone SVG files via `<img>`.
-**Future option:** inline SVG to support `currentColor`.
+### Inline SVG
+
+Icons are rendered as inline SVG via Go template named templates (`templates/icons.html`). This gives native `currentColor` support — icons automatically inherit the text color, which makes theme switching (light/dark), `:hover`, `:focus`, and `:disabled` states work without additional CSS rules or duplicate icon files. The same mechanism also eliminates extra HTTP requests per icon.
+
+`static/icons/` contains the original Lucide SVG files downloaded from the official repository. These files are not used at runtime — they serve as the source of truth for updating or regenerating `templates/icons.html`.
 
 ---
 

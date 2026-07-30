@@ -10,16 +10,20 @@ import (
 )
 
 func LoadTemplates(page string) (*template.Template, error) {
+	icons := filepath.Join("internal", "app", "templates", "icons.html")
+
 	if page == "login" {
 		return template.ParseFiles(
 			filepath.Join("internal", "app", "templates", "login.html"),
+			icons,
 		)
 	}
 
-	if page == "products" || page == "organizations" || page == "customers" || page == "users" {
+	if page == "products" || page == "organizations" || page == "customers" || page == "users" || page == "receipts" {
 		return template.ParseFiles(
 			filepath.Join("internal", "app", "templates", "layout.html"),
 			filepath.Join("internal", "app", "templates", "list.html"),
+			icons,
 		)
 	}
 
@@ -28,6 +32,7 @@ func LoadTemplates(page string) (*template.Template, error) {
 	return template.ParseFiles(
 		filepath.Join("internal", "app", "templates", "layout.html"),
 		filepath.Join("internal", "app", "templates", content),
+		icons,
 	)
 }
 
