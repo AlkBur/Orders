@@ -89,6 +89,12 @@ func (s *Store) List(ctx context.Context) ([]*Receipt, error) {
 }
 
 func (s *Store) Save(ctx context.Context, doc *Document) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
 	r := doc.Receipt
 
 	if r.ID == 0 {
@@ -112,7 +118,7 @@ func (s *Store) Save(ctx context.Context, doc *Document) error {
 			sentAtArg = r.SentAt.Format(time.RFC3339)
 		}
 
-		result, err := s.db.ExecContext(ctx, `
+		result, err := tx.ExecContext(ctx, `
 			INSERT INTO receipts (uuid, exchange_id, number, date,
 				organization_id, user_id, customer_id, total, sent_at,
 				status, status_color, created_at, updated_at)
@@ -143,7 +149,7 @@ func (s *Store) Save(ctx context.Context, doc *Document) error {
 			sentAtArg = r.SentAt.Format(time.RFC3339)
 		}
 
-		_, err := s.db.ExecContext(ctx, `
+		_, err := tx.ExecContext(ctx, `
 			UPDATE receipts SET
 				uuid = ?, number = ?, date = ?,
 				organization_id = ?, user_id = ?, customer_id = ?,
@@ -159,8 +165,29 @@ func (s *Store) Save(ctx context.Context, doc *Document) error {
 		}
 	}
 
-	if err := s.saveItems(ctx, r.ID, doc.Items); err != nil {
+	if err := saveItemsTx(tx, r.ID, doc.Items); err != nil {
 		return err
+	}
+
+	return tx.Commit()
+}
+
+func saveItemsTx(tx *sql.Tx, receiptID int64, items []ReceiptItem) error {
+	if _, err := tx.ExecContext(context.Background(),
+		`DELETE FROM receipt_items WHERE receipt_id = ?`, receiptID); err != nil {
+		return err
+	}
+
+	for _, item := range items {
+		_, err := tx.ExecContext(context.Background(), `
+			INSERT INTO receipt_items
+				(receipt_id, line_num, product_id, unit, quantity, price, amount)
+			VALUES (?, ?, ?, ?, ?, ?, ?)
+		`, receiptID, item.LineNum, item.ProductID, item.Unit,
+			item.Quantity, item.Price, item.Amount)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -241,27 +268,6 @@ func (s *Store) Synchronize(ctx context.Context, updates []ReceiptUpdate) error 
 	}
 
 	return tx.Commit()
-}
-
-func (s *Store) saveItems(ctx context.Context, receiptID int64, items []ReceiptItem) error {
-	if _, err := s.db.ExecContext(ctx,
-		`DELETE FROM receipt_items WHERE receipt_id = ?`, receiptID); err != nil {
-		return err
-	}
-
-	for _, item := range items {
-		_, err := s.db.ExecContext(ctx, `
-			INSERT INTO receipt_items
-				(receipt_id, line_num, product_id, unit, quantity, price, amount)
-			VALUES (?, ?, ?, ?, ?, ?, ?)
-		`, receiptID, item.LineNum, item.ProductID, item.Unit,
-			item.Quantity, item.Price, item.Amount)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 func (s *Store) listItems(ctx context.Context, receiptID int64) ([]ReceiptItem, error) {

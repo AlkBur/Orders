@@ -3,22 +3,97 @@
 	<h1 class="card-title">{{.Title}}</h1>
 
 	{{if not .Receipt.ID}}
-		{{/* Новый документ — информационная карточка */}}
-		<label for="organization_id">Организация</label>
-		<select id="organization_id" disabled>
-			<option value="">Выберите организацию</option>
-			{{range .Orgs}}
-			<option value="{{.ID}}">{{.Name}}</option>
-			{{end}}
-		</select>
+		{{/* Новый документ — Object Editor */}}
+		<div x-data="{
+			values: {
+				organization_id: {{.OrganizationID}},
+				customer_id: {{.CustomerID}},
+				customer_name: {{printf "%q" .CustomerName}}
+			},
+			items: {{.ItemsJSON}},
+			get orgSelected() { return this.values.organization_id > 0; },
+			addItem() { this.items.push({ product_id: 0, product_name: '', unit: '', quantity: 1, price: 0, amount: 0 }); },
+			removeItem(i) { this.items.splice(i, 1); },
+			calcAmount(i) {
+				let item = this.items[i];
+				item.amount = (item.quantity || 0) * (item.price || 0);
+			},
+			get total() { return this.items.reduce((s, i) => s + (i.amount || 0), 0); }
+		}">
+			<form hx-post="/receipts" hx-target="this" hx-swap="outerHTML" method="post">
+				<label for="organization_id">Организация</label>
+				<select id="organization_id" name="organization_id" x-model="values.organization_id" required>
+					<option value="0">Выберите организацию</option>
+					{{range .Orgs}}
+					<option value="{{.ID}}">{{.Name}}</option>
+					{{end}}
+				</select>
+				{{if index .Errors "organization_id"}}
+				<p class="field-error">{{index .Errors "organization_id"}}</p>
+				{{end}}
 
-		<label>Клиент</label>
-		<p class="field-note">Будет доступно после выбора организации</p>
+				<label>Клиент</label>
+				<div class="lookup-field">
+					<input type="text" :value="values.customer_name || (values.customer_id > 0 ? 'Выбран' : 'Не выбран')" readonly disabled>
+					<a href="/customers?mode=picker&field=customer&return_to=/receipts/new"
+					   role="button" class="outline"
+					   :class="{ disabled: !orgSelected }">Выбрать</a>
+				</div>
+				<input type="hidden" name="customer_id" :value="values.customer_id">
+				{{if index .Errors "customer_id"}}
+				<p class="field-error">{{index .Errors "customer_id"}}</p>
+				{{end}}
 
-		<label>Товары</label>
-		<p class="field-note">Будут доступны после выбора клиента</p>
+				<h2>Позиции</h2>
+				<table>
+					<thead>
+						<tr>
+							<th>№</th>
+							<th>Товар</th>
+							<th>Е. изм</th>
+							<th>Количество</th>
+							<th>Цена</th>
+							<th>Сумма</th>
+							<th></th>
+						</tr>
+					</thead>
+					<tbody>
+						<template x-for="(item, i) in items" :key="i">
+							<tr>
+								<td x-text="i + 1"></td>
+								<td>
+									<input type="hidden" :name="'items[' + i + '][product_id]'" x-model="item.product_id">
+									<input type="text" :value="item.product_name || 'Не выбран'" readonly disabled>
+									<a href="/products?mode=picker&field=product&return_to=/receipts/new"
+									   role="button" class="outline"
+									   :class="{ disabled: !orgSelected }">Выбрать</a>
+								</td>
+								<td><input type="text" :name="'items[' + i + '][unit]'" x-model="item.unit" class="table-input"></td>
+								<td><input type="number" step="0.001" :name="'items[' + i + '][quantity]'" x-model="item.quantity" @input="calcAmount(i)" class="table-input"></td>
+								<td><input type="number" step="0.01" :name="'items[' + i + '][price]'" x-model="item.price" @input="calcAmount(i)" class="table-input"></td>
+								<td x-text="item.amount.toFixed(2)"></td>
+								<td><button type="button" @click="removeItem(i)" class="outline secondary small">✕</button></td>
+							</tr>
+						</template>
+						<template x-if="items.length === 0">
+							<tr><td colspan="7">Нет позиций</td></tr>
+						</template>
+					</tbody>
+				</table>
+				<button type="button" @click="addItem()" :disabled="!orgSelected">Добавить товар</button>
 
-		<a href="/receipts" role="button" class="outline">К списку</a>
+				<div class="total-row">
+					<strong>Итого: <span x-text="total.toFixed(2)"></span></strong>
+				</div>
+
+				{{if index .Errors ""}}
+				<p class="field-error">{{index .Errors ""}}</p>
+				{{end}}
+
+				<button type="submit">Сохранить</button>
+				<a href="/receipts" role="button" class="outline">К списку</a>
+			</form>
+		</div>
 	{{else}}
 		{{/* Существующий документ */}}
 		{{$r := .Receipt}}
