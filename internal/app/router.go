@@ -3,6 +3,7 @@ package app
 import (
 	"net/http"
 
+	"Orders/internal/app/pages"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
@@ -29,6 +30,14 @@ func (a *App) NewRouter() *chi.Mux {
 			http.FileServer(http.FS(StaticFS())),
 		),
 	)
+
+	// UI Showcase — демонстрация компонентов
+	r.Route("/ui", func(r chi.Router) {
+		showcaseFS := ShowcaseFS()
+		r.Get("/dashboard", pages.HandleDashboard(showcaseFS))
+		r.Get("/organizations", pages.HandleOrganizations(showcaseFS))
+		r.Get("/organizations/{id}", pages.HandleOrganization(showcaseFS))
+	})
 
 	// Integration API — обмен между системами (UUID-based)
 	r.Route("/api/integration/organizations/{oid}", func(r chi.Router) {

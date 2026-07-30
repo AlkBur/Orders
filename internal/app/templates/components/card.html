@@ -1,0 +1,10 @@
+{{/* Card component.
+     card_open — открывает карточку, принимает необязательный заголовок.
+     card_close — закрывает карточку.
+     Использование:
+       {{template "card_open" "Заголовок"}}
+         ... произвольное содержимое ...
+       {{template "card_close"}}
+*/}}
+{{define "card_open"}}<div class="card">{{if .}}<div class="card-header"><p class="card-header-title">{{.}}</p></div>{{end}}<div class="card-content">{{end}}
+{{define "card_close"}}</div></div>{{end}}

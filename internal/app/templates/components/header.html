@@ -1,0 +1,9 @@
+{{define "header"}}
+<nav class="app-header">
+  <a class="app-header-title" href="/ui/dashboard">{{.AppName}}</a>
+  <div class="app-header-actions">
+    <span class="app-header-user">{{icon "user"}} {{.Username}}</span>
+    <a class="button is-light app-header-logout" href="/logout">{{icon "logout"}} Выход</a>
+  </div>
+</nav>
+{{end}}

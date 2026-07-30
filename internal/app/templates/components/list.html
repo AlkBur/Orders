@@ -1,0 +1,81 @@
+{{define "list"}}
+
+{{if eq .RenderMode.String "Cards"}}
+  {{template "list_cards" .}}
+{{else}}
+  {{template "list_default" .}}
+{{end}}
+
+{{end}}
+
+{{define "list_default"}}
+<section class="list {{.Preset.Modifier}}">
+  <div class="list-desktop">
+    {{template "list_header_row" .}}
+    {{range .Rows}}
+    {{template "list_data_row" .}}
+    {{end}}
+    {{if eq (len .Rows) 0}}
+    <div class="list-row is-empty">
+      <div class="list-cell">Нет данных</div>
+    </div>
+    {{end}}
+  </div>
+  <div class="list-mobile">
+    {{range .Rows}}
+    {{template "list_card" .}}
+    {{end}}
+    {{if eq (len .Rows) 0}}
+    <div class="list-card"><div class="list-card-body"><p>Нет данных</p></div></div>
+    {{end}}
+  </div>
+</section>
+{{end}}
+
+{{define "list_cards"}}
+<section class="list {{.Preset.Modifier}}">
+  <div class="list-desktop">
+    {{template "list_header_row" .}}
+    {{range .Rows}}
+    {{template "list_data_row" .}}
+    {{end}}
+  </div>
+  <div class="list-cards">
+    {{range .Rows}}
+    {{template "list_card" .}}
+    {{end}}
+  </div>
+</section>
+{{end}}
+
+{{define "list_header_row"}}
+<div class="list-row is-header">
+  {{range .Columns}}
+  <div class="list-cell">{{.Label}}</div>
+  {{end}}
+  <div class="list-cell is-actions"></div>
+</div>
+{{end}}
+
+{{define "list_data_row"}}
+<a class="list-row" href="{{.URL}}">
+  {{range .Cells}}
+  <div class="list-cell">{{.}}</div>
+  {{end}}
+  <div class="list-cell is-actions">
+    <span class="icon">{{icon "edit"}}</span>
+  </div>
+</a>
+{{end}}
+
+{{define "list_card"}}
+<div class="list-card">
+  <div class="list-card-body">
+    <p class="list-card-title">{{index .Cells 0}}</p>
+    <p class="list-card-subtitle">{{index .Cells 1}}</p>
+    <div class="list-card-row is-actions">
+      <a href="{{.URL}}" class="list-card-action">{{icon "edit"}} Открыть</a>
+    </div>
+  </div>
+</div>
+{{end}}
