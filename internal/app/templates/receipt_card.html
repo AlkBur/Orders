@@ -1,49 +1,71 @@
 {{define "content"}}
-{{$r := .Receipt}}
-<h1>Товарный чек №{{$r.Number}}</h1>
+<article class="page-card">
+	<h1 class="card-title">{{.Title}}</h1>
 
-<table>
-	<tr><td>Номер</td><td>{{$r.Number}}</td></tr>
-	<tr><td>Дата</td><td>{{$r.Date.Format "2006-01-02"}}</td></tr>
-	<tr><td>Организация</td><td>{{$r.OrganizationName}}</td></tr>
-	<tr><td>Пользователь</td><td>{{$r.UserLogin}}</td></tr>
-	<tr><td>Клиент</td><td>{{$r.CustomerName}}</td></tr>
-	<tr><td>Сумма</td><td>{{printf "%.2f" $r.Total}}</td></tr>
-	<tr><td>Статус</td><td>{{if $r.Status}}{{$r.Status}}{{else if $r.SentAt}}Отправлен{{else}}Не отправлен{{end}}</td></tr>
-</table>
+	{{if not .Receipt.ID}}
+		{{/* Новый документ — информационная карточка */}}
+		<label for="organization_id">Организация</label>
+		<select id="organization_id" disabled>
+			<option value="">Выберите организацию</option>
+			{{range .Orgs}}
+			<option value="{{.ID}}">{{.Name}}</option>
+			{{end}}
+		</select>
 
-<h2>Позиции</h2>
-<table>
-	<thead>
-		<tr>
-			<th>№</th>
-			<th>Товар</th>
-			<th>Е. изм</th>
-			<th>Количество</th>
-			<th>Цена</th>
-			<th>Сумма</th>
-		</tr>
-	</thead>
-	<tbody>
-		{{range .Items}}
-		<tr>
-			<td>{{.LineNum}}</td>
-			<td>{{.ProductName}}</td>
-			<td>{{.Unit}}</td>
-			<td>{{printf "%.2f" .Quantity}}</td>
-			<td>{{printf "%.2f" .Price}}</td>
-			<td>{{printf "%.2f" .Amount}}</td>
-		</tr>
-		{{else}}
-		<tr><td colspan="6">Нет позиций</td></tr>
+		<label>Клиент</label>
+		<p class="field-note">Будет доступно после выбора организации</p>
+
+		<label>Товары</label>
+		<p class="field-note">Будут доступны после выбора клиента</p>
+
+		<a href="/receipts" role="button" class="outline">К списку</a>
+	{{else}}
+		{{/* Существующий документ */}}
+		{{$r := .Receipt}}
+		<table>
+			<tr><td>Номер</td><td>{{$r.Number}}</td></tr>
+			<tr><td>Дата</td><td>{{$r.Date.Format "2006-01-02"}}</td></tr>
+			<tr><td>Организация</td><td>{{$r.OrganizationName}}</td></tr>
+			<tr><td>Пользователь</td><td>{{$r.UserLogin}}</td></tr>
+			<tr><td>Клиент</td><td>{{$r.CustomerName}}</td></tr>
+			<tr><td>Сумма</td><td>{{printf "%.2f" $r.Total}}</td></tr>
+			<tr><td>Статус</td><td>{{if $r.Status}}{{$r.Status}}{{else if $r.SentAt}}Отправлен{{else}}Не отправлен{{end}}</td></tr>
+		</table>
+
+		<h2>Позиции</h2>
+		<table>
+			<thead>
+				<tr>
+					<th>№</th>
+					<th>Товар</th>
+					<th>Е. изм</th>
+					<th>Количество</th>
+					<th>Цена</th>
+					<th>Сумма</th>
+				</tr>
+			</thead>
+			<tbody>
+				{{range .Items}}
+				<tr>
+					<td>{{.LineNum}}</td>
+					<td>{{.ProductName}}</td>
+					<td>{{.Unit}}</td>
+					<td>{{printf "%.2f" .Quantity}}</td>
+					<td>{{printf "%.2f" .Price}}</td>
+					<td>{{printf "%.2f" .Amount}}</td>
+				</tr>
+				{{else}}
+				<tr><td colspan="6">Нет позиций</td></tr>
+				{{end}}
+			</tbody>
+		</table>
+
+		{{if eq $r.SentAt nil}}
+		<form method="POST" action="/receipts/{{$r.ID}}/send" style="display:inline">
+			<button type="submit">Отправить</button>
+		</form>
 		{{end}}
-	</tbody>
-</table>
-
-{{if eq $r.SentAt nil}}
-<form method="POST" action="/receipts/{{$r.ID}}/send" style="display:inline">
-	<button type="submit">Отправить</button>
-</form>
-{{end}}
-<a href="/receipts">К списку</a>
+		<a href="/receipts">К списку</a>
+	{{end}}
+</article>
 {{end}}

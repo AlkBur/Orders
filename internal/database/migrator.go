@@ -5,9 +5,7 @@ import (
 	"fmt"
 )
 
-var knownOldVersions = map[int]bool{
-	4: true,
-}
+var knownOldVersions = map[int]bool{}
 
 func ensureSystemInfoTable(db *sql.DB) error {
 	_, err := db.Exec(`

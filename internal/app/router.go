@@ -53,7 +53,7 @@ func (a *App) NewRouter() *chi.Mux {
 
 			// Receipts
 			r.Get("/receipts", a.ReceiptsPage)
-			r.Post("/receipts", a.ReceiptSave)
+			r.Get("/receipts/new", a.ReceiptCard)
 			r.Get("/receipts/{id}", a.ReceiptCard)
 			r.Post("/receipts/{id}", a.ReceiptSave)
 			r.Post("/receipts/{id}/send", a.ReceiptSubmit)

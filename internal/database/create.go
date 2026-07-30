@@ -6,9 +6,21 @@ import (
 )
 
 func (t Table) CreateSQL() string {
+	return t.createSQL(false)
+}
+
+func (t Table) CreateSQLIfNotExists() string {
+	return t.createSQL(true)
+}
+
+func (t Table) createSQL(ifNotExists bool) string {
 	var b strings.Builder
 
-	b.WriteString("CREATE TABLE ")
+	if ifNotExists {
+		b.WriteString("CREATE TABLE IF NOT EXISTS ")
+	} else {
+		b.WriteString("CREATE TABLE ")
+	}
 	b.WriteString(t.Name)
 	b.WriteString(" (\n")
 

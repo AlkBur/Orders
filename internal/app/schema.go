@@ -96,4 +96,18 @@ func registerMigrations(s *database.Schema) {
 			return nil
 		},
 	})
+
+	s.AddMigration(database.Migration{
+		Version: 5,
+		Name:    "Add receipts tables",
+		Up: func(ctx context.Context, tx *sql.Tx) error {
+			if _, err := tx.ExecContext(ctx, receipts.Table.CreateSQLIfNotExists()); err != nil {
+				return err
+			}
+			if _, err := tx.ExecContext(ctx, receipts.ItemsTable.CreateSQLIfNotExists()); err != nil {
+				return err
+			}
+			return nil
+		},
+	})
 }

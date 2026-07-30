@@ -121,6 +121,19 @@ func TestCreateSQL_Organizations(t *testing.T) {
 	assertColumn(t, cols, 3, "active", "INTEGER", true, "1", 0)
 }
 
+func TestCreateSQLIfNotExists_Idempotent(t *testing.T) {
+	db, err := sql.Open("sqlite", t.TempDir()+"/test.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	sql := organizationsTable().CreateSQLIfNotExists()
+
+	execSQL(t, db, sql)
+	execSQL(t, db, sql)
+}
+
 func assertColumn(t *testing.T, cols []columnInfo, idx int, name, ctype string, notnull bool, dflt string, pk int) {
 	t.Helper()
 	c := cols[idx]
