@@ -1,7 +1,6 @@
 package app
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -139,7 +138,7 @@ func (a *App) ReceiptCard(w http.ResponseWriter, r *http.Request) {
 		title = "Новый товарный чек"
 	}
 
-	itemsJSON, _ := toJSON(doc.Items)
+	itemsJSON, _ := common.ToJSON(doc.Items)
 
 	page := pages.ReceiptCardPage{
 		Title:          title,
@@ -170,14 +169,6 @@ func (a *App) ReceiptCard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.Render(w, "receipt_card", page)
-}
-
-func toJSON(v any) (string, error) {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return "", err
-	}
-	return string(b), nil
 }
 
 func (a *App) ReceiptSave(w http.ResponseWriter, r *http.Request) {
@@ -300,7 +291,7 @@ func (a *App) ReceiptSave(w http.ResponseWriter, r *http.Request) {
 }
 
 func renderReceiptFormWithErrors(w http.ResponseWriter, r *http.Request, a *App, errs map[string]string, items []receipts.ReceiptItem) {
-	itemsJSON, _ := toJSON(items)
+	itemsJSON, _ := common.ToJSON(items)
 	customerID := parseInt64(r.FormValue("customer_id"))
 	var customerName string
 	if customerID > 0 && a.customers != nil {
@@ -325,7 +316,7 @@ func renderReceiptFormWithErrors(w http.ResponseWriter, r *http.Request, a *App,
 			page.Orgs = orgs
 		}
 	}
-	page.ErrorsJSON, _ = toJSON(errs)
+	page.ErrorsJSON, _ = common.ToJSON(errs)
 	if page.ErrorsJSON == "" {
 		page.ErrorsJSON = "{}"
 	}

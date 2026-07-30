@@ -22,6 +22,8 @@ body {
 
 :root {
 	--page-card-width: 420px;
+	--icon-button-size: 2.75rem;
+	--icon-size: 1rem;
 }
 
 .main-menu {
@@ -100,4 +102,50 @@ a.disabled,
 a[aria-disabled="true"] {
 	pointer-events: none;
 	opacity: 0.5;
+}
+
+.icon-button {
+	width: var(--icon-button-size);
+	height: var(--icon-button-size);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	line-height: 1;
+	padding: 0;
+}
+.icon-button:hover {
+	opacity: var(--pico-link-hover-opacity, 0.8);
+}
+.icon-button:focus-visible {
+	outline: var(--pico-primary-focus, auto);
+}
+.icon-button img {
+	width: var(--icon-size);
+	height: var(--icon-size);
+	display: block;
+}
+.icon-button:disabled,
+.icon-button[aria-disabled="true"] {
+	opacity: 0.5;
+	cursor: not-allowed;
+	pointer-events: none;
+}
+
+.icon-button--labeled {
+	width: auto;
+	gap: 0.4rem;
+	padding: 0.5rem 0.75rem;
+}
+
+.lookup-field {
+	display: flex;
+}
+.lookup-field > :first-child {
+	flex: 1;
+	border-right: none;
+	border-radius: var(--pico-border-radius) 0 0 var(--pico-border-radius);
+}
+.lookup-field .icon-button {
+	border-radius: 0 var(--pico-border-radius) var(--pico-border-radius) 0;
+	border-left: none;
 }

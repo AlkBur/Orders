@@ -76,7 +76,27 @@ Format:
 
 - SVG
 
-Icons are stored locally.
+Icons are stored locally in `static/icons/`.
+
+### Standard set
+
+| Action   | Icon     | Text |
+| -------- | -------- | ---- |
+| Lookup   | Search   | no   |
+| Add      | Plus     | yes  |
+| Delete   | Trash2   | no   |
+| Save     | Save     | yes  |
+| Send     | Send     | yes  |
+| Logout   | LogOut   | no   |
+
+New icons are added only when a new action appears.
+
+### Component
+
+All icon-only buttons use the `.icon-button` class (2.5rem square, CSS variable `--icon-button-size`). Buttons with text use `.icon-button--labeled`. Icons use the CSS variable `--icon-size` (default 1rem). Disabled state is handled via `:disabled` or `[aria-disabled="true"]` with reduced opacity.
+
+**Current implementation:** standalone SVG files via `<img>`.
+**Future option:** inline SVG to support `currentColor`.
 
 ---
 
