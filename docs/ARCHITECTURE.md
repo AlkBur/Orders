@@ -582,7 +582,42 @@ SQLite → IdentityService.Load() → Runtime
 
 ---
 
-# 16. Будущее развитие
+# 16. Object Editor
+
+Object Editor — платформенный механизм построения карточек объектов.
+Полное описание: `RFC-017-object-editor.md`.
+
+Три фундаментальных понятия:
+
+1. **Object Descriptor** — метаданные объекта (поля, типы, обязательность,
+   зависимости, действия). Editor читает Descriptor, но не знает имён полей.
+
+2. **Editor Engine** — связующий слой: итерирует Descriptor, выбирает
+   FieldComponent по типу поля, применяет DependsOn, ReadOnly, ошибки.
+
+3. **Editor Context (Alpine)** — минимальное состояние редактора в браузере:
+   `values`, `errors`, `dirty`. Alpine управляет только UI-состоянием
+   (`:disabled`), бизнес-логика — только на сервере.
+
+Слои:
+
+```
+Object Descriptor
+        ↓
+Editor Engine
+        ↓
+Editor Context (Alpine)
+        ↓
+HTML + htmx
+        ↓
+Server Validation (HTTP 422)
+```
+
+Первый пользователь: Receipt (Commit B).
+
+---
+
+# 17. Будущее развитие
 
 Архитектура должна позволять:
 

@@ -316,31 +316,120 @@ func TestRunMigrations_DuplicateDetectedBeforeRun(t *testing.T) {
 	}
 }
 
-func TestRunMigrations_OldFormatDB(t *testing.T) {
+func TestRunMigrations_UpgradeFromV4(t *testing.T) {
 	db := openDB(t)
 
-	if err := ensureSystemInfoTable(db); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.Exec(`
-		INSERT OR REPLACE INTO system_info(key, value)
-		VALUES('schema_version', '4')
-	`); err != nil {
-		t.Fatal(err)
-	}
-
+	// Step 1: create schema WITHOUT receipts, register v2-v4 migrations
 	schema := NewSchema()
 	register(t, schema, Must(NewTable("users",
 		Int("id").PrimaryKey().AutoIncrement(),
 		String("login").NotNull().Unique(),
 		String("password_hash"),
 	)))
+	register(t, schema, Must(NewTable("sessions",
+		String("id").PrimaryKey(),
+		Int("user_id"),
+	)))
+
+	addMigration(t, schema, Migration{
+		Version: 2,
+		Name:    "v2-placeholder",
+		Up:      func(ctx context.Context, tx *sql.Tx) error { return nil },
+	})
+	addMigration(t, schema, Migration{
+		Version: 3,
+		Name:    "v3-placeholder",
+		Up:      func(ctx context.Context, tx *sql.Tx) error { return nil },
+	})
+	addMigration(t, schema, Migration{
+		Version: 4,
+		Name:    "v4-placeholder",
+		Up:      func(ctx context.Context, tx *sql.Tx) error { return nil },
+	})
 
 	if err := schema.RunMigrations(db); err != nil {
 		t.Fatal(err)
 	}
+	assertVersion(t, db, 4)
 
-	assertVersion(t, db, 1)
+	// Step 2: register receipts tables + migration 5, run again
+	register(t, schema, Must(NewTable("receipts",
+		Int("id").PrimaryKey().AutoIncrement(),
+		String("uuid").Unique(),
+		String("exchange_id").NotNull().Unique(),
+		String("number").NotNull(),
+		String("date").NotNull(),
+		Int("organization_id").NotNull(),
+		Real("total").NotNull().Default(0),
+		DateTime("sent_at"),
+		String("status").NotNull().Default(""),
+		String("status_color").NotNull().Default(""),
+		DateTime("created_at").NotNull().Default("CURRENT_TIMESTAMP"),
+		DateTime("updated_at").NotNull().Default("CURRENT_TIMESTAMP"),
+	)))
+	register(t, schema, Must(NewTable("receipt_items",
+		Int("id").PrimaryKey().AutoIncrement(),
+		Int("receipt_id").NotNull(),
+		Int("line_num").NotNull(),
+		Int("product_id").NotNull(),
+		String("unit").NotNull().Default(""),
+		Real("quantity").NotNull().Default(1),
+		Real("price").NotNull().Default(0),
+		Real("amount").NotNull().Default(0),
+	)))
+
+	addMigration(t, schema, Migration{
+		Version: 5,
+		Name:    "Add receipts tables",
+		Up: func(ctx context.Context, tx *sql.Tx) error {
+			if _, err := tx.ExecContext(ctx,
+				`CREATE TABLE IF NOT EXISTS receipts (
+					id INTEGER PRIMARY KEY AUTOINCREMENT,
+					uuid TEXT UNIQUE,
+					exchange_id TEXT NOT NULL UNIQUE,
+					number TEXT NOT NULL,
+					date TEXT NOT NULL,
+					organization_id INTEGER NOT NULL,
+					total REAL NOT NULL DEFAULT 0,
+					sent_at DATETIME,
+					status TEXT NOT NULL DEFAULT '',
+					status_color TEXT NOT NULL DEFAULT '',
+					created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+					updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+				)`); err != nil {
+				return err
+			}
+			if _, err := tx.ExecContext(ctx,
+				`CREATE TABLE IF NOT EXISTS receipt_items (
+					id INTEGER PRIMARY KEY AUTOINCREMENT,
+					receipt_id INTEGER NOT NULL,
+					line_num INTEGER NOT NULL,
+					product_id INTEGER NOT NULL,
+					unit TEXT NOT NULL DEFAULT '',
+					quantity REAL NOT NULL DEFAULT 1,
+					price REAL NOT NULL DEFAULT 0,
+					amount REAL NOT NULL DEFAULT 0
+				)`); err != nil {
+				return err
+			}
+			return nil
+		},
+	})
+
+	if err := schema.RunMigrations(db); err != nil {
+		t.Fatal(err)
+	}
+	assertVersion(t, db, 5)
+	assertTableExists(t, db, "receipts")
+	assertTableExists(t, db, "receipt_items")
+
+	// Step 3: run again — nothing changes
+	if err := schema.RunMigrations(db); err != nil {
+		t.Fatal(err)
+	}
+	assertVersion(t, db, 5)
+	assertTableExists(t, db, "receipts")
+	assertTableExists(t, db, "receipt_items")
 }
 
 func TestRunMigrations_OldFormatUnknownVersion(t *testing.T) {

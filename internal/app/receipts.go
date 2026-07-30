@@ -14,6 +14,18 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+func receiptIDFromURL(r *http.Request) int64 {
+	idStr := chi.URLParam(r, "id")
+	if idStr == "" || idStr == "new" {
+		return 0
+	}
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		return 0
+	}
+	return id
+}
+
 func (a *App) ReceiptsPage(w http.ResponseWriter, r *http.Request) {
 	NoCache(w)
 
@@ -53,10 +65,15 @@ func (a *App) ReceiptsPage(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	page := pages.ReceiptListPage{
+	page := pages.ListPage{
 		Title:     "Товарные чеки",
 		Columns:   pageColumns,
 		Rows:      rows,
+		NewURL:    "/receipts/new",
+		RowAction: pages.RowAction{
+			Label:   "Открыть",
+			BaseURL: "/receipts",
+		},
 		EmptyText: "Нет товарных чеков",
 	}
 
@@ -66,28 +83,50 @@ func (a *App) ReceiptsPage(w http.ResponseWriter, r *http.Request) {
 func (a *App) ReceiptCard(w http.ResponseWriter, r *http.Request) {
 	NoCache(w)
 
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
+	id := receiptIDFromURL(r)
 
-	doc, err := a.receipts.GetByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, receipts.ErrNotFound) {
-			http.NotFound(w, r)
+	var doc *receipts.Document
+	if id == 0 {
+		rec := a.receipts.New()
+		doc = &receipts.Document{Receipt: rec}
+	} else {
+		var err error
+		doc, err = a.receipts.GetByID(r.Context(), id)
+		if err != nil {
+			if errors.Is(err, receipts.ErrNotFound) {
+				http.NotFound(w, r)
+				return
+			}
+			a.InternalError(w, err)
 			return
 		}
-		a.InternalError(w, err)
-		return
 	}
 
 	title := "Товарный чек №" + doc.Receipt.Number
+	if doc.Receipt.ID == 0 {
+		title = "Новый товарный чек"
+	}
+
 	page := pages.ReceiptCardPage{
 		Title:   title,
 		Receipt: doc.Receipt,
 		Items:   doc.Items,
+	}
+
+	if doc.Receipt.ID == 0 && a.organizations != nil {
+		orgs, err := a.organizations.List(r.Context())
+		if err != nil {
+			a.InternalError(w, err)
+			return
+		}
+		page.Orgs = orgs
+	} else if a.customers != nil {
+		customers, err := a.customers.List(r.Context(), doc.Receipt.OrganizationID)
+		if err != nil {
+			a.InternalError(w, err)
+			return
+		}
+		page.Customers = customers
 	}
 
 	a.Render(w, "receipt_card", page)

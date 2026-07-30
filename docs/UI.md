@@ -235,6 +235,26 @@ General rules:
 - consistent spacing;
 - identical buttons.
 
+# Entity Selection (Lookup)
+
+Large directories (customers, products) are selected via a `[Выбрать]` button,
+not a `<select>` element. The pattern:
+
+1. Form shows current value (or "Не выбран") with a `[Выбрать]` link.
+2. `[Выбрать]` navigates to the entity list page in picker mode
+   (`?mode=picker&organization_id={oid}`).
+3. In picker mode, rows link back to the origin form with
+   `?customer_id={id}&return_to=...`.
+4. The origin handler reads the selected ID from query params and
+   re-renders the form with the entity pre-filled.
+
+Picker mode rules:
+
+- `[Выбрать]` is disabled if no organization is selected.
+- The picker list only shows entities of the selected organization.
+- This mechanism is used for customers, products, and any future
+  large directories.
+
 ---
 
 # Tables
@@ -348,6 +368,102 @@ HTML is generated on the server.
 The browser is responsible only for presentation and user interaction.
 Business logic never executes in the browser.
 
+# Client-Side Architecture
+
+## Principles
+
+1. **HTML генерируется сервером** (`html/template`). Браузер получает готовую
+   разметку без клиентского рендеринга.
+
+2. **Alpine.js** отвечает только за локальное состояние интерфейса:
+   - активация/деактивация элементов (`:disabled`)
+   - модальные окна (отображение HTML, полученного от сервера)
+   - реактивные вычисления (сумма документа)
+   - Всегда progressive enhancement — форма работает и без Alpine
+     (с полной перезагрузкой страницы)
+
+3. **htmx** отвечает только за обмен с сервером:
+   - сохранение документа (`hx-post`)
+   - загрузка пикера (`hx-get`)
+   - частичная подмена HTML
+   - Всегда progressive enhancement — htmx-эндпоинты возвращают полную
+     HTML-разметку, пригодную для обычного POST
+
+4. **Вся бизнес-логика и окончательная валидация — только на сервере.**
+   Браузер не принимает бизнес-решений (canSave, валидация форматов и т.п.).
+
+5. **HTTP 422 Unprocessable Entity** используется для ошибок валидации.
+   При 422 сервер возвращает форму с заполненными полями и ошибками.
+   htmx заменяет форму; без htmx — полная перезагрузка с той же формой.
+
+## Распределение ответственности
+
+| Компонент | Что делает |
+|-----------|------------|
+| Сервер (Go) | Валидация, сохранение, рендер HTML |
+| htmx | POST/GET к серверу, частичная подмена HTML |
+| Alpine.js | `:disabled`, модалки, реактивные вычисления |
+
+## Editor Context (Alpine)
+
+Единое состояние редактора для всех типов объектов:
+
+```js
+{
+  values: {},   // { fieldName: value }
+  errors: {},   // { fieldName: "error text" }
+  dirty: false
+}
+```
+
+- Alpine управляет `:disabled` через `values.organization_id > 0`
+  (UI-logic, не бизнес-логика)
+- Кнопка «Сохранить» всегда активна; сервер отвечает 422 с ошибками
+- Без Alpine все поля disabled до первой полной перезагрузки
+
+## Lookup Field
+
+Ссылочные поля (организация, контрагент, товар) используют кнопку
+`[Выбрать]` и отображение текущего значения, а не `<select>`.
+
+Picker mode — list page в режиме выбора:
+- скрыта кнопка «Добавить»
+- каждая строка ссылается на возврат с выбранным значением
+
+
+# List Pages
+
+All list pages use the generic `pages.ListPage` struct and the `list.html` template.
+
+```go
+page := pages.ListPage{
+    Title:     "...",
+    Columns:   pageColumns,
+    Rows:      rows,
+    NewURL:    ".../new",
+    RowAction: pages.RowAction{...},
+    EmptyText: "...",
+}
+
+a.Render(w, "entity", page)
+```
+
+Creating a dedicated list page struct (e.g. `ReceiptListPage`) is discouraged.
+The standard `ListPage` already provides all fields that `list.html` expects:
+`Title`, `Search`, `Columns`, `Rows`, `NewURL`, `RowAction`, `SearchURL`, `EmptyText`.
+
+A custom list struct may only be introduced if `list.html` cannot be reused
+and a completely different template is required.
+
+Current list pages using `pages.ListPage`:
+
+- Customers
+- Organizations
+- Products
+- Receipts
+- Users
+
+---
 
 # Login Page
 

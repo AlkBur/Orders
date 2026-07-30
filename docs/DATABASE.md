@@ -1,6 +1,6 @@
 # Orders Server — Структура базы данных
 
-Версия: 1.0
+Версия: 2.0
 
 ---
 
@@ -23,6 +23,8 @@
 
 Содержит только двоичные данные документов (PDF).
 
+*Реализация запланирована. Текущая версия приложения использует только `base.db`.*
+
 Такое разделение позволяет:
 
 - уменьшить размер рабочей базы данных;
@@ -34,8 +36,6 @@
 
 # 2. Общие требования
 
-Для обеих баз данных:
-
 - используется SQLite;
 - используется режим WAL;
 - включены внешние ключи (`PRAGMA foreign_keys = ON`);
@@ -45,24 +45,36 @@
 
 # 3. Dual-ID Architecture
 
-Все сущности (кроме сессий) имеют два идентификатора:
+Все сущности (кроме сессий и товарных чеков) имеют два идентификатора:
 
 - **ID (INTEGER)** — внутренний первичный ключ. Автоинкремент. Используется
   в URL веб-интерфейса, внешних ключах и JOIN. Тип `INTEGER` с `PRIMARY KEY AUTOINCREMENT`.
 
 - **UUID (TEXT)** — внешний идентификатор. Используется в API и синхронизации
-  с внешними системами. Тип `TEXT NOT NULL`.
+  с внешними системами. Тип `TEXT NOT NULL UNIQUE` (Organization, User)
+  или `TEXT NOT NULL` с составным `UNIQUE(organization_id, uuid)` (Customer, Product).
+
+Сессии — исключение: используют строковый первичный ключ (токен сессии).
+
+Товарные чеки (Receipts) — исключение: используют три идентификатора:
+
+- **ID (INTEGER)** — внутренний первичный ключ.
+- **ExchangeID (TEXT UNIQUE NOT NULL)** — стабильный UUID документа,
+  генерируется при создании. Используется как внешний ключ в интеграции
+  (`entity.ExternalKey("OrganizationID", "ExchangeID")`).
+- **UUID (TEXT UNIQUE)** — внешний UUID, присваивается 1С при синхронизации.
+  Может быть NULL до первой синхронизации.
 
 Ограничения уникальности:
 
 | Сущность | Ограничение |
 |----------|-------------|
 | Organization | `UNIQUE(uuid)` |
-| User | `UNIQUE(uuid)` |
+| User | `UNIQUE(uuid)`, `UNIQUE(login)` |
 | Customer | `UNIQUE(organization_id, uuid)` |
 | Product | `UNIQUE(organization_id, uuid)` |
-
-Сессии — исключение: используют строковый первичный ключ (токен сессии).
+| Receipt | `UNIQUE(uuid)`, `UNIQUE(exchange_id)`, `UNIQUE(organization_id, number)` |
+| ReceiptItem | — |
 
 ---
 
@@ -84,16 +96,15 @@ var Table = database.Must(database.NewTable("customers",
 )).AddUniqueConstraint("organization_id", "uuid")
 ```
 
-При запуске приложения:
+## Типы колонок
 
-```go
-schema := database.NewSchema()
-schema.Register(users.Table)
-schema.Register(sessions.Table)
-
-db, err := database.OpenPath(config.DatabasePath)
-schema.RunMigrations(db)
-```
+| Функция | SQLite type |
+|---------|-------------|
+| `String()` | TEXT |
+| `Int()` | INTEGER |
+| `Real()` | REAL |
+| `Bool()` | INTEGER (0/1) |
+| `DateTime()` | DATETIME |
 
 ## AddUniqueConstraint
 
@@ -105,12 +116,21 @@ database.NewTable("customers", ...).AddUniqueConstraint("organization_id", "uuid
 
 Генерирует `UNIQUE (organization_id, uuid)` в CREATE TABLE.
 
+## CreateSQL
+
+```go
+func (t Table) CreateSQL() string              // CREATE TABLE tablename (...)
+func (t Table) CreateSQLIfNotExists() string   // CREATE TABLE IF NOT EXISTS tablename (...)
+```
+
+`CreateSQL()` используется для первоначального создания схемы (новая БД).
+`CreateSQLIfNotExists()` — для миграций, где таблица может уже существовать.
+
 ## Сценарии RunMigrations
 
 | Состояние | Действие |
 |-----------|----------|
-| Новая БД (v=0) | CREATE TABLE из описаний, запись v=1 |
-| Старая система (v=4) | Одноразовый переход |
+| Новая БД (v=0) | CREATE TABLE из описаний всех зарегистрированных Table, запись v = код |
 | v == code version | Ничего |
 | v < code version | Выполнить недостающие миграции по порядку |
 | v > code version | Ошибка (БД новее кода) |
@@ -118,15 +138,17 @@ database.NewTable("customers", ...).AddUniqueConstraint("organization_id", "uuid
 ## Служебная таблица system_info
 
 ```sql
-key   TEXT PRIMARY KEY
-value TEXT NOT NULL
+CREATE TABLE system_info (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+)
 ```
 
 Хранит одну запись:
 
 ```
 key = 'schema_version'
-value = '1'
+value = '<текущая версия>'
 ```
 
 ---
@@ -138,10 +160,10 @@ value = '1'
 
 ```go
 type Customer struct {
-    ID   int64  `db:"id" order:"2"`
-    UUID string `db:"uuid" label:"ID" order:"5" list:"true"`
-    Name string `db:"name" label:"Наименование" order:"20" list:"true" search:"true"`
-    Active bool `db:"active" label:"Активен" order:"30" list:"true"`
+    ID     int64  `db:"id" order:"2"`
+    UUID   string `db:"uuid" label:"ID" order:"5" list:"true"`
+    Name   string `db:"name" label:"Наименование" order:"20" list:"true" search:"true"`
+    Active bool   `db:"active" label:"Активен" order:"30" list:"true"`
     ...
 }
 
@@ -157,7 +179,7 @@ var Descriptor = entity.Register[Customer](
 |-----|----------|
 | `db` | Имя колонки в БД |
 | `label` | Отображаемое имя |
-| `order` | Порядок сортировки (int) |
+| `order` | Порядок сортировки (int, обязателен для всех полей) |
 | `list` | "true" = показывать в таблице |
 | `search` | "true" = участвует в поиске |
 | `readonly` | "true" = только для отображения |
@@ -184,7 +206,7 @@ Descriptor предоставляет:
 | login | TEXT UNIQUE | Логин |
 | email | TEXT | Email |
 | password_hash | TEXT | Хэш пароля |
-| is_admin | BOOLEAN | Администратор |
+| is_admin | INTEGER | Администратор |
 | created_at | DATETIME | Создан |
 | updated_at | DATETIME | Изменен |
 
@@ -218,7 +240,7 @@ Descriptor предоставляет:
 | uuid | TEXT UNIQUE | Внешний UUID |
 | name | TEXT | Наименование |
 | api_key | TEXT UNIQUE | Ключ для API-интеграции |
-| active | BOOLEAN | Активная |
+| active | INTEGER | Активная |
 | created_at | DATETIME | Создана |
 | updated_at | DATETIME | Изменена |
 
@@ -234,7 +256,7 @@ Descriptor предоставляет:
 | uuid | TEXT | Внешний UUID (из 1С или сгенерированный) |
 | organization_id | INTEGER NOT NULL | FK → organizations.id |
 | name | TEXT | Наименование |
-| active | BOOLEAN | Активный |
+| active | INTEGER | Активный |
 | created_at | DATETIME | Создан |
 | updated_at | DATETIME | Изменен |
 
@@ -256,7 +278,7 @@ Descriptor предоставляет:
 | organization_id | INTEGER NOT NULL | FK → organizations.id |
 | name | TEXT | Наименование |
 | unit | TEXT | Единица измерения |
-| active | BOOLEAN | Активный |
+| active | INTEGER | Активный |
 | created_at | DATETIME | Создан |
 | updated_at | DATETIME | Изменен |
 
@@ -266,50 +288,90 @@ Descriptor предоставляет:
 
 ---
 
-## Таблица Orders
+## Таблица Receipts
 
 Назначение: Товарные чеки.
 
 | Поле | Тип | Описание |
 |------|-----|----------|
-| id | INTEGER | Первичный ключ |
-| customer_uuid | TEXT | UUID контрагента |
-| customer_name | TEXT | Наименование контрагента на момент создания |
-| document_date | DATE | Дата документа |
-| status | INTEGER | Статус |
-| total | DECIMAL | Итоговая сумма |
+| id | INTEGER PK | Внутренний ID |
+| uuid | TEXT UNIQUE | Внешний UUID (присваивается 1С, nullable) |
+| exchange_id | TEXT UNIQUE NOT NULL | Локальный UUID, генерируется при создании |
+| number | TEXT NOT NULL | Номер документа |
+| date | TEXT NOT NULL | Дата документа (YYYY-MM-DD) |
+| organization_id | INTEGER NOT NULL | FK → organizations.id |
+| user_id | INTEGER NOT NULL | FK → users.id |
+| customer_id | INTEGER NOT NULL | FK → customers.id |
+| total | REAL | Итоговая сумма |
+| sent_at | DATETIME | Дата отправки (когда документ готов к выдаче 1С) |
+| status | TEXT | Статус (управляется 1С) |
+| status_color | TEXT | Цвет статуса (управляется 1С) |
 | created_at | DATETIME | Создан |
 | updated_at | DATETIME | Изменен |
 
+Ограничения:
+- `UNIQUE(uuid)` — внешний UUID уникален (может быть NULL).
+- `UNIQUE(exchange_id)` — локальный UUID уникален.
+- `UNIQUE(organization_id, number)` — номер уникален в пределах организации.
+- `FOREIGN KEY(organization_id) REFERENCES organizations(id)`.
+- `FOREIGN KEY(user_id) REFERENCES users(id)`.
+- `FOREIGN KEY(customer_id) REFERENCES customers(id)`.
+
 ---
 
-## Таблица OrderItems
+## Таблица ReceiptItems
 
 Назначение: Строки товарного чека.
 
 | Поле | Тип | Описание |
 |------|-----|----------|
-| id | INTEGER | Первичный ключ |
-| order_id | INTEGER | Документ |
-| product_uuid | TEXT | UUID товара |
-| product_name | TEXT | Наименование товара на момент создания |
+| id | INTEGER PK | Внутренний ID |
+| receipt_id | INTEGER NOT NULL | FK → receipts.id |
+| line_num | INTEGER | Номер строки |
+| product_id | INTEGER NOT NULL | FK → products.id |
 | unit | TEXT | Единица измерения |
-| quantity | DECIMAL | Количество |
-| price | DECIMAL | Цена |
-| amount | DECIMAL | Сумма |
+| quantity | REAL | Количество |
+| price | REAL | Цена |
+| amount | REAL | Сумма |
+
+Ограничения:
+- `FOREIGN KEY(receipt_id) REFERENCES receipts(id) ON DELETE CASCADE`.
+- `FOREIGN KEY(product_id) REFERENCES products(id)`.
 
 ---
 
-# 7. База данных files.db
+# 7. Статусы документов
 
-## Таблица OrderFiles
+`Status` — открытая строка (TEXT). Значение полностью управляется 1С
+через `Synchronize()`. Orders не интерпретирует и не ограничивает статус.
+
+Единственный внутренний статус — состояние отправки:
+
+- `sent_at IS NULL` — документ редактируется.
+- `sent_at IS NOT NULL` — документ опубликован для 1С, read-only.
+
+Документ считается доступным для синхронизации, если:
+
+```
+sent_at IS NOT NULL
+  AND uuid IS NULL
+```
+
+---
+
+# 8. База данных files.db (запланировано)
+
+*Раздел описывает целевую архитектуру. Реализация начнётся после
+добавления функциональности PDF.*
+
+## Таблица ReceiptFiles
 
 Назначение: Хранение PDF-файлов документов.
 
 | Поле | Тип | Описание |
 |------|-----|----------|
-| id | INTEGER | Первичный ключ |
-| order_id | INTEGER | Идентификатор документа |
+| id | INTEGER PK | Первичный ключ |
+| receipt_id | INTEGER | FK → receipts.id |
 | file_name | TEXT | Имя файла |
 | mime_type | TEXT | MIME-тип |
 | file_size | INTEGER | Размер файла |
@@ -317,29 +379,23 @@ Descriptor предоставляет:
 | created_at | DATETIME | Дата загрузки |
 | updated_at | DATETIME | Изменен |
 
----
+Связи:
 
-# 8. Статусы документов
-
-| Код | Статус |
-|------|---------|
-| 0 | Создан |
-| 1 | Отправлен |
-| 2 | Обработан |
-| 3 | Отменен |
+- ReceiptFile принадлежит одному документу.
+- На один документ может быть от нуля до нескольких файлов.
 
 ---
 
 # 9. Связи
 
-## base.db
+Receipt
 
-Order
-
-- имеет одного контрагента;
+- принадлежит одной организации;
+- создан одним пользователем;
+- относится к одному контрагенту;
 - содержит много строк.
 
-OrderItems
+ReceiptItem
 
 - принадлежит одному документу;
 - содержит снимок данных товара.
@@ -349,15 +405,6 @@ Customer / Product
 - принадлежат одной организации;
 - идентифицируются UUID в пределах организации.
 
-## files.db
-
-OrderFiles
-
-- принадлежит одному документу;
-- может существовать в количестве от нуля до нескольких файлов на один документ.
-
-Связь осуществляется по полю `order_id`.
-
 ---
 
 # 10. Правила хранения данных
@@ -365,24 +412,24 @@ OrderFiles
 Контрагенты и товары синхронизируются только через API.
 
 Документы хранят снимок наименований товаров и контрагентов на момент создания.
-
 Изменение справочников не влияет на ранее созданные документы.
 
-Все справочники имеют dual-ID: внутренний `id` (int64, PK, используется
+Все справочники (кроме чеков) имеют dual-ID: внутренний `id` (int64, PK, используется
 в URL и FK) и внешний `uuid` (TEXT, используется в API и синхронизации).
+
+Чеки имеют три идентификатора: `id` (внутренний), `exchange_id` (локальный UUID
+для интеграции), `uuid` (внешний UUID от 1С, может быть NULL).
 
 ---
 
-# 11. Правила хранения PDF
+# 11. Правила хранения PDF (запланировано)
 
-PDF-файлы сохраняются только в базе данных `files.db`.
+PDF-файлы будут сохраняться только в базе данных `files.db`.
 
 Каждый файл хранится как BLOB.
 
 Файлы никогда не изменяются после сохранения в интерфейсе.
-
-Файлы могут обновляться через api.
-
+Файлы могут обновляться через API.
 Удаление PDF через пользовательский интерфейс не предусмотрено.
 
 ---
@@ -392,7 +439,7 @@ PDF-файлы сохраняются только в базе данных `fil
 Для полного резервного копирования приложения необходимо сохранить:
 
 - base.db
-- files.db
+- files.db (после реализации)
 
 Других данных, необходимых для восстановления системы, приложение не хранит.
 
@@ -420,3 +467,9 @@ PDF-файлы сохраняются только в базе данных `fil
   - Customers/Products получают `UNIQUE(organization_id, uuid)`.
   - Organizations/Users получают `UNIQUE(uuid)`.
   - Sessions — исключение (строковый PK).
+
+## Версия 5
+
+- **Название:** Add receipts tables
+- **Операция:** CREATE TABLE IF NOT EXISTS receipts, CREATE TABLE IF NOT EXISTS receipt_items.
+- Без DROP — идемпотентно, безопасно для существующих данных.
