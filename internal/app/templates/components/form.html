@@ -3,7 +3,7 @@
   <label class="label" for="{{.Name}}">{{.Label}}</label>
   <div class="control">
     {{if eq .Type.String "text"}}
-      <input class="input" type="text" id="{{.Name}}" name="{{.Name}}" value="{{.Value}}"{{if .Readonly}} readonly{{end}}{{if .Required}} required{{end}}>
+      <input class="input" type="text" id="{{.Name}}" name="{{.Name}}" value="{{.Value}}"{{if .Readonly}} readonly{{end}}{{if .Required}} required{{end}}{{if .Autocomplete}} autocomplete="{{.Autocomplete}}"{{end}}{{if .Autofocus}} autofocus{{end}}>
     {{else if eq .Type.String "number"}}
       <input class="input" type="number" id="{{.Name}}" name="{{.Name}}" value="{{.Value}}"{{if .Readonly}} readonly{{end}}>
     {{else if eq .Type.String "select"}}
@@ -12,6 +12,8 @@
           <option value="">Выберите...</option>
         </select>
       </div>
+    {{else if eq .Type.String "password"}}
+      <input class="input" type="password" id="{{.Name}}" name="{{.Name}}"{{if .Required}} required{{end}}{{if .Autocomplete}} autocomplete="{{.Autocomplete}}"{{end}}{{if .Autofocus}} autofocus{{end}}>
     {{else if eq .Type.String "checkbox"}}
       <label class="checkbox">
         <input type="checkbox" id="{{.Name}}" name="{{.Name}}"{{if eq .Value "true"}} checked{{end}}>

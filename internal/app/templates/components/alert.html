@@ -1,0 +1,16 @@
+{{/* Alert — универсальный блок сообщений.
+     AlertData{Type, Messages}. Одно сообщение — строкой,
+     несколько — заголовок «Исправьте ошибки» и список.
+*/}}
+{{define "alert"}}
+<div class="alert alert--{{.Type}}" role="alert">
+  {{if eq (len .Messages) 1}}
+    {{index .Messages 0}}
+  {{else}}
+    <p class="alert-title">Исправьте ошибки:</p>
+    <ul class="alert-list">
+      {{range .Messages}}<li>{{.}}</li>{{end}}
+    </ul>
+  {{end}}
+</div>
+{{end}}

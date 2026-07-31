@@ -57,8 +57,24 @@
 
 <div class="catalog-section">
   <div class="section-heading">Form</div>
+  <p class="catalog-note">
+    Поле с типом <code>password</code> поддерживается компонентом Form.
+    Значение пароля никогда не подставляется в разметку.
+  </p>
   {{template "form_group" .Fields}}
   {{template "catalog_code" (index .CodeSamples "form")}}
+</div>
+
+<div class="catalog-section">
+  <div class="section-heading">Alert</div>
+  <p class="catalog-note">
+    Универсальный блок сообщений: одно сообщение — строкой,
+    несколько — заголовком и списком.
+  </p>
+  {{range .Alerts}}
+    {{template "alert" .}}
+  {{end}}
+  {{template "catalog_code" (index .CodeSamples "alert")}}
 </div>
 
 <div class="catalog-section">
