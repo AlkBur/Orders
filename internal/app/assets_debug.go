@@ -19,7 +19,7 @@ func LoadTemplates(page string) (*template.Template, error) {
 		)
 	}
 
-	if page == "products" || page == "organizations" || page == "customers" || page == "users" || page == "receipts" {
+	if page == "products" || page == "customers" || page == "users" || page == "receipts" {
 		return template.ParseFiles(
 			filepath.Join("internal", "app", "templates", "layout.html"),
 			filepath.Join("internal", "app", "templates", "list.html"),

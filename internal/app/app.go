@@ -96,8 +96,6 @@ func New(configPath string) (*App, error) {
 		"set-password",
 		"receipts",
 		"receipt_card",
-		"organizations",
-		"organization_card",
 		"customers",
 		"customer_card",
 		"products",
