@@ -174,7 +174,7 @@ func TestList_Empty(t *testing.T) {
 	db := testDB(t)
 	store := NewStore(db)
 
-	list, err := store.List(context.Background())
+	list, err := store.List(context.Background(), ListOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,7 +196,7 @@ func TestList_OrderedByName(t *testing.T) {
 		}
 	}
 
-	list, err := store.List(context.Background())
+	list, err := store.List(context.Background(), ListOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

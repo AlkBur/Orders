@@ -3,9 +3,9 @@
   <label class="label" for="{{.Name}}">{{.Label}}</label>
   <div class="control">
     {{if eq .Type.String "text"}}
-      <input class="input" type="text" id="{{.Name}}" name="{{.Name}}" value="{{.Value}}">
+      <input class="input" type="text" id="{{.Name}}" name="{{.Name}}" value="{{.Value}}"{{if .Readonly}} readonly{{end}}{{if .Required}} required{{end}}>
     {{else if eq .Type.String "number"}}
-      <input class="input" type="number" id="{{.Name}}" name="{{.Name}}" value="{{.Value}}">
+      <input class="input" type="number" id="{{.Name}}" name="{{.Name}}" value="{{.Value}}"{{if .Readonly}} readonly{{end}}>
     {{else if eq .Type.String "select"}}
       <div class="select is-fullwidth">
         <select id="{{.Name}}" name="{{.Name}}">

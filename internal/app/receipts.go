@@ -8,6 +8,7 @@ import (
 
 	"Orders/internal/app/pages"
 	"Orders/internal/common"
+	"Orders/internal/organizations"
 	"Orders/internal/receipts"
 	"Orders/internal/ui"
 	"Orders/internal/ui/display"
@@ -153,7 +154,7 @@ func (a *App) ReceiptCard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if doc.Receipt.ID == 0 && a.organizations != nil {
-		orgs, err := a.organizations.List(r.Context())
+		orgs, err := a.organizations.List(r.Context(), organizations.ListOptions{})
 		if err != nil {
 			a.InternalError(w, err)
 			return
@@ -311,7 +312,7 @@ func renderReceiptFormWithErrors(w http.ResponseWriter, r *http.Request, a *App,
 		ItemsJSON:      itemsJSON,
 	}
 	if a.organizations != nil {
-		orgs, err := a.organizations.List(r.Context())
+		orgs, err := a.organizations.List(r.Context(), organizations.ListOptions{})
 		if err == nil {
 			page.Orgs = orgs
 		}

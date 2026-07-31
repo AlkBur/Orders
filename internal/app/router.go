@@ -56,7 +56,7 @@ func (a *App) NewRouter() *chi.Mux {
 		r.Group(func(r chi.Router) {
 			r.Use(RequirePassword)
 
-			r.Get("/", a.MenuPage)
+			r.Get("/", a.DashboardPage)
 
 			// Receipts
 			r.Get("/receipts", a.ReceiptsPage)
@@ -107,6 +107,7 @@ func (a *App) NewRouter() *chi.Mux {
 			r.Post("/organizations", a.OrganizationSave)
 			r.Get("/organizations/{id}", a.OrganizationCard)
 			r.Post("/organizations/{id}", a.OrganizationSave)
+			r.Post("/organizations/{id}/delete", a.OrganizationDelete)
 
 			// Users
 			r.Route("/users", func(r chi.Router) {

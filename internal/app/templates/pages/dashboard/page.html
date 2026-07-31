@@ -1,0 +1,28 @@
+{{define "page_content"}}
+<div class="stats-grid">
+  <div class="stats-card">
+    {{template "card_open" "Всего организаций"}}
+      <p class="stats-value">{{.Stats.Total}}</p>
+    {{template "card_close"}}
+  </div>
+  <div class="stats-card">
+    {{template "card_open" "Активных"}}
+      <p class="stats-value">{{.Stats.Active}}</p>
+    {{template "card_close"}}
+  </div>
+</div>
+
+<div class="section-heading">Последние организации</div>
+{{template "list" .RecentList}}
+
+<div class="section-heading">Модули</div>
+<div class="stats-grid">
+  {{range .Modules}}
+    <div class="stats-card">
+      {{template "card_open" .Name}}
+        <p class="placeholder-text">{{.Note}}</p>
+      {{template "card_close"}}
+    </div>
+  {{end}}
+</div>
+{{end}}

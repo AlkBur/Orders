@@ -631,6 +631,41 @@ ui.RenderPage(w, baseFS, pageFS, data)
 - Добавление нового компонента не требует изменения кода — достаточно положить
   `.html` файл в `components/`.
 
+### Реальные страницы
+
+Шаблоны реальных страниц располагаются у своего владельца:
+
+```
+app:              internal/app/templates/pages/dashboard/page.html
+домен модуля:     internal/organizations/templates/list/page.html
+                  internal/organizations/templates/card/page.html
+```
+
+Домен отдаёт шаблоны через `organizations.Templates()` (embedded в release,
+диск в debug — те же правила, что и у `app.TemplateFS()`). Хендлер в `app`
+собирает данные из `pages`-моделей и вызывает:
+
+```go
+pageFS, _ := fs.Sub(organizations.Templates(), "list")
+ui.RenderPage(w, TemplateFS(), pageFS, data)
+```
+
+Данные для рендера собирает слой `app` (хендлеры); домен не знает о `pages`.
+FAB реализуется данными списка через `FABProvider` (например,
+`organizationsListData.FAB()`).
+
+### Dashboard
+
+`/` — dashboard: `internal/app/dashboard.go` + `pages/dashboard/page.html`.
+Счётчики (`Count`, `CountActive`), последние организации (`List` с
+`OrderBy: "created_at"` и `Limit`), placeholder-блоки будущих модулей.
+
+### Header в реальных страницах
+
+Пункт меню с `ID == "logout"` рендерится как `<form method="post">` —
+logout принимает только POST. Пункт меню приложения задаётся в `pageHeader()`
+в `internal/app/organizations.go`.
+
 ### FAB
 
 | Компонент | Файл | API | Внутренняя реализация |

@@ -5,7 +5,17 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"fmt"
+	"strings"
 )
+
+// ListOptions управляет выборкой списка организаций.
+// OrderBy добавлен заранее, чтобы не менять сигнатуру позже.
+type ListOptions struct {
+	Query   string
+	Limit   int
+	Offset  int
+	OrderBy string
+}
 
 type Store struct {
 	db *sql.DB
@@ -71,12 +81,35 @@ func (s *Store) GetByUUID(ctx context.Context, uuid string) (*Organization, erro
 	return o, nil
 }
 
-func (s *Store) List(ctx context.Context) ([]*Organization, error) {
-	rows, err := s.db.QueryContext(ctx, `
+func (s *Store) List(ctx context.Context, opts ListOptions) ([]*Organization, error) {
+	q := `
 		SELECT id, uuid, name, active, created_at, updated_at
 		FROM organizations
-		ORDER BY name
-	`)
+	`
+	var args []any
+
+	if opts.Query != "" {
+		q += ` WHERE name LIKE ? ESCAPE '\'`
+		args = append(args, "%"+escapeLike(opts.Query)+"%")
+	}
+
+	switch opts.OrderBy {
+	case "created_at":
+		q += ` ORDER BY created_at DESC`
+	default:
+		q += ` ORDER BY name`
+	}
+
+	if opts.Limit > 0 {
+		q += ` LIMIT ?`
+		args = append(args, opts.Limit)
+		if opts.Offset > 0 {
+			q += ` OFFSET ?`
+			args = append(args, opts.Offset)
+		}
+	}
+
+	rows, err := s.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -106,6 +139,42 @@ func (s *Store) List(ctx context.Context) ([]*Organization, error) {
 	}
 
 	return orgs, nil
+}
+
+// Count возвращает число организаций, удовлетворяющих поисковому запросу.
+func (s *Store) Count(ctx context.Context, query string) (int, error) {
+	q := `SELECT COUNT(*) FROM organizations`
+	var args []any
+
+	if query != "" {
+		q += ` WHERE name LIKE ? ESCAPE '\'`
+		args = append(args, "%"+escapeLike(query)+"%")
+	}
+
+	var n int
+	if err := s.db.QueryRowContext(ctx, q, args...).Scan(&n); err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+// CountActive возвращает число активных организаций.
+func (s *Store) CountActive(ctx context.Context) (int, error) {
+	var n int
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM organizations WHERE active = 1`,
+	).Scan(&n); err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+// escapeLike экранирует спецсимволы подстановки LIKE.
+func escapeLike(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `%`, `\%`)
+	s = strings.ReplaceAll(s, `_`, `\_`)
+	return s
 }
 
 // Save inserts or updates an organization.
