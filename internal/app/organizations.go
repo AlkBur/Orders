@@ -2,71 +2,94 @@ package app
 
 import (
 	"errors"
+	"io/fs"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"Orders/internal/app/pages"
 	"Orders/internal/common"
 	"Orders/internal/organizations"
-	"Orders/internal/ui/display"
+	"Orders/internal/ui"
 
 	"github.com/go-chi/chi/v5"
 )
 
+type organizationsListData struct {
+	Title   string
+	Header  pages.HeaderData
+	Toolbar pages.ToolbarData
+	Search  pages.SearchData
+	List    pages.ListData
+}
+
+func (organizationsListData) FAB() *ui.FAB {
+	return &ui.FAB{Icon: "plus", URL: "/organizations/new", Text: "Добавить"}
+}
+
+type organizationCardData struct {
+	Title      string
+	Header     pages.HeaderData
+	ID         int64
+	Name       string
+	Active     bool
+	FormAction string
+	Fields     []pages.Field
+}
+
 func (a *App) OrganizationsPage(w http.ResponseWriter, r *http.Request) {
 	NoCache(w)
 
-	orgs, err := a.organizations.List(r.Context())
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+
+	orgs, err := a.organizations.List(r.Context(), organizations.ListOptions{Query: query})
 	if err != nil {
 		a.InternalError(w, err)
 		return
 	}
 
-	fields := organizations.Descriptor.ListFields()
-
-	var pageColumns []pages.Column
-	for _, f := range fields {
-		pageColumns = append(pageColumns, pages.Column{
-			Name:  f.GoName,
-			Label: f.Label,
-		})
-	}
-
-	var rows []pages.Row
+	var rows []pages.ListRow
 	for _, o := range orgs {
-		var item display.Values = o
-
-		var cells []string
-		for _, f := range fields {
-			value, err := item.DisplayValue(f.GoName)
-			if err != nil {
-				a.InternalError(w, err)
-				return
-			}
-			cells = append(cells, value)
-		}
-		rows = append(rows, pages.Row{
-			Cells: cells,
-			ID:    strconv.FormatInt(o.ID, 10),
-			URL:   o.URL(),
+		rows = append(rows, pages.ListRow{
+			URL: "/organizations/" + strconv.FormatInt(o.ID, 10),
+			Cells: []string{
+				o.Name,
+				orgStatus(o.Active),
+				o.CreatedAt.Format("02.01.2006"),
+			},
 		})
 	}
 
-	page := pages.ListPage{
-		Title:   "Организации",
-		Columns: pageColumns,
-		Rows:    rows,
-
-		NewURL: "/organizations/new",
-		RowAction: pages.RowAction{
-			Label:   "Открыть",
-			BaseURL: "/organizations",
-		},
-
-		EmptyText: "Нет организаций",
+	pageFS, err := fs.Sub(organizations.Templates(), "list")
+	if err != nil {
+		a.InternalError(w, err)
+		return
 	}
 
-	a.Render(w, "organizations", page)
+	data := organizationsListData{
+		Title:  "Организации",
+		Header: pageHeader(r, "Организации"),
+		Toolbar: pages.ToolbarData{
+			Buttons: []pages.Button{
+				{Style: pages.ButtonPrimary, Text: "Добавить", URL: "/organizations/new", Icon: "plus"},
+			},
+		},
+		Search: pages.SearchData{Placeholder: "Поиск организаций...", Value: query},
+		List: pages.ListData{
+			Columns: []pages.ListColumn{
+				{Label: "Название"},
+				{Label: "Статус"},
+				{Label: "Создана"},
+			},
+			Rows:       rows,
+			RenderMode: pages.RenderComfortable,
+			Preset:     pages.ListOrganizations,
+		},
+	}
+
+	if err := ui.RenderPage(w, TemplateFS(), pageFS, data); err != nil {
+		a.InternalError(w, err)
+	}
 }
 
 func organizationID(r *http.Request) int64 {
@@ -102,15 +125,59 @@ func (a *App) OrganizationCard(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	title := org.Name
-	if title == "" {
-		title = "Новая организация"
+	pageFS, err := fs.Sub(organizations.Templates(), "card")
+	if err != nil {
+		a.InternalError(w, err)
+		return
 	}
 
-	a.Render(w, "organization_card", pages.OrganizationCardPage{
-		Title: title,
-		Org:   org,
-	})
+	name := org.Name
+	if name == "" {
+		name = "Новая организация"
+	}
+
+	action := "/organizations"
+	if id > 0 {
+		action = "/organizations/" + strconv.FormatInt(id, 10)
+	}
+
+	data := organizationCardData{
+		Title:      name,
+		Header:     pageHeader(r, "Организации"),
+		ID:         id,
+		Name:       name,
+		Active:     org.Active,
+		FormAction: action,
+		Fields: []pages.Field{
+			{Name: "uuid", Label: "UUID", Type: pages.FieldText, Value: org.UUID, Readonly: true},
+			{Name: "name", Label: "Наименование", Type: pages.FieldText, Value: org.Name, Required: true},
+			{Name: "active", Label: "Активна", Type: pages.FieldCheckbox, Value: checkValue(org.Active)},
+			{Name: "apikey", Label: "API Key", Type: pages.FieldText, Value: org.APIKey, Readonly: true},
+		},
+	}
+
+	if err := ui.RenderPage(w, TemplateFS(), pageFS, data); err != nil {
+		a.InternalError(w, err)
+	}
+}
+
+func (a *App) OrganizationDelete(w http.ResponseWriter, r *http.Request) {
+	id := organizationID(r)
+	if id == 0 {
+		http.NotFound(w, r)
+		return
+	}
+
+	if err := a.organizations.DeleteByID(r.Context(), id); err != nil {
+		if errors.Is(err, organizations.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		a.InternalError(w, err)
+		return
+	}
+
+	http.Redirect(w, r, "/organizations", http.StatusSeeOther)
 }
 
 func (a *App) OrganizationSave(w http.ResponseWriter, r *http.Request) {
@@ -124,7 +191,7 @@ func (a *App) OrganizationSave(w http.ResponseWriter, r *http.Request) {
 	org := &organizations.Organization{
 		ID:     id,
 		UUID:   r.FormValue("uuid"),
-		Name:   r.FormValue("name"),
+		Name:   strings.TrimSpace(r.FormValue("name")),
 		Active: r.FormValue("active") == "on",
 	}
 
@@ -153,4 +220,29 @@ func (a *App) OrganizationSave(w http.ResponseWriter, r *http.Request) {
 	a.orgKeysMu.Unlock()
 
 	http.Redirect(w, r, "/organizations/"+strconv.FormatInt(org.ID, 10), http.StatusSeeOther)
+}
+
+func pageHeader(r *http.Request, section string) pages.HeaderData {
+	user := CurrentUser(r)
+	return pages.HeaderData{
+		Section:  section,
+		Username: user.Login,
+		Menu: []pages.MenuItem{
+			{ID: "logout", Label: "Выход", Icon: "logout", URL: "/logout"},
+		},
+	}
+}
+
+func orgStatus(active bool) string {
+	if active {
+		return "Активна"
+	}
+	return "Неактивна"
+}
+
+func checkValue(v bool) string {
+	if v {
+		return "true"
+	}
+	return ""
 }

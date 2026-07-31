@@ -1,0 +1,21 @@
+//go:build !debug
+
+package organizations
+
+import (
+	"embed"
+	"io/fs"
+)
+
+//go:embed templates/*
+var templatesFS embed.FS
+
+// Templates returns the domain templates (templates/list/page.html,
+// templates/card/page.html). In release builds they are embedded.
+func Templates() fs.FS {
+	sub, err := fs.Sub(templatesFS, "templates")
+	if err != nil {
+		panic(err)
+	}
+	return sub
+}

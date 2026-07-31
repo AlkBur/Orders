@@ -98,6 +98,18 @@ html.js .app-menu.is-open .app-menu-panel {
   border: none;
   border-top: 1px solid var(--bulma-border);
 }
+.app-menu-form {
+  margin: 0;
+  padding: 0;
+}
+.app-menu-form .app-menu-item {
+  width: 100%;
+  border: none;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
 .app-menu-item {
   display: flex;
   align-items: center;
@@ -258,6 +270,10 @@ html.js .app-menu.is-open .app-menu-panel {
   color: var(--bulma-text-strong);
   margin: 0;
 }
+.placeholder-text {
+  color: var(--bulma-text-light);
+  margin: 0;
+}
 
 /* --- Badges (Organization status) --- */
 .badge {
@@ -299,6 +315,14 @@ html.js .app-menu.is-open .app-menu-panel {
 }
 .page-actions {
   flex-shrink: 0;
+}
+
+/* Inline forms (e.g. delete action on a card page) */
+.inline-form {
+  display: inline-block;
+}
+.inline-form .button.is-danger {
+  margin-top: 0.75rem;
 }
 
 /* --- Button (page-level actions, themed) --- */

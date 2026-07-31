@@ -130,7 +130,7 @@ func TestOrganizationSave_Create(t *testing.T) {
 		t.Fatalf("expected 303, got %d", w.Code)
 	}
 
-	list, err := orgs.List(context.Background())
+	list, err := orgs.List(context.Background(), organizations.ListOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

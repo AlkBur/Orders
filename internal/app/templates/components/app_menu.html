@@ -11,6 +11,12 @@
     {{range .Menu}}
       {{if .Separator}}
         <hr class="app-menu-separator">
+      {{else if eq .ID "logout"}}
+        <form class="app-menu-form" method="post" action="{{.URL}}">
+          <button type="submit" class="app-menu-item{{if .Danger}} is-danger{{end}}" data-app-menu-item>
+            {{if .Icon}}{{icon .Icon}}{{end}}<span>{{.Label}}</span>
+          </button>
+        </form>
       {{else}}
         <a class="app-menu-item{{if .Danger}} is-danger{{end}}" href="{{.URL}}" data-app-menu-item>
           {{if .Icon}}{{icon .Icon}}{{end}}<span>{{.Label}}</span>

@@ -12,6 +12,7 @@ import (
 	"Orders/internal/common"
 	"Orders/internal/customers"
 	"Orders/internal/entity"
+	"Orders/internal/organizations"
 	"Orders/internal/ui/display"
 
 	"github.com/go-chi/chi/v5"
@@ -150,7 +151,7 @@ func (a *App) CustomerCard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if customer.ID == 0 && oid == 0 {
-		orgs, err := a.organizations.List(r.Context())
+		orgs, err := a.organizations.List(r.Context(), organizations.ListOptions{})
 		if err != nil {
 			a.InternalError(w, err)
 			return

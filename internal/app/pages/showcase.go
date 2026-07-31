@@ -150,10 +150,12 @@ type SearchData struct {
 }
 
 type Field struct {
-	Name  string
-	Label string
-	Type  FieldType
-	Value string
+	Name     string
+	Label    string
+	Type     FieldType
+	Value    string
+	Readonly bool
+	Required bool
 }
 
 type ListColumn struct {

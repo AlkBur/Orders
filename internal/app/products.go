@@ -11,6 +11,7 @@ import (
 	"Orders/internal/app/pages"
 	"Orders/internal/common"
 	"Orders/internal/entity"
+	"Orders/internal/organizations"
 	"Orders/internal/products"
 	"Orders/internal/ui/display"
 
@@ -163,7 +164,7 @@ func (a *App) ProductCard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if product.ID == 0 && oid == 0 {
-		orgs, err := a.organizations.List(r.Context())
+		orgs, err := a.organizations.List(r.Context(), organizations.ListOptions{})
 		if err != nil {
 			a.InternalError(w, err)
 			return
