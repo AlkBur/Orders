@@ -502,16 +502,17 @@ Current list pages using `pages.ListPage`:
 
 ---
 
-# Component Library (UI Showcase)
+# Component Library (Component Catalog)
 
 ## Architecture
 
-The showcase demonstrates a platform component library with three layers:
+The catalog page at `/ui` demonstrates the platform component library.
+One page with sections; every new component appears here before real use:
 
 ```
 Layout          →  layout/base.html
 Components      →  components/*.html
-Pages           →  pages/*.html
+Pages           →  pages/<page>/page.html
 Theme           →  themes/<name>/theme.css
 ```
 
@@ -554,6 +555,12 @@ Theme           →  themes/<name>/theme.css
 
 Страницы собираются только из компонентов. Не используют CSS-классы темы напрямую.
 Страницы могут содержать локальные элементы навигации (Breadcrumb), не выделяемые в компоненты.
+
+Каждая страница — каталог с одним файлом `page.html` (`pages/<page>/page.html`),
+определяющим `define "page_content"`. Шаблон живёт рядом с кодом, который его рендерит.
+
+Страница каталога (`/ui`) — исключение: это стенд компонентов, он может
+использовать собственные `catalog-*` классы для демонстрационной раскладки.
 
 ### Theme
 
