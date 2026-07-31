@@ -1,9 +1,7 @@
 {{define "header"}}
-<nav class="app-header">
-  <a class="app-header-title" href="/ui/dashboard">{{.AppName}}</a>
-  <div class="app-header-actions">
-    <span class="app-header-user">{{icon "user"}} {{.Username}}</span>
-    <a class="button is-light app-header-logout" href="/logout">{{icon "logout"}} Выход</a>
-  </div>
-</nav>
+<header class="app-header">
+  <a class="app-header-home" href="/" aria-label="На главную">{{icon "house"}}</a>
+  <div class="app-header-title">{{.Section}}</div>
+  {{template "app_menu" .}}
+</header>
 {{end}}

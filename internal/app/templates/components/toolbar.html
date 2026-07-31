@@ -1,19 +1,8 @@
-{{define "toolbar"}}
-<div class="level mb-0">
-  <div class="level-left">
-    <div class="level-item">
-      <h2 class="title is-4 mb-0">{{.Title}}</h2>
-    </div>
-  </div>
-  <div class="level-right">
-    <div class="level-item">
-      <div class="buttons">
-        {{range .Buttons}}
-          {{template "toolbar_button" .}}
-        {{end}}
-      </div>
-    </div>
-  </div>
+{{define "toolbar_actions"}}
+<div class="buttons">
+  {{range .Buttons}}
+    {{template "toolbar_button" .}}
+  {{end}}
 </div>
 {{end}}
 
@@ -22,21 +11,6 @@
   <span class="icon">{{icon .Icon}}</span>
   <span>{{.Text}}</span>
 </a>
-{{end}}
-
-{{define "toolbar_search"}}
-<form class="toolbar-search" method="get">
-  <div class="field has-addons">
-    <div class="control has-icons-left">
-      <input class="input" type="search" placeholder="{{.Placeholder}}"
-             value="{{.Value}}" autocomplete="off" spellcheck="false">
-      <span class="icon is-left is-small">{{icon "search"}}</span>
-    </div>
-    <div class="control">
-      <button class="button" type="submit">Найти</button>
-    </div>
-  </div>
-</form>
 {{end}}
 
 {{define "toolbar_search_inline"}}
@@ -58,11 +32,7 @@
 <div class="level mb-0">
   <div class="level-left">
     <div class="level-item toolbar-actions">
-      <div class="buttons">
-        {{range .Toolbar.Buttons}}
-          {{template "toolbar_button" .}}
-        {{end}}
-      </div>
+      {{template "toolbar_actions" .Toolbar}}
     </div>
   </div>
   <div class="level-right">

@@ -1,0 +1,22 @@
+{{define "app_menu"}}
+<div class="app-menu" data-app-menu>
+  <button type="button" class="app-menu-button" data-app-menu-toggle
+          aria-label="Меню" aria-haspopup="true" aria-expanded="false">
+    {{icon "more_vertical"}}
+  </button>
+  <div class="app-menu-panel" data-app-menu-panel>
+    <div class="app-menu-user">
+      {{icon "user"}} <span>{{.Username}}</span>
+    </div>
+    {{range .Menu}}
+      {{if .Separator}}
+        <hr class="app-menu-separator">
+      {{else}}
+        <a class="app-menu-item{{if .Danger}} is-danger{{end}}" href="{{.URL}}" data-app-menu-item>
+          {{if .Icon}}{{icon .Icon}}{{end}}<span>{{.Label}}</span>
+        </a>
+      {{end}}
+    {{end}}
+  </div>
+</div>
+{{end}}
