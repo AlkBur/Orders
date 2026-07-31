@@ -124,13 +124,23 @@ func (b Button) Class() string {
 // FAB — платформенный компонент для главного действия на мобильных.
 // Модель и функции доступны через пакет ui.
 
+// MenuItem — пункт меню приложения (AppMenu) в шапке.
+type MenuItem struct {
+	ID        string
+	Label     string
+	Icon      string
+	URL       string
+	Danger    bool
+	Separator bool
+}
+
 type HeaderData struct {
-	AppName  string
+	Section  string
 	Username string
+	Menu     []MenuItem
 }
 
 type ToolbarData struct {
-	Title   string
 	Buttons []Button
 }
 
@@ -213,13 +223,22 @@ func renderShowcase(w http.ResponseWriter, page string, data any, tmplFS fs.FS) 
 	return ui.RenderPage(w, tmplFS, pageFS, data)
 }
 
+func demoHeader(section string) HeaderData {
+	return HeaderData{
+		Section:  section,
+		Username: "Администратор",
+		Menu: []MenuItem{
+			{ID: "logout", Label: "Выход", Icon: "logout", URL: "/logout"},
+		},
+	}
+}
+
 func HandleDashboard(tmplFS fs.FS) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := DashboardPage{
 			Title:  "Панель управления",
-			Header: HeaderData{AppName: "Orders", Username: "Администратор"},
+			Header: demoHeader("Панель управления"),
 			Toolbar: ToolbarData{
-				Title: "Панель управления",
 				Buttons: []Button{
 					{Style: ButtonPrimary, Text: "Создать", URL: "#", Icon: "plus"},
 				},
@@ -250,9 +269,8 @@ func HandleOrganizations(tmplFS fs.FS) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := OrganizationsPage{
 			Title:  "Организации",
-			Header: HeaderData{AppName: "Orders", Username: "Администратор"},
+			Header: demoHeader("Организации"),
 			Toolbar: ToolbarData{
-				Title: "Организации",
 				Buttons: []Button{
 					{Style: ButtonPrimary, Text: "Добавить", URL: "#", Icon: "plus"},
 				},
@@ -286,7 +304,7 @@ func HandleOrganization(tmplFS fs.FS) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := OrganizationPage{
 			Title:  "ООО Ромашка",
-			Header: HeaderData{AppName: "Orders", Username: "Администратор"},
+			Header: demoHeader("Организации"),
 			Name:   "ООО Ромашка",
 			Description: "Оптовая торговля цветами и растениями. " +
 				"Компания основана в 2010 году, имеет филиалы в 5 городах.",

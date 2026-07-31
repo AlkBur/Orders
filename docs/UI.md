@@ -525,12 +525,30 @@ Theme           →  themes/<name>/theme.css
 
 | Компонент   | Файл                  | API                             | Внутренняя реализация |
 |-------------|-----------------------|---------------------------------|-----------------------|
-| Header      | `components/header.html` | `HeaderData{Title, Username}`   | Bulma navbar          |
-| Toolbar     | `components/toolbar.html` | `ToolbarData{Title, Buttons}` | Bulma level + button |
+| Header      | `components/header.html` | `HeaderData{Section, Username, Menu []MenuItem}` | Semantic (`app-header`) |
+| AppMenu     | `components/app_menu.html` | `MenuItem{ID, Label, Icon, URL, Danger, Separator}` | Semantic (`app-menu`) |
+| Toolbar     | `components/toolbar.html` | `ToolbarData{Buttons}` / `SearchData{Placeholder, Value}` | Bulma level + button |
 | Card        | `components/card.html`   | `card_open` / `card_close` (title) | Bulma card        |
 | List        | `components/list.html`   | `ListData{Columns, Rows, RenderMode, Preset}` | Semantic Classes |
 | Form        | `components/form.html`   | `Field{Name, Label, Type, Value}` | Bulma field/control/input |
 | Dialog      | `components/dialog.html` | `DialogData{ID, Title}`         | Bulma modal           |
+| FAB         | `components/fab.html`    | `FAB{Icon, Text, URL}`          | Semantic (`app-fab`) |
+
+### Header и AppMenu
+
+Правило платформы: **Header показывает раздел приложения, страница показывает объект.**
+
+```
+🏠  Организации                        ⋮
+```
+
+- `app-header-home` — иконка «домой», ведёт на `/` (dashboard).
+- `app-header-title` — название раздела, усекается через `ellipsis`.
+- `app_menu` — собственный компонент (не Bulma dropdown, не `<details>`).
+  Без JS панель видна (пользователь + пункты). С JS (`html.js`) — toggle
+  через `data-app-menu-toggle`, закрытие по клику вне / Esc / выбору пункта.
+- Заголовок объекта (например, «ООО Ромашка») — ответственность страницы (`h1`),
+  а не Header.
 
 ### Pages
 
@@ -567,20 +585,44 @@ Theme           →  themes/<name>/theme.css
 
 Новые компоненты добавляются при появлении самостоятельной функциональной ответственности.
 
+### 6. Компонент сначала нужен приложению
+
+Компонент проектируется только когда он понадобился реальному приложению:
+
+```
+Реальная задача
+  ↓
+не хватает компонента
+  ↓
+Component Catalog
+  ↓
+реальное использование
+```
+
+Не проектировать компоненты «на будущее» («а вдруг потом понадобится...»).
+
+### 7. Два независимых использования
+
+Компонент считается частью общей библиотеки только после минимум двух
+независимых использований в приложении (например, `Card` — организации
+и dashboard). Если компонент нужен одному экрану — возможно, ему ещё
+не место в общей библиотеке.
+
 ## Template Loading
 
 Layout и компоненты загружаются через маску (не требуют изменения кода при добавлении):
 
 ```go
-template.ParseFS(tmplFS,
-    "layout/*.html",
-    "components/*.html",
-    "pages/"+page+".html",
-)
+ui.RenderPage(w, baseFS, pageFS, data)
 ```
 
-Страницы загружаются индивидуально, так каждая определяет `define "page_content"`.
-Добавление нового компонента не требует изменения кода — достаточно положить `.html` файл в `components/`.
+- `baseFS` — общие шаблоны: `layout/*.html` + `components/*.html`.
+- `pageFS` — каталог конкретной страницы, содержит один файл `page.html`,
+  который определяет `define "page_content"`.
+- Шаблон страницы живёт рядом со своим вызывающим кодом (домен или раздел
+  приложения), а не в общем наборе шаблонов.
+- Добавление нового компонента не требует изменения кода — достаточно положить
+  `.html` файл в `components/`.
 
 ### FAB
 
@@ -601,6 +643,7 @@ template.ParseFS(tmplFS,
 ## Platform Components
 
 Header
+AppMenu
 Toolbar
 FAB
 Card
