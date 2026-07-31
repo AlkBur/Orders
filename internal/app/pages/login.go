@@ -1,9 +1,7 @@
 package pages
 
 type LoginPage struct {
-	Title string
-
-	Login string
-
-	Error string
+	Title  string
+	Fields []Field
+	Alert  *AlertData
 }
