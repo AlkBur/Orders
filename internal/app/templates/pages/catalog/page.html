@@ -1,0 +1,84 @@
+{{define "page_content"}}
+{{template "toolbar_list" .}}
+
+<div class="catalog-section">
+  <div class="section-heading">Header и AppMenu</div>
+  <p class="catalog-note">
+    Заголовок этой страницы — живой пример Header: слева иконка «домой» (ведёт на /),
+    в центре название раздела с усечением, справа меню приложения (⋮).
+  </p>
+  {{template "catalog_code" (index .CodeSamples "menu")}}
+</div>
+
+<div class="catalog-section">
+  <div class="section-heading">Buttons</div>
+  <div class="buttons">
+    {{range .Buttons}}
+      {{template "toolbar_button" .}}
+    {{end}}
+  </div>
+  {{template "catalog_code" (index .CodeSamples "button")}}
+</div>
+
+<div class="catalog-section">
+  <div class="section-heading">Toolbar и поиск</div>
+  <p class="catalog-note">Toolbar выше — живой пример: действия слева, поиск справа.</p>
+  {{template "catalog_code" (index .CodeSamples "toolbar")}}
+</div>
+
+<div class="catalog-section">
+  <div class="section-heading">Icons</div>
+  <div class="catalog-grid">
+    {{range .Icons}}
+      <div class="catalog-grid-item">
+        <span class="icon">{{icon .}}</span>
+        <span class="catalog-name">{{.}}</span>
+      </div>
+    {{end}}
+  </div>
+</div>
+
+<div class="catalog-section">
+  <div class="section-heading">Card</div>
+  {{template "card_open" "Карточка с заголовком"}}
+    <p>Карточка — универсальная обёртка. Внутри может быть число, график, список или форма.</p>
+  {{template "card_close"}}
+  {{template "card_open" ""}}
+    <p>Карточка без заголовка.</p>
+  {{template "card_close"}}
+  {{template "catalog_code" (index .CodeSamples "card")}}
+</div>
+
+<div class="catalog-section">
+  <div class="section-heading">List</div>
+  {{template "list" .List}}
+  {{template "catalog_code" (index .CodeSamples "list")}}
+</div>
+
+<div class="catalog-section">
+  <div class="section-heading">Form</div>
+  {{template "form_group" .Fields}}
+  {{template "catalog_code" (index .CodeSamples "form")}}
+</div>
+
+<div class="catalog-section">
+  <div class="section-heading">Dialog</div>
+  <p class="catalog-note">
+    Диалог рендерится скрытым; открывается добавлением класса <code>is-active</code>.
+  </p>
+  {{template "dialog" .Dialog}}
+  {{template "catalog_code" (index .CodeSamples "dialog")}}
+</div>
+
+<div class="catalog-section">
+  <div class="section-heading">FAB</div>
+  <p class="catalog-note">
+    Плавающая кнопка главного действия видна на мобильных (ширина < 769px).
+    Эта страница демонстрирует её через <code>FABProvider</code>.
+  </p>
+</div>
+{{end}}
+
+{{define "catalog_code"}}
+<pre class="catalog-pre">{{.}}</pre>
+{{end}}

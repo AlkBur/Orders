@@ -52,9 +52,9 @@ func (m RenderMode) String() string {
 type ListPreset int
 
 const (
-	ListDefault      ListPreset = 0
+	ListDefault       ListPreset = 0
 	ListOrganizations ListPreset = 1
-	ListEmployees    ListPreset = 2
+	ListEmployees     ListPreset = 2
 )
 
 func (p ListPreset) String() string {
@@ -179,154 +179,98 @@ type DialogData struct {
 	Content template.HTML
 }
 
-type DashboardStats struct {
-	Total  int
-	Active int
+// CatalogPage — Component Catalog: единая страница /ui с демонстрацией
+// компонентов платформы и примерами использования.
+type CatalogPage struct {
+	Title       string
+	Header      HeaderData
+	Toolbar     ToolbarData
+	Search      SearchData
+	Buttons     []Button
+	Icons       []string
+	Fields      []Field
+	List        ListData
+	Dialog      DialogData
+	CodeSamples map[string]string
 }
 
-type DashboardPage struct {
-	Title      string
-	Header     HeaderData
-	Toolbar    ToolbarData
-	Stats      DashboardStats
-	RecentList ListData
-}
-
-type OrganizationsPage struct {
-	Title   string
-	Header  HeaderData
-	Toolbar ToolbarData
-	Search  SearchData
-	List    ListData
-}
-
-func (OrganizationsPage) FAB() *ui.FAB {
+func (CatalogPage) FAB() *ui.FAB {
 	return &ui.FAB{Icon: "plus", URL: "#", Text: "Добавить"}
 }
 
-type OrganizationPage struct {
-	Title         string
-	Header        HeaderData
-	Name          string
-	Description   string
-	Active        bool
-	EmployeeCount int
-	CreatedAt     string
-	Employees     ListData
-}
-
-func renderShowcase(w http.ResponseWriter, page string, data any, tmplFS fs.FS) error {
-	pageFS, err := fs.Sub(tmplFS, "pages/"+page)
-	if err != nil {
-		return err
-	}
-	return ui.RenderPage(w, tmplFS, pageFS, data)
-}
-
-func demoHeader(section string) HeaderData {
-	return HeaderData{
-		Section:  section,
-		Username: "Администратор",
-		Menu: []MenuItem{
-			{ID: "logout", Label: "Выход", Icon: "logout", URL: "/logout"},
-		},
-	}
-}
-
-func HandleDashboard(tmplFS fs.FS) http.HandlerFunc {
+func HandleCatalog(tmplFS fs.FS) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		data := DashboardPage{
-			Title:  "Панель управления",
-			Header: demoHeader("Панель управления"),
+		data := CatalogPage{
+			Title:  "Компоненты",
+			Header: HeaderData{
+				Section:  "Компоненты",
+				Username: "Администратор",
+				Menu: []MenuItem{
+					{ID: "logout", Label: "Выход", Icon: "logout", URL: "/logout"},
+				},
+			},
 			Toolbar: ToolbarData{
 				Buttons: []Button{
 					{Style: ButtonPrimary, Text: "Создать", URL: "#", Icon: "plus"},
+					{Style: ButtonOutline, Text: "Экспорт", URL: "#", Icon: "save"},
 				},
 			},
-			Stats: DashboardStats{Total: 12, Active: 8},
-			RecentList: ListData{
-				Columns: []ListColumn{
-					{Label: "Название"},
-					{Label: "Статус"},
-					{Label: "Город"},
-				},
-				Rows: []ListRow{
-					{URL: "/ui/organizations/1", Cells: []string{"ООО Ромашка", "Активна", "Москва"}},
-					{URL: "/ui/organizations/2", Cells: []string{"ИП Иванов", "Активна", "СПб"}},
-					{URL: "/ui/organizations/3", Cells: []string{"ЗАО ТехноСервис", "Неактивна", "Казань"}},
-				},
-				RenderMode: RenderComfortable,
-				Preset:     ListOrganizations,
+			Search: SearchData{Placeholder: "Поиск компонентов...", Value: ""},
+			Buttons: []Button{
+				{Style: ButtonDefault, Text: "Обычная", URL: "#"},
+				{Style: ButtonPrimary, Text: "Основная", URL: "#", Icon: "plus"},
+				{Style: ButtonOutline, Text: "Контурная", URL: "#", Icon: "edit"},
+				{Style: ButtonDanger, Text: "Опасная", URL: "#", Icon: "trash"},
 			},
-		}
-		if err := renderShowcase(w, "dashboard", data, tmplFS); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
-	}
-}
-
-func HandleOrganizations(tmplFS fs.FS) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		data := OrganizationsPage{
-			Title:  "Организации",
-			Header: demoHeader("Организации"),
-			Toolbar: ToolbarData{
-				Buttons: []Button{
-					{Style: ButtonPrimary, Text: "Добавить", URL: "#", Icon: "plus"},
-				},
+			Icons: []string{
+				"house", "plus", "search", "save", "edit", "trash",
+				"arrow_left", "arrow_right", "user", "logout",
+				"building", "package", "chart", "settings", "people",
+				"more_vertical",
 			},
-			Search: SearchData{Placeholder: "Поиск организаций...", Value: ""},
+			Fields: []Field{
+				{Name: "name", Label: "Название", Type: FieldText, Value: "ООО Ромашка"},
+				{Name: "inn", Label: "ИНН", Type: FieldText},
+				{Name: "employees", Label: "Сотрудники", Type: FieldNumber, Value: "24"},
+				{Name: "active", Label: "Активна", Type: FieldCheckbox, Value: "true"},
+			},
 			List: ListData{
 				Columns: []ListColumn{
 					{Label: "Название"},
 					{Label: "ИНН"},
 					{Label: "Статус"},
-					{Label: "Город"},
 				},
 				Rows: []ListRow{
-					{URL: "/ui/organizations/1", Cells: []string{"ООО Ромашка", "7701123456", "Активна", "Москва"}},
-					{URL: "/ui/organizations/2", Cells: []string{"ИП Иванов", "7801234567", "Активна", "Санкт-Петербург"}},
-					{URL: "/ui/organizations/3", Cells: []string{"ЗАО ТехноСервис", "1601234567", "Неактивна", "Казань"}},
-					{URL: "/ui/organizations/4", Cells: []string{"ООО Альфа", "7702123456", "Активна", "Москва"}},
-					{URL: "/ui/organizations/5", Cells: []string{"ООО Бета", "5401123456", "Активна", "Новосибирск"}},
+					{URL: "#", Cells: []string{"ООО Ромашка", "7701123456", "Активна"}},
+					{URL: "#", Cells: []string{"ИП Иванов", "7801234567", "Активна"}},
+					{URL: "#", Cells: []string{"ЗАО ТехноСервис", "1601234567", "Неактивна"}},
 				},
 				RenderMode: RenderComfortable,
 				Preset:     ListOrganizations,
 			},
-		}
-		if err := renderShowcase(w, "organizations", data, tmplFS); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
-	}
-}
-
-func HandleOrganization(tmplFS fs.FS) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		data := OrganizationPage{
-			Title:  "ООО Ромашка",
-			Header: demoHeader("Организации"),
-			Name:   "ООО Ромашка",
-			Description: "Оптовая торговля цветами и растениями. " +
-				"Компания основана в 2010 году, имеет филиалы в 5 городах.",
-			Active:        true,
-			EmployeeCount: 24,
-			CreatedAt:     "15 марта 2024",
-			Employees: ListData{
-				Columns: []ListColumn{
-					{Label: "Имя"},
-					{Label: "Должность"},
-					{Label: "Телефон"},
-				},
-				Rows: []ListRow{
-					{URL: "#", Cells: []string{"Иванов Иван", "Директор", "+7 (495) 123-45-67"}},
-					{URL: "#", Cells: []string{"Петрова Анна", "Бухгалтер", "+7 (495) 123-45-68"}},
-					{URL: "#", Cells: []string{"Сидоров Алексей", "Менеджер", "+7 (495) 123-45-69"}},
-				},
-				RenderMode: RenderComfortable,
-				Preset:     ListEmployees,
+			Dialog: DialogData{
+				ID:      "demo-dialog",
+				Title:   "Подтверждение",
+				Content: template.HTML("<p>Удалить запись?</p>"),
+			},
+			CodeSamples: map[string]string{
+				"toolbar": `{{template "toolbar_list" .}}`,
+				"button":  `{{template "toolbar_button" .}}`,
+				"card": `{{template "card_open" "Заголовок"}}
+  ...содержимое...
+{{template "card_close"}}`,
+				"list":  `{{template "list" .List}}`,
+				"form":  `{{template "form_group" .Fields}}`,
+				"menu":  `{{template "app_menu" .Header}}`,
+				"dialog": `{{template "dialog" .Dialog}}`,
 			},
 		}
-		if err := renderShowcase(w, "organization", data, tmplFS); err != nil {
+		pageFS, err := fs.Sub(tmplFS, "pages/catalog")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if err := ui.RenderPage(w, tmplFS, pageFS, data); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	}
