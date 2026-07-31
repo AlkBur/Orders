@@ -1,8 +1,9 @@
 package app
 
 import (
-	"Orders/internal/app/pages"
 	"net/http"
+
+	"Orders/internal/app/pages"
 )
 
 func (a *App) SetPasswordPage(w http.ResponseWriter, r *http.Request) {
@@ -14,25 +15,15 @@ func (a *App) SetPasswordPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p := pages.SetPasswordPage{
-		Title: "Orders",
-		Login: user.Login,
-	}
-
-	session := CurrentSession(r)
-	if session != nil && session.Flash != nil {
-		p.Error = session.Flash.Message
-		session.ClearFlash()
-		a.sessions.Save(session)
-	}
-
-	a.Render(w, "set-password", p)
+	a.RenderAuth(w, r, ResponseModeFromRequest(r), "set_password", a.setPasswordPageData(user.Login, nil))
 }
 
 func (a *App) SetPasswordSubmit(w http.ResponseWriter, r *http.Request) {
+	mode := ResponseModeFromRequest(r)
+
 	identity := CurrentUser(r)
 	if identity.ID == 0 || !identity.NeedsPasswordSetup() {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+		a.Redirect(w, r, mode, "/")
 		return
 	}
 
@@ -44,13 +35,23 @@ func (a *App) SetPasswordSubmit(w http.ResponseWriter, r *http.Request) {
 	password := r.FormValue("password")
 	confirm := r.FormValue("confirm")
 
-	if password == "" || password != confirm {
-		session := CurrentSession(r)
-		if session != nil {
-			session.SetFlash("error", "Passwords do not match")
-			a.sessions.Save(session)
-		}
-		http.Redirect(w, r, "/set-password", http.StatusSeeOther)
+	var msgs []string
+	if password == "" {
+		msgs = append(msgs, "Новый пароль обязателен.")
+	}
+	if confirm == "" {
+		msgs = append(msgs, "Подтверждение пароля обязательно.")
+	}
+	if password != "" && confirm != "" && password != confirm {
+		msgs = append(msgs, "Пароли не совпадают.")
+	}
+
+	if len(msgs) > 0 {
+		NoCache(w)
+		a.RenderAuth(w, r, mode, "set_password", a.setPasswordPageData(identity.Login, &pages.AlertData{
+			Type:     pages.AlertError,
+			Messages: msgs,
+		}))
 		return
 	}
 
@@ -77,5 +78,17 @@ func (a *App) SetPasswordSubmit(w http.ResponseWriter, r *http.Request) {
 	}
 	DeleteSessionCookie(w)
 
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	a.Redirect(w, r, mode, "/")
+}
+
+func (a *App) setPasswordPageData(login string, alert *pages.AlertData) pages.SetPasswordPage {
+	return pages.SetPasswordPage{
+		Title: "Установка пароля",
+		Login: login,
+		Fields: []pages.Field{
+			{Name: "password", Label: "Новый пароль", Type: pages.FieldPassword},
+			{Name: "confirm", Label: "Повторите пароль", Type: pages.FieldPassword},
+		},
+		Alert: alert,
+	}
 }

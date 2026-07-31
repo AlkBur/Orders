@@ -1,7 +1,8 @@
 package pages
 
 type SetPasswordPage struct {
-	Title string
-	Login string
-	Error string
+	Title  string
+	Login  string
+	Fields []Field
+	Alert  *AlertData
 }

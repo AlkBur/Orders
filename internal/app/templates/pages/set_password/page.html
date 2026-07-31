@@ -1,0 +1,14 @@
+{{define "page_content"}}
+<div class="auth-card" id="set-password-card">
+  {{template "card_open" "Установка пароля"}}
+    <p class="auth-subtitle">Пользователь: {{.Login}}</p>
+    {{if .Alert}}{{template "alert" .Alert}}{{end}}
+    <form method="post" action="/set-password" hx-post="/set-password" hx-target="#set-password-card" hx-swap="outerHTML">
+      {{range .Fields}}{{template "form_field" .}}{{end}}
+      <div class="buttons mt-2">
+        <button type="submit" class="button is-primary is-fullwidth">Сохранить</button>
+      </div>
+    </form>
+  {{template "card_close"}}
+</div>
+{{end}}

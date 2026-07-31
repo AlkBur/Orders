@@ -1,9 +1,10 @@
 package app
 
 import (
+	"net/http"
+
 	"Orders/internal/app/pages"
 	"Orders/internal/users"
-	"net/http"
 )
 
 func (a *App) LoginPage(w http.ResponseWriter, r *http.Request) {
@@ -15,31 +16,43 @@ func (a *App) LoginPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	page := pages.LoginPage{
-		Title: "Orders",
-	}
-
-	a.Render(w, "login", page)
+	a.RenderAuth(w, r, ResponseModeFromRequest(r), "login", a.loginPageData("", nil))
 }
 
-func (app *App) Login(w http.ResponseWriter, r *http.Request) {
-	page := pages.LoginPage{
-		Title: "Orders",
-	}
+func (a *App) Login(w http.ResponseWriter, r *http.Request) {
+	mode := ResponseModeFromRequest(r)
 
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
 
-	page.Login = r.FormValue("login")
+	login := r.FormValue("login")
 	password := r.FormValue("password")
 
-	identity, ok := app.identity.GetByLogin(page.Login)
+	var msgs []string
+	if login == "" {
+		msgs = append(msgs, "Пользователь обязателен.")
+	}
+	if password == "" {
+		msgs = append(msgs, "Пароль обязателен.")
+	}
+	if len(msgs) > 0 {
+		NoCache(w)
+		a.RenderAuth(w, r, mode, "login", a.loginPageData(login, &pages.AlertData{
+			Type:     pages.AlertError,
+			Messages: msgs,
+		}))
+		return
+	}
+
+	identity, ok := a.identity.GetByLogin(login)
 	if !ok {
 		NoCache(w)
-		page.Error = "Invalid login or password"
-		app.Render(w, "login", page)
+		a.RenderAuth(w, r, mode, "login", a.loginPageData(login, &pages.AlertData{
+			Type:     pages.AlertError,
+			Messages: []string{"Неверный логин или пароль."},
+		}))
 		return
 	}
 
@@ -49,27 +62,39 @@ func (app *App) Login(w http.ResponseWriter, r *http.Request) {
 		ok, err := users.VerifyPassword(password, identity.PasswordHash)
 		authenticated = (err == nil && ok)
 	} else {
-		authenticated = users.VerifyBootstrapPassword(password, app.config.Auth.InitialPassword)
+		authenticated = users.VerifyBootstrapPassword(password, a.config.Auth.InitialPassword)
 	}
 
 	if !authenticated {
 		NoCache(w)
-		page.Error = "Invalid login or password"
-		app.Render(w, "login", page)
+		a.RenderAuth(w, r, mode, "login", a.loginPageData(login, &pages.AlertData{
+			Type:     pages.AlertError,
+			Messages: []string{"Неверный логин или пароль."},
+		}))
 		return
 	}
 
-	session, err := app.sessions.Create(identity.ID, r.UserAgent())
+	session, err := a.sessions.Create(identity.ID, r.UserAgent())
 	if err != nil {
-		app.InternalError(w, err)
+		a.InternalError(w, err)
 		return
 	}
 	SetSessionCookie(w, session.ID)
 
+	target := "/"
 	if identity.NeedsPasswordSetup() {
-		http.Redirect(w, r, "/set-password", http.StatusSeeOther)
-		return
+		target = "/set-password"
 	}
+	a.Redirect(w, r, mode, target)
+}
 
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+func (a *App) loginPageData(login string, alert *pages.AlertData) pages.LoginPage {
+	return pages.LoginPage{
+		Title: "Вход",
+		Fields: []pages.Field{
+			{Name: "login", Label: "Пользователь", Type: pages.FieldText, Value: login, Autocomplete: "username", Autofocus: true},
+			{Name: "password", Label: "Пароль", Type: pages.FieldPassword, Autocomplete: "current-password"},
+		},
+		Alert: alert,
+	}
 }
