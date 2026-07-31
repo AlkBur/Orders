@@ -86,6 +86,7 @@ const (
 	FieldNumber   FieldType = 1
 	FieldSelect   FieldType = 2
 	FieldCheckbox FieldType = 3
+	FieldPassword FieldType = 4
 )
 
 func (t FieldType) String() string {
@@ -96,6 +97,8 @@ func (t FieldType) String() string {
 		return "select"
 	case FieldCheckbox:
 		return "checkbox"
+	case FieldPassword:
+		return "password"
 	default:
 		return "text"
 	}
@@ -150,12 +153,41 @@ type SearchData struct {
 }
 
 type Field struct {
-	Name     string
-	Label    string
-	Type     FieldType
-	Value    string
-	Readonly bool
-	Required bool
+	Name        string
+	Label       string
+	Type        FieldType
+	Value       string
+	Readonly    bool
+	Required    bool
+	Autofocus   bool
+	Autocomplete string
+}
+
+type AlertType int
+
+const (
+	AlertInfo AlertType = iota
+	AlertSuccess
+	AlertWarning
+	AlertError
+)
+
+func (t AlertType) String() string {
+	switch t {
+	case AlertSuccess:
+		return "success"
+	case AlertWarning:
+		return "warning"
+	case AlertError:
+		return "error"
+	default:
+		return "info"
+	}
+}
+
+type AlertData struct {
+	Type     AlertType
+	Messages []string
 }
 
 type ListColumn struct {
@@ -191,6 +223,7 @@ type CatalogPage struct {
 	Buttons     []Button
 	Icons       []string
 	Fields      []Field
+	Alerts      []AlertData
 	List        ListData
 	Dialog      DialogData
 	CodeSamples map[string]string
@@ -234,7 +267,12 @@ func HandleCatalog(tmplFS fs.FS) http.HandlerFunc {
 				{Name: "name", Label: "Название", Type: FieldText, Value: "ООО Ромашка"},
 				{Name: "inn", Label: "ИНН", Type: FieldText},
 				{Name: "employees", Label: "Сотрудники", Type: FieldNumber, Value: "24"},
+				{Name: "secret", Label: "Пароль", Type: FieldPassword, Autocomplete: "current-password"},
 				{Name: "active", Label: "Активна", Type: FieldCheckbox, Value: "true"},
+			},
+			Alerts: []AlertData{
+				{Type: AlertInfo, Messages: []string{"Информационное сообщение"}},
+				{Type: AlertError, Messages: []string{"Пароль не может быть пустым.", "Пароли не совпадают."}},
 			},
 			List: ListData{
 				Columns: []ListColumn{
@@ -264,6 +302,7 @@ func HandleCatalog(tmplFS fs.FS) http.HandlerFunc {
 				"list":  `{{template "list" .List}}`,
 				"form":  `{{template "form_group" .Fields}}`,
 				"menu":  `{{template "app_menu" .Header}}`,
+				"alert": `{{template "alert" .Alert}}`,
 				"dialog": `{{template "dialog" .Dialog}}`,
 			},
 		}
