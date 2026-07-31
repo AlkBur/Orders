@@ -44,7 +44,7 @@ func StaticFS() fs.FS {
 	))
 }
 
-func ShowcaseFS() fs.FS {
+func TemplateFS() fs.FS {
 	return os.DirFS(filepath.Join(
 		"internal",
 		"app",
