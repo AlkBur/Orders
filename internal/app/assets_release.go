@@ -55,7 +55,7 @@ func StaticFS() fs.FS {
 	return sub
 }
 
-func ShowcaseFS() fs.FS {
+func TemplateFS() fs.FS {
 	sub, err := fs.Sub(showcaseTemplatesFS, "templates")
 	if err != nil {
 		panic(err)

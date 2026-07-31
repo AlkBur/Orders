@@ -33,7 +33,7 @@ func (a *App) NewRouter() *chi.Mux {
 
 	// UI Showcase — демонстрация компонентов
 	r.Route("/ui", func(r chi.Router) {
-		showcaseFS := ShowcaseFS()
+		showcaseFS := TemplateFS()
 		r.Get("/dashboard", pages.HandleDashboard(showcaseFS))
 		r.Get("/organizations", pages.HandleOrganizations(showcaseFS))
 		r.Get("/organizations/{id}", pages.HandleOrganization(showcaseFS))
