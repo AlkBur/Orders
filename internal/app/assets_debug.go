@@ -12,13 +12,6 @@ import (
 func LoadTemplates(page string) (*template.Template, error) {
 	icons := filepath.Join("internal", "app", "templates", "icons.html")
 
-	if page == "login" {
-		return template.ParseFiles(
-			filepath.Join("internal", "app", "templates", "login.html"),
-			icons,
-		)
-	}
-
 	if page == "products" || page == "customers" || page == "users" || page == "receipts" {
 		return template.ParseFiles(
 			filepath.Join("internal", "app", "templates", "layout.html"),
