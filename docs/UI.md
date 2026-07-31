@@ -531,7 +531,8 @@ Theme           →  themes/<name>/theme.css
 | Toolbar     | `components/toolbar.html` | `ToolbarData{Buttons}` / `SearchData{Placeholder, Value}` | Bulma level + button |
 | Card        | `components/card.html`   | `card_open` / `card_close` (title) | Bulma card        |
 | List        | `components/list.html`   | `ListData{Columns, Rows, RenderMode, Preset}` | Semantic Classes |
-| Form        | `components/form.html`   | `Field{Name, Label, Type, Value}` | Bulma field/control/input |
+| Form        | `components/form.html`   | `Field{Name, Label, Type, Value, Readonly, Required, Autofocus, Autocomplete}` | Bulma field/control/input |
+| Alert       | `components/alert.html`  | `AlertData{Type, Messages}`   | Semantic (`alert`)    |
 | Dialog      | `components/dialog.html` | `DialogData{ID, Title}`         | Bulma modal           |
 | FAB         | `components/fab.html`    | `FAB{Icon, Text, URL}`          | Semantic (`app-fab`) |
 
@@ -620,16 +621,55 @@ Component Catalog
 Layout и компоненты загружаются через маску (не требуют изменения кода при добавлении):
 
 ```go
-ui.RenderPage(w, baseFS, pageFS, data)
+ui.Render(w, baseFS, pageFS, name, data)
 ```
 
 - `baseFS` — общие шаблоны: `layout/*.html` + `components/*.html`.
 - `pageFS` — каталог конкретной страницы, содержит один файл `page.html`,
   который определяет `define "page_content"`.
+- `name` — любой именованный шаблон: `base`, `auth`, `page_content`, `dialog`, ...
 - Шаблон страницы живёт рядом со своим вызывающим кодом (домен или раздел
   приложения), а не в общем наборе шаблонов.
 - Добавление нового компонента не требует изменения кода — достаточно положить
   `.html` файл в `components/`.
+
+`ui.Render` умеет рендерить любой именованный шаблон. `RenderPage` и
+`RenderAuthPage` — тонкие обёртки, выбирающие layout. HTMX лишь использует
+фрагментную возможность рендера, но не определяет её: `page_content` — обычный
+именованный шаблон, а не специальная возможность для HTMX.
+
+### Layouts
+
+| Layout       | Шаблон                | Назначение                                          |
+|--------------|-----------------------|-----------------------------------------------------|
+| Application  | `layout/base.html`    | После входа: Header, FAB, AppMenu, Toolbar, страница |
+| Auth         | `layout/auth.html`    | Вход в систему: Login, Set Password                  |
+
+Auth Layout — минимальный каркас: только центрированный контейнер страницы
+(`auth-layout` → `auth-container` → `page_content`). Ни Header, ни FAB, ни
+AppMenu, ни Toolbar, ни footer, ни логотипов.
+
+Правило: **Layout отвечает только за каркас страницы. Он не содержит
+бизнес-логики и не знает о конкретных экранах** (Login, Dashboard,
+Organizations).
+
+### ResponseMode
+
+`ResponseMode` определяет формат ответа сервера: полная страница или
+фрагмент. Способ определения режима (HTMX или иной транспорт) является
+инфраструктурной деталью.
+
+```go
+type ResponseMode int // FullPage, Fragment
+mode := ResponseModeFromRequest(r)
+```
+
+- `FullPage` — обычный ответ: полный Layout; редирект `303 See Other`.
+- `Fragment` — только `page_content`; редирект через заголовок `HX-Redirect`.
+
+Хендлер определяет режим один раз в начале (`mode := ResponseModeFromRequest(r)`)
+и дальше работает через `a.RenderAuth(...)` / `a.Redirect(...)`, не проверяя
+заголовки HTMX напрямую. Бизнес-логика не зависит от транспорта доставки.
 
 ### Реальные страницы
 
@@ -637,6 +677,8 @@ ui.RenderPage(w, baseFS, pageFS, data)
 
 ```
 app:              internal/app/templates/pages/dashboard/page.html
+                  internal/app/templates/pages/login/page.html
+                  internal/app/templates/pages/set_password/page.html
 домен модуля:     internal/organizations/templates/list/page.html
                   internal/organizations/templates/card/page.html
 ```
@@ -717,59 +759,71 @@ Platform components must not depend on Bulma layout components (`navbar`, `level
 
 # Login Page
 
-The login page is the application entry point.
+Страница входа — обычная страница платформы на Auth Layout: без Header,
+FAB, AppMenu и Toolbar. Собирается только из общих компонентов:
 
-It is available without authentication.
+```
+Auth Layout
+    └── Card («Вход»)
+            ├── Alert (ошибки)
+            └── Form
+                    ├── Пользователь (text)
+                    ├── Пароль (password)
+                    └── Button «Войти»
+```
 
-Layout:
+Карточка центрируется темой (`auth-layout` + `auth-card`), ширина —
+`min(420px, calc(100vw - 2rem))`.
 
-- Application title
-- Optional subtitle
-- Login field
-- Password field
-- Login button
-- Error message area
+Валидация выполняется только на сервере (HTML `required` не используется):
 
-The page uses the common layout template.
+- пустые поля → «Пользователь обязателен.» / «Пароль обязателен.»;
+- неверные данные → «Неверный логин или пароль.»;
+- все найденные ошибки собираются сразу и показываются через Alert.
 
-The login form is centered vertically on desktop.
+После успешной аутентификации:
 
-On mobile devices it occupies the full available width.
+- требуется установка пароля → `/set-password`;
+- иначе → `/` (dashboard).
 
-The login button always has full width.
+Форма использует htmx для плавной доставки: при ошибке сервер возвращает
+только карточку (`page_content`), которую htmx подменяет через
+`hx-target="#login-card"`. Без JavaScript форма работает как обычный POST
+(полная страница при ошибке, `303` при успехе).
 
-After successful authentication:
+# Set Password
 
-/login
-    ↓
-302 Redirect
-    ↓
-/orders
+Страница `set-password` — часть потока входа (Auth Layout, без Header).
+Обязательный шаг после первого входа по bootstrap-паролю: пока пароль не
+установлен, доступ к приложению закрыт (`RequirePassword`).
 
-After failed authentication:
+Серверная валидация собирает все ошибки сразу:
 
-- login page is rendered again;
-- entered login is preserved;
-- password field is cleared;
-- an error message is displayed.
+1. «Новый пароль обязателен.»
+2. «Подтверждение пароля обязательно.»
+3. «Пароли не совпадают.»
 
-The page is fully functional without JavaScript.
+После успешной установки сессия завершается и пользователь перенаправляется
+на `/` для входа с новым паролем.
 
 # Authentication Flow
 
-GET  /login
+```
+GET /login
     ↓
-Render login page
+RenderAuth (FullPage)
 
 POST /login
     ↓
-Authenticate user
-
-Success
+Серверная валидация
     ↓
-302 → /orders
+Ошибки → RenderAuth (фрагмент для htmx / полная страница) + Alert
+Успех  → Redirect (/set-password | /)
 
-Failure
+POST /set-password
     ↓
-Render login page
-Display authentication error
+Серверная валидация (все ошибки сразу)
+    ↓
+Ошибки → RenderAuth + Alert
+Успех  → завершение сессии, Redirect (/)
+```
