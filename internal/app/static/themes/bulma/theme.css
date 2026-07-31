@@ -4,6 +4,21 @@
    Uses Bulma CSS variables for consistency.
    ================================================================ */
 
+/* --- Auth layout: minimal centered page (no navigation) --- */
+.auth-layout {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 1rem;
+}
+.auth-card {
+  width: min(420px, calc(100vw - 2rem));
+}
+.auth-subtitle {
+  color: var(--bulma-text-light);
+  margin: 0 0 0.75rem;
+}
+
 /* --- Header: custom semantic component --- */
 /* Independent from Bulma navbar — our own flex layout. */
 .app-header {
