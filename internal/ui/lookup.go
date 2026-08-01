@@ -2,11 +2,6 @@ package ui
 
 import "net/http"
 
-const (
-	LookupCustomer = "customer"
-	LookupProduct  = "product"
-)
-
 type LookupResult struct {
 	FieldName string
 	ID        int64

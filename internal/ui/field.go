@@ -26,6 +26,15 @@ func (t FieldType) String() string {
 	}
 }
 
+// SelectOption — элемент списка выбора (FieldSelect).
+// SelectOption описывает только реальные данные; placeholder для
+// пустого значения — свойство Field, а не искусственная опция.
+type SelectOption struct {
+	Value    string
+	Label    string
+	Disabled bool
+}
+
 // Field — модель поля формы (Form component).
 type Field struct {
 	Name         string
@@ -37,4 +46,6 @@ type Field struct {
 	Autofocus    bool
 	Autocomplete string
 	Icon         string
+	Placeholder  string
+	Options      []SelectOption
 }

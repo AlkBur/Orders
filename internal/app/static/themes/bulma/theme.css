@@ -237,6 +237,20 @@ html.js .app-menu.is-open .app-menu-panel {
 .list-row .icon {
   color: var(--bulma-text-light);
 }
+.list-row-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--bulma-radius-small);
+  color: var(--bulma-text-light);
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+.list-row-action:hover {
+  color: var(--bulma-link);
+  background-color: var(--bulma-background);
+}
 
 /* --- List: Mobile cards --- */
 .list-card {
@@ -299,9 +313,9 @@ html.js .app-menu.is-open .app-menu-panel {
 }
 
 /* --- Preset modifiers --- */
-.list--organizations .list-row.is-header .list-cell:nth-child(1) { flex: 2; }
-.list--organizations .list-row .list-cell:nth-child(1) { flex: 2; }
-.list--employees .list-row.is-header .list-cell:nth-child(1) { flex: 1.5; }
+.list--wide .list-row.is-header .list-cell:nth-child(1) { flex: 2; }
+.list--wide .list-row .list-cell:nth-child(1) { flex: 2; }
+.list--compact .list-row.is-header .list-cell:nth-child(1) { flex: 1.5; }
 
 /* --- Stats grid (Dashboard + Organization) --- */
 .stats-grid,

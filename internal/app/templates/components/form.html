@@ -10,8 +10,13 @@
       {{if .Icon}}<span class="icon is-left">{{icon .Icon}}</span>{{end}}
     {{else if eq .Type.String "select"}}
       <div class="select is-fullwidth">
-        <select id="{{.Name}}" name="{{.Name}}">
-          <option value="">Выберите...</option>
+        <select id="{{.Name}}" name="{{.Name}}"{{if .Required}} required{{end}}>
+          {{if .Placeholder}}
+          <option value=""{{if not .Value}} selected{{end}}>{{.Placeholder}}</option>
+          {{end}}
+          {{range .Options}}
+          <option value="{{.Value}}"{{if eq .Value $.Value}} selected{{end}}{{if .Disabled}} disabled{{end}}>{{.Label}}</option>
+          {{end}}
         </select>
       </div>
     {{else if eq .Type.String "password"}}

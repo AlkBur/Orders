@@ -58,14 +58,35 @@
 {{end}}
 
 {{define "list_data_row"}}
+{{if .URL}}
 <a class="list-row" href="{{.URL}}">
   {{range .Cells}}
   <div class="list-cell">{{.}}</div>
   {{end}}
   <div class="list-cell is-actions">
-    <span class="icon">{{icon "edit"}}</span>
+    {{template "list_row_actions" .}}
   </div>
 </a>
+{{else}}
+<div class="list-row">
+  {{range .Cells}}
+  <div class="list-cell">{{.}}</div>
+  {{end}}
+  <div class="list-cell is-actions">
+    {{template "list_row_actions" .}}
+  </div>
+</div>
+{{end}}
+{{end}}
+
+{{define "list_row_actions"}}
+{{if .Actions}}
+  {{range .Actions}}
+  <a class="list-row-action" href="{{.URL}}" aria-label="{{.Label}}">{{icon .Icon}}</a>
+  {{end}}
+{{else}}
+  <span class="icon">{{icon "edit"}}</span>
+{{end}}
 {{end}}
 
 {{define "list_card"}}
@@ -74,7 +95,13 @@
     <p class="list-card-title">{{index .Cells 0}}</p>
     <p class="list-card-subtitle">{{index .Cells 1}}</p>
     <div class="list-card-row is-actions">
+      {{if .Actions}}
+      {{range .Actions}}
+      <a href="{{.URL}}" class="list-card-action">{{icon .Icon}} {{.Label}}</a>
+      {{end}}
+      {{else}}
       <a href="{{.URL}}" class="list-card-action">{{icon "edit"}} Открыть</a>
+      {{end}}
     </div>
   </div>
 </div>
