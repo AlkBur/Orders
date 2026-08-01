@@ -365,17 +365,31 @@ html.js .app-menu.is-open .app-menu-panel {
 .module-card:hover {
   border-color: var(--bulma-link);
   box-shadow: 0 0 0 0.2rem var(--bulma-link-soft);
+  text-decoration: none;
 }
 .module-card.is-hero {
   flex-basis: 100%;
 }
 .module-card-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   font-weight: 600;
   color: var(--bulma-text-strong);
 }
 .module-card-note {
-  color: var(--bulma-text-light);
+  color: var(--bulma-text-weak);
   margin: 0;
+}
+.module-card-count {
+  margin-top: 0.25rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--bulma-grey-dark);
+}
+.module-card.is-hero .module-card-count {
+  margin-top: auto;
+  text-align: right;
 }
 
 /* --- Badges (Organization status) --- */
