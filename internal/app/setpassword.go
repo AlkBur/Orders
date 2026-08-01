@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"Orders/internal/app/pages"
+	"Orders/internal/ui"
 )
 
 func (a *App) SetPasswordPage(w http.ResponseWriter, r *http.Request) {
@@ -48,8 +49,8 @@ func (a *App) SetPasswordSubmit(w http.ResponseWriter, r *http.Request) {
 
 	if len(msgs) > 0 {
 		NoCache(w)
-		a.RenderAuth(w, r, mode, "set_password", a.setPasswordPageData(identity.Login, &pages.AlertData{
-			Type:     pages.AlertError,
+		a.RenderAuth(w, r, mode, "set_password", a.setPasswordPageData(identity.Login, &ui.AlertData{
+			Type:     ui.AlertError,
 			Messages: msgs,
 		}))
 		return
@@ -81,13 +82,13 @@ func (a *App) SetPasswordSubmit(w http.ResponseWriter, r *http.Request) {
 	a.Redirect(w, r, mode, "/")
 }
 
-func (a *App) setPasswordPageData(login string, alert *pages.AlertData) pages.SetPasswordPage {
+func (a *App) setPasswordPageData(login string, alert *ui.AlertData) pages.SetPasswordPage {
 	return pages.SetPasswordPage{
 		Title: "Установка пароля",
 		Login: login,
-		Fields: []pages.Field{
-			{Name: "password", Label: "Новый пароль", Type: pages.FieldPassword},
-			{Name: "confirm", Label: "Повторите пароль", Type: pages.FieldPassword},
+		Fields: []ui.Field{
+			{Name: "password", Label: "Новый пароль", Type: ui.FieldPassword},
+			{Name: "confirm", Label: "Повторите пароль", Type: ui.FieldPassword},
 		},
 		Alert: alert,
 	}
