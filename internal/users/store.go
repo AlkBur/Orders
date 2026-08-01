@@ -29,6 +29,12 @@ func (s *Store) GetByUUID(ctx context.Context, uuid string) (*User, error) {
 	`, uuid))
 }
 
+func (s *Store) Count(ctx context.Context) (int64, error) {
+	var n int64
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users`).Scan(&n)
+	return n, err
+}
+
 func (s *Store) List(ctx context.Context) ([]*User, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, uuid, login, email, password_hash, is_admin, created_at, updated_at

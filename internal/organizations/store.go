@@ -141,29 +141,10 @@ func (s *Store) List(ctx context.Context, opts ListOptions) ([]*Organization, er
 	return orgs, nil
 }
 
-// Count возвращает число организаций, удовлетворяющих поисковому запросу.
-func (s *Store) Count(ctx context.Context, query string) (int, error) {
-	q := `SELECT COUNT(*) FROM organizations`
-	var args []any
-
-	if query != "" {
-		q += ` WHERE name LIKE ? ESCAPE '\'`
-		args = append(args, "%"+escapeLike(query)+"%")
-	}
-
-	var n int
-	if err := s.db.QueryRowContext(ctx, q, args...).Scan(&n); err != nil {
-		return 0, err
-	}
-	return n, nil
-}
-
-// CountActive возвращает число активных организаций.
-func (s *Store) CountActive(ctx context.Context) (int, error) {
-	var n int
-	if err := s.db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM organizations WHERE active = 1`,
-	).Scan(&n); err != nil {
+// Count возвращает число организаций.
+func (s *Store) Count(ctx context.Context) (int64, error) {
+	var n int64
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM organizations`).Scan(&n); err != nil {
 		return 0, err
 	}
 	return n, nil
