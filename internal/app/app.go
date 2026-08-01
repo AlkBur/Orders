@@ -94,8 +94,6 @@ func New(configPath string) (*App, error) {
 	for _, page := range []string{
 		"receipts",
 		"receipt_card",
-		"customers",
-		"customer_card",
 		"products",
 		"product_card",
 		"users",
