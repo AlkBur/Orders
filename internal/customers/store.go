@@ -62,6 +62,12 @@ func (s *Store) GetByExternal(ctx context.Context, organizationID int64, uuid st
 	return c, nil
 }
 
+func (s *Store) Count(ctx context.Context) (int64, error) {
+	var n int64
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM customers`).Scan(&n)
+	return n, err
+}
+
 func (s *Store) List(ctx context.Context, organizationID int64) ([]*Customer, error) {
 	var rows *sql.Rows
 	var err error

@@ -37,12 +37,7 @@ type dashboardData struct {
 func (a *App) DashboardPage(w http.ResponseWriter, r *http.Request) {
 	NoCache(w)
 
-	total, err := a.organizations.Count(r.Context(), "")
-	if err != nil {
-		a.InternalError(w, err)
-		return
-	}
-	active, err := a.organizations.CountActive(r.Context())
+	total, err := a.organizations.Count(r.Context())
 	if err != nil {
 		a.InternalError(w, err)
 		return
@@ -112,8 +107,7 @@ func (a *App) DashboardPage(w http.ResponseWriter, r *http.Request) {
 		Title:  "Рабочий стол",
 		Header: pageHeader(r, "Рабочий стол"),
 		Stats: dashboardStats{
-			Total:  total,
-			Active: active,
+			Total: int(total),
 		},
 		RecentDocs: ui.ListData{
 			Columns:    docColumns,

@@ -50,6 +50,12 @@ func (s *Store) GetByID(ctx context.Context, id int64) (*Document, error) {
 	return &Document{Receipt: r, Items: items}, nil
 }
 
+func (s *Store) Count(ctx context.Context) (int64, error) {
+	var n int64
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM receipts`).Scan(&n)
+	return n, err
+}
+
 func (s *Store) List(ctx context.Context) ([]*Receipt, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT
