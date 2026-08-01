@@ -33,6 +33,46 @@ Static resources are served by the HTTP server.
 
 ---
 
+# Модель представления
+
+Главное правило UI-архитектуры проекта: данные движутся строго по
+вертикали, и каждый слой отвечает только за свою часть.
+
+```
+Storage
+   ↓
+Domain
+   ↓
+Handler
+   ↓
+UI Model
+   ↓
+Template
+   ↓
+HTML
+```
+
+- **Storage** — доступ к данным (SQLite, prepared statements).
+- **Domain** — бизнес-модель и бизнес-правила (`internal/customers`,
+  `internal/receipts`, ...). Ничего не знает о `ui`.
+- **Handler** — `app`-хендлер: валидация, вызов бизнес-логики, сборка
+  модели представления.
+- **UI Model** — данные для рендера (`ui.ListData`, `[]ui.Field`,
+  структуры страниц вида `customersListData`). Только презентационные
+  данные, никакой бизнес-логики.
+- **Template** — представление (`html/template`); шаблон живёт рядом
+  с кодом, который его рендерит.
+- **HTML** — результат, отданный браузеру.
+
+Правило: **доменные модели никогда не передаются в шаблоны.** Хендлер
+всегда собирает модель представления из доменных данных. Шаблоны и
+библиотека `internal/ui` не знают о предметной области: в
+`components/*.html` и в `internal/ui` нет доменных имён (проверялось:
+`internal/ui` не содержит констант полей домена, пресеты нейтральны
+(`ListWide`/`ListCompact`), `form.html` знает только `Field`).
+
+---
+
 # UI Stack
 
 ## Rendering
@@ -468,35 +508,41 @@ Picker mode — list page в режиме выбора:
 
 # List Pages
 
-All list pages use the generic `pages.ListPage` struct and the `list.html` template.
+Список страницы строится из `ui.ListData` и рендерится доменным шаблоном
+модуля (`templates/list/page.html`). Хендлер модуля собирает модель
+представления (см. «Модель представления»); домен в шаблон не передаётся.
 
 ```go
-page := pages.ListPage{
-    Title:     "...",
-    Columns:   pageColumns,
-    Rows:      rows,
-    NewURL:    ".../new",
-    RowAction: pages.RowAction{...},
-    EmptyText: "...",
+data := customersListData{
+    List: ui.ListData{
+        Columns:    columns,              // из Descriptor.ListFields() + DisplayValue
+        Rows:       rows,                 // []ui.ListRow
+        RenderMode: ui.RenderComfortable,
+    },
 }
-
-a.Render(w, "entity", page)
+pageFS, _ := fs.Sub(customers.Templates(), "list")
+ui.RenderPage(w, TemplateFS(), pageFS, data)
 ```
 
-Creating a dedicated list page struct (e.g. `ReceiptListPage`) is discouraged.
-The standard `ListPage` already provides all fields that `list.html` expects:
-`Title`, `Search`, `Columns`, `Rows`, `NewURL`, `RowAction`, `SearchURL`, `EmptyText`.
+Строка `ui.ListRow{URL, Cells, Actions []RowAction}`:
 
-A custom list struct may only be introduced if `list.html` cannot be reused
-and a completely different template is required.
+- `URL` — задан → строка является ссылкой на объект;
+- `Actions` — заданы → вместо перехода рисуются действия строки
+  (например, «Выбрать» в пикере).
 
-Current list pages using `pages.ListPage`:
+Действия строки не заменяют навигацию по списку: если строке нужна и
+ссылка, и действие, это противоречит модели списка (вложенные ссылки
+недопустимы) — решается либо ссылкой, либо действием, но не тем и другим.
 
-- Customers
-- Organizations
+Легаси `pages.ListPage` больше не используется для новых страниц.
+Пока остаётся в:
+
 - Products
 - Receipts
 - Users
+
+(переносятся по мере миграции; Organizations и Customers уже переведены
+на `ui.ListData`).
 
 ---
 
@@ -530,11 +576,26 @@ Theme           →  themes/<name>/theme.css
 | AppMenu     | `components/app_menu.html` | `MenuItem{ID, Label, Icon, URL, Danger, Separator}` | Semantic (`app-menu`) |
 | Toolbar     | `components/toolbar.html` | `ToolbarData{Buttons}` / `SearchData{Placeholder, Value}` | Bulma level + button |
 | Card        | `components/card.html`   | `card_open` / `card_close` (title) | Bulma card        |
-| List        | `components/list.html`   | `ListData{Columns, Rows, RenderMode, Preset}` | Semantic Classes |
-| Form        | `components/form.html`   | `Field{Name, Label, Type, Value, Readonly, Required, Autofocus, Autocomplete, Icon}` | Bulma field/control/input |
+| List        | `components/list.html`   | `ListData{Columns, Rows, RenderMode, Preset}`; строка `ListRow{URL, Cells, Actions []RowAction}` | Semantic Classes |
+| Form        | `components/form.html`   | `Field{Name, Label, Type, Value, Readonly, Required, Autofocus, Autocomplete, Icon, Placeholder, Options []SelectOption}` | Bulma field/control/input |
 | Alert       | `components/alert.html`  | `AlertData{Type, Messages}`   | Semantic (`alert`)    |
 | Dialog      | `components/dialog.html` | `DialogData{ID, Title}`         | Bulma modal           |
 | FAB         | `components/fab.html`    | `FAB{Icon, Text, URL}`          | Semantic (`app-fab`) |
+
+#### Row Actions
+
+Действия строки списка (`RowAction{ID, Icon, Label, URL}`) — ссылки-иконки
+на строке. Библиотека не знает бизнес-смысла действия: иконку, подпись и
+URL задаёт хендлер. Типичный пример — пикер: вместо перехода по `URL`
+строки рисуется действие «Выбрать» (`icon: check`), которое возвращает
+в исходную форму с выбранным значением.
+
+#### Select Options
+
+Поле выбора (`FieldSelect`) описывается через `Field.Options []SelectOption`.
+`SelectOption{Value, Label, Disabled}` описывает только реальные данные.
+Placeholder для пустого значения — свойство `Field.Placeholder`, а не
+искусственная опция.
 
 ### Header и AppMenu
 
@@ -698,9 +759,17 @@ FAB реализуется данными списка через `FABProvider` 
 
 ### Dashboard
 
-`/` — dashboard: `internal/app/dashboard.go` + `pages/dashboard/page.html`.
-Счётчики (`Count`, `CountActive`), последние организации (`List` с
-`OrderBy: "created_at"` и `Limit`), placeholder-блоки будущих модулей.
+`/` — «Рабочий стол» администратора: `internal/app/dashboard.go` +
+`pages/dashboard/page.html`.
+
+Dashboard — **навигационный экран**, а не набор инструментов:
+
+- первично — карточки модулей: hero-карточка «Документы» (`/receipts`)
+  и сетка модулей (Организации, Контрагенты, Товары, Пользователи);
+- вторично — виджеты со свежими данными: «Недавние документы» (≤5),
+  «Последние организации», «Статистика» (счётчики организаций);
+- Toolbar и FAB намеренно отсутствуют: рабочий стол ничего не создаёт,
+  он только направляет. Возвращать кнопки на dashboard не нужно.
 
 ### Header в реальных страницах
 
@@ -781,10 +850,9 @@ Auth Layout
 - неверные данные → «Неверный логин или пароль.»;
 - все найденные ошибки собираются сразу и показываются через Alert.
 
-После успешной аутентификации:
-
-- требуется установка пароля → `/set-password`;
-- иначе → `/` (dashboard).
+После успешной аутентификации пользователь попадает на стартовый экран,
+который определяется `LandingURL(identity)` (см. «Landing»): установка
+пароля, рабочий стол для админа, документы для пользователя.
 
 Форма использует htmx для плавной доставки: при ошибке сервер возвращает
 только карточку (`page_content`), которую htmx подменяет через
@@ -806,6 +874,39 @@ Auth Layout
 После успешной установки сессия завершается и пользователь перенаправляется
 на `/` для входа с новым паролем.
 
+# Landing
+
+Стартовый экран после входа определяется ролью и состоянием аккаунта.
+Единственная точка принятия этого решения — `LandingURL(u users.Identity)`
+в `internal/app/landing.go`:
+
+```go
+func LandingURL(u users.Identity) string {
+    if u.NeedsPasswordSetup() {
+        return RouteSetPassword
+    }
+    if u.IsAdmin {
+        return RouteDashboard
+    }
+    return RouteReceipts
+}
+```
+
+Приоритет:
+
+1. установка пароля — всегда, независимо от роли (`/set-password`);
+2. админ — рабочий стол (`/`);
+3. пользователь — документы (`/receipts`).
+
+`LandingURL` намеренно «тупая»: она только выбирает первый экран и не
+содержит ни проверки прав, ни навигационной логики. Маршруты задаются
+константами в `internal/app/routes.go` (`RouteDashboard`, `RouteReceipts`,
+`RouteSetPassword`).
+
+Рабочий стол (`/`) доступен только администратору — `RequireAdmin`
+в роутере (403 для остальных); обычный пользователь после входа
+попадает на `/receipts`.
+
 # Authentication Flow
 
 ```
@@ -818,7 +919,7 @@ POST /login
 Серверная валидация
     ↓
 Ошибки → RenderAuth (фрагмент для htmx / полная страница) + Alert
-Успех  → Redirect (/set-password | /)
+Успех  → Redirect (LandingURL: /set-password | / | /receipts)
 
 POST /set-password
     ↓
