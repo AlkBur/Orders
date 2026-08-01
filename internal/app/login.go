@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"Orders/internal/app/pages"
+	"Orders/internal/ui"
 	"Orders/internal/users"
 )
 
@@ -39,8 +40,8 @@ func (a *App) Login(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(msgs) > 0 {
 		NoCache(w)
-		a.RenderAuth(w, r, mode, "login", a.loginPageData(login, &pages.AlertData{
-			Type:     pages.AlertError,
+		a.RenderAuth(w, r, mode, "login", a.loginPageData(login, &ui.AlertData{
+			Type:     ui.AlertError,
 			Messages: msgs,
 		}))
 		return
@@ -49,8 +50,8 @@ func (a *App) Login(w http.ResponseWriter, r *http.Request) {
 	identity, ok := a.identity.GetByLogin(login)
 	if !ok {
 		NoCache(w)
-		a.RenderAuth(w, r, mode, "login", a.loginPageData(login, &pages.AlertData{
-			Type:     pages.AlertError,
+		a.RenderAuth(w, r, mode, "login", a.loginPageData(login, &ui.AlertData{
+			Type:     ui.AlertError,
 			Messages: []string{"Неверный логин или пароль."},
 		}))
 		return
@@ -67,8 +68,8 @@ func (a *App) Login(w http.ResponseWriter, r *http.Request) {
 
 	if !authenticated {
 		NoCache(w)
-		a.RenderAuth(w, r, mode, "login", a.loginPageData(login, &pages.AlertData{
-			Type:     pages.AlertError,
+		a.RenderAuth(w, r, mode, "login", a.loginPageData(login, &ui.AlertData{
+			Type:     ui.AlertError,
 			Messages: []string{"Неверный логин или пароль."},
 		}))
 		return
@@ -88,12 +89,12 @@ func (a *App) Login(w http.ResponseWriter, r *http.Request) {
 	a.Redirect(w, r, mode, target)
 }
 
-func (a *App) loginPageData(login string, alert *pages.AlertData) pages.LoginPage {
+func (a *App) loginPageData(login string, alert *ui.AlertData) pages.LoginPage {
 	return pages.LoginPage{
 		Title: "Вход",
-		Fields: []pages.Field{
-			{Name: "login", Label: "Пользователь", Type: pages.FieldText, Value: login, Autocomplete: "username", Autofocus: true},
-			{Name: "password", Label: "Пароль", Type: pages.FieldPassword, Autocomplete: "current-password"},
+		Fields: []ui.Field{
+			{Name: "login", Label: "Пользователь", Type: ui.FieldText, Value: login, Autocomplete: "username", Autofocus: true},
+			{Name: "password", Label: "Пароль", Type: ui.FieldPassword, Autocomplete: "current-password"},
 		},
 		Alert: alert,
 	}

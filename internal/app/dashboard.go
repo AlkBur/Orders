@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"Orders/internal/app/pages"
 	"Orders/internal/organizations"
 	"Orders/internal/ui"
 )
@@ -22,9 +21,9 @@ type dashboardModule struct {
 
 type dashboardData struct {
 	Title      string
-	Header     pages.HeaderData
+	Header     ui.HeaderData
 	Stats      dashboardStats
-	RecentList pages.ListData
+	RecentList ui.ListData
 	Modules    []dashboardModule
 }
 
@@ -50,9 +49,9 @@ func (a *App) DashboardPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var rows []pages.ListRow
+	var rows []ui.ListRow
 	for _, o := range recent {
-		rows = append(rows, pages.ListRow{
+		rows = append(rows, ui.ListRow{
 			URL: "/organizations/" + strconv.FormatInt(o.ID, 10),
 			Cells: []string{
 				o.Name,
@@ -74,14 +73,14 @@ func (a *App) DashboardPage(w http.ResponseWriter, r *http.Request) {
 			Total:  total,
 			Active: active,
 		},
-		RecentList: pages.ListData{
-			Columns: []pages.ListColumn{
+		RecentList: ui.ListData{
+			Columns: []ui.ListColumn{
 				{Label: "Название"},
 				{Label: "Статус"},
 			},
 			Rows:       rows,
-			RenderMode: pages.RenderComfortable,
-			Preset:     pages.ListOrganizations,
+			RenderMode: ui.RenderComfortable,
+			Preset:     ui.ListOrganizations,
 		},
 		Modules: []dashboardModule{
 			{Name: "Контрагенты", Note: "Скоро"},

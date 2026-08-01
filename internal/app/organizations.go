@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	"Orders/internal/app/pages"
 	"Orders/internal/common"
 	"Orders/internal/organizations"
 	"Orders/internal/ui"
@@ -17,10 +16,10 @@ import (
 
 type organizationsListData struct {
 	Title   string
-	Header  pages.HeaderData
-	Toolbar pages.ToolbarData
-	Search  pages.SearchData
-	List    pages.ListData
+	Header  ui.HeaderData
+	Toolbar ui.ToolbarData
+	Search  ui.SearchData
+	List    ui.ListData
 }
 
 func (organizationsListData) FAB() *ui.FAB {
@@ -29,12 +28,12 @@ func (organizationsListData) FAB() *ui.FAB {
 
 type organizationCardData struct {
 	Title      string
-	Header     pages.HeaderData
+	Header     ui.HeaderData
 	ID         int64
 	Name       string
 	Active     bool
 	FormAction string
-	Fields     []pages.Field
+	Fields     []ui.Field
 }
 
 func (a *App) OrganizationsPage(w http.ResponseWriter, r *http.Request) {
@@ -48,9 +47,9 @@ func (a *App) OrganizationsPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var rows []pages.ListRow
+	var rows []ui.ListRow
 	for _, o := range orgs {
-		rows = append(rows, pages.ListRow{
+		rows = append(rows, ui.ListRow{
 			URL: "/organizations/" + strconv.FormatInt(o.ID, 10),
 			Cells: []string{
 				o.Name,
@@ -69,21 +68,21 @@ func (a *App) OrganizationsPage(w http.ResponseWriter, r *http.Request) {
 	data := organizationsListData{
 		Title:  "Организации",
 		Header: pageHeader(r, "Организации"),
-		Toolbar: pages.ToolbarData{
-			Buttons: []pages.Button{
-				{Style: pages.ButtonPrimary, Text: "Добавить", URL: "/organizations/new", Icon: "plus"},
+		Toolbar: ui.ToolbarData{
+			Buttons: []ui.Button{
+				{Style: ui.ButtonPrimary, Text: "Добавить", URL: "/organizations/new", Icon: "plus"},
 			},
 		},
-		Search: pages.SearchData{Placeholder: "Поиск организаций...", Value: query},
-		List: pages.ListData{
-			Columns: []pages.ListColumn{
+		Search: ui.SearchData{Placeholder: "Поиск организаций...", Value: query},
+		List: ui.ListData{
+			Columns: []ui.ListColumn{
 				{Label: "Название"},
 				{Label: "Статус"},
 				{Label: "Создана"},
 			},
 			Rows:       rows,
-			RenderMode: pages.RenderComfortable,
-			Preset:     pages.ListOrganizations,
+			RenderMode: ui.RenderComfortable,
+			Preset:     ui.ListOrganizations,
 		},
 	}
 
@@ -148,11 +147,11 @@ func (a *App) OrganizationCard(w http.ResponseWriter, r *http.Request) {
 		Name:       name,
 		Active:     org.Active,
 		FormAction: action,
-		Fields: []pages.Field{
-			{Name: "uuid", Label: "UUID", Type: pages.FieldText, Value: org.UUID, Readonly: true},
-			{Name: "name", Label: "Наименование", Type: pages.FieldText, Value: org.Name, Required: true},
-			{Name: "active", Label: "Активна", Type: pages.FieldCheckbox, Value: checkValue(org.Active)},
-			{Name: "apikey", Label: "API Key", Type: pages.FieldText, Value: org.APIKey, Readonly: true},
+		Fields: []ui.Field{
+			{Name: "uuid", Label: "UUID", Type: ui.FieldText, Value: org.UUID, Readonly: true},
+			{Name: "name", Label: "Наименование", Type: ui.FieldText, Value: org.Name, Required: true},
+			{Name: "active", Label: "Активна", Type: ui.FieldCheckbox, Value: checkValue(org.Active)},
+			{Name: "apikey", Label: "API Key", Type: ui.FieldText, Value: org.APIKey, Readonly: true},
 		},
 	}
 
@@ -222,12 +221,12 @@ func (a *App) OrganizationSave(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/organizations/"+strconv.FormatInt(org.ID, 10), http.StatusSeeOther)
 }
 
-func pageHeader(r *http.Request, section string) pages.HeaderData {
+func pageHeader(r *http.Request, section string) ui.HeaderData {
 	user := CurrentUser(r)
-	return pages.HeaderData{
+	return ui.HeaderData{
 		Section:  section,
 		Username: user.Login,
-		Menu: []pages.MenuItem{
+		Menu: []ui.MenuItem{
 			{ID: "logout", Label: "Выход", Icon: "logout", URL: "/logout"},
 		},
 	}

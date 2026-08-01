@@ -1,8 +1,10 @@
 package pages
 
+import "Orders/internal/ui"
+
 type SetPasswordPage struct {
 	Title  string
 	Login  string
-	Fields []Field
-	Alert  *AlertData
+	Fields []ui.Field
+	Alert  *ui.AlertData
 }
