@@ -341,6 +341,43 @@ html.js .app-menu.is-open .app-menu-panel {
   margin: 0;
 }
 
+/* --- Dashboard modules (Рабочий стол) --- */
+.module-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+.module-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  flex: 1;
+  min-width: 200px;
+  padding: 1rem 1.25rem;
+  background-color: var(--bulma-scheme-main);
+  border: 1px solid var(--bulma-border);
+  border-radius: var(--bulma-radius-large);
+  text-decoration: none;
+  color: var(--bulma-text);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.module-card:hover {
+  border-color: var(--bulma-link);
+  box-shadow: 0 0 0 0.2rem var(--bulma-link-soft);
+}
+.module-card.is-hero {
+  flex-basis: 100%;
+}
+.module-card-title {
+  font-weight: 600;
+  color: var(--bulma-text-strong);
+}
+.module-card-note {
+  color: var(--bulma-text-light);
+  margin: 0;
+}
+
 /* --- Badges (Organization status) --- */
 .badge {
   display: inline-block;
