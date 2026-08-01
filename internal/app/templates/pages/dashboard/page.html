@@ -2,29 +2,12 @@
 <div class="module-grid">
   {{range .Modules}}
     <a class="module-card{{if .Hero}} is-hero{{end}}" href="{{.URL}}">
-      <div class="module-card-title">{{.Name}}</div>
+      <div class="module-card-title">{{icon .Icon}} {{.Name}}</div>
+      {{if .Note}}
       <div class="module-card-note">{{.Note}}</div>
+      {{end}}
+      <div class="module-card-count">{{.Count}}</div>
     </a>
   {{end}}
-</div>
-
-<div class="section-heading">Недавние документы</div>
-{{template "list" .RecentDocs}}
-
-<div class="section-heading">Последние организации</div>
-{{template "list" .RecentOrgs}}
-
-<div class="section-heading">Статистика</div>
-<div class="stats-grid">
-  <div class="stats-card">
-    {{template "card_open" "Всего организаций"}}
-      <p class="stats-value">{{.Stats.Total}}</p>
-    {{template "card_close"}}
-  </div>
-  <div class="stats-card">
-    {{template "card_open" "Активных"}}
-      <p class="stats-value">{{.Stats.Active}}</p>
-    {{template "card_close"}}
-  </div>
 </div>
 {{end}}
