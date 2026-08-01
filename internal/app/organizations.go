@@ -82,7 +82,7 @@ func (a *App) OrganizationsPage(w http.ResponseWriter, r *http.Request) {
 			},
 			Rows:       rows,
 			RenderMode: ui.RenderComfortable,
-			Preset:     ui.ListOrganizations,
+			Preset:     ui.ListWide,
 		},
 	}
 

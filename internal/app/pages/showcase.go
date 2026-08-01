@@ -63,6 +63,12 @@ func HandleCatalog(tmplFS fs.FS) http.HandlerFunc {
 				{Name: "inn", Label: "ИНН", Type: ui.FieldText},
 				{Name: "employees", Label: "Сотрудники", Type: ui.FieldNumber, Value: "24"},
 				{Name: "secret", Label: "Пароль", Type: ui.FieldPassword, Autocomplete: "current-password", Icon: "lock"},
+				{Name: "org", Label: "Организация", Type: ui.FieldSelect, Placeholder: "Выберите организацию",
+					Options: []ui.SelectOption{
+						{Value: "1", Label: "ООО Ромашка"},
+						{Value: "2", Label: "ИП Иванов"},
+						{Value: "3", Label: "ЗАО ТехноСервис", Disabled: true},
+					}},
 				{Name: "active", Label: "Активна", Type: ui.FieldCheckbox, Value: "true"},
 			},
 			Alerts: []ui.AlertData{
@@ -76,12 +82,14 @@ func HandleCatalog(tmplFS fs.FS) http.HandlerFunc {
 					{Label: "Статус"},
 				},
 				Rows: []ui.ListRow{
-					{URL: "#", Cells: []string{"ООО Ромашка", "7701123456", "Активна"}},
-					{URL: "#", Cells: []string{"ИП Иванов", "7801234567", "Активна"}},
-					{URL: "#", Cells: []string{"ЗАО ТехноСервис", "1601234567", "Неактивна"}},
+					{Cells: []string{"ООО Ромашка", "7701123456", "Активна"},
+						Actions: []ui.RowAction{{ID: "edit", Icon: "edit", Label: "Открыть", URL: "#"}}},
+					{Cells: []string{"ИП Иванов", "7801234567", "Активна"},
+						Actions: []ui.RowAction{{ID: "select", Icon: "check", Label: "Выбрать", URL: "#"}}},
+					{Cells: []string{"ЗАО ТехноСервис", "1601234567", "Неактивна"}},
 				},
 				RenderMode: ui.RenderComfortable,
-				Preset:     ui.ListOrganizations,
+				Preset:     ui.ListWide,
 			},
 			Dialog: ui.DialogData{
 				ID:      "demo-dialog",

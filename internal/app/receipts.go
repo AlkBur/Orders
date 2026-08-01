@@ -16,6 +16,13 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// lookupCustomer / lookupProduct — значения select_field в callback-ссылках
+// пикера. Принадлежат приложению (потребителю ReadLookup), а не библиотеке ui.
+const (
+	lookupCustomer = "customer"
+	lookupProduct  = "product"
+)
+
 func receiptIDFromURL(r *http.Request) int64 {
 	idStr := chi.URLParam(r, "id")
 	if idStr == "" || idStr == "new" {
@@ -94,7 +101,7 @@ func (a *App) ReceiptCard(w http.ResponseWriter, r *http.Request) {
 
 		if lookup, ok := ui.ReadLookup(r); ok {
 			switch lookup.FieldName {
-			case ui.LookupCustomer:
+			case lookupCustomer:
 				if a.customers != nil {
 					cust, err := a.customers.GetByID(r.Context(), lookup.ID)
 					if err == nil {
@@ -102,7 +109,7 @@ func (a *App) ReceiptCard(w http.ResponseWriter, r *http.Request) {
 						rec.CustomerName = cust.Name
 					}
 				}
-			case ui.LookupProduct:
+			case lookupProduct:
 				if a.products != nil {
 					prod, err := a.products.GetByID(r.Context(), lookup.ID)
 					if err == nil {

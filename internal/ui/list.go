@@ -22,17 +22,17 @@ func (m RenderMode) String() string {
 type ListPreset int
 
 const (
-	ListDefault       ListPreset = 0
-	ListOrganizations ListPreset = 1
-	ListEmployees     ListPreset = 2
+	ListDefault ListPreset = 0
+	ListWide    ListPreset = 1
+	ListCompact ListPreset = 2
 )
 
 func (p ListPreset) String() string {
 	switch p {
-	case ListOrganizations:
-		return "Organizations"
-	case ListEmployees:
-		return "Employees"
+	case ListWide:
+		return "Wide"
+	case ListCompact:
+		return "Compact"
 	default:
 		return "Default"
 	}
@@ -40,10 +40,10 @@ func (p ListPreset) String() string {
 
 func (p ListPreset) Modifier() string {
 	switch p {
-	case ListOrganizations:
-		return "list--organizations"
-	case ListEmployees:
-		return "list--employees"
+	case ListWide:
+		return "list--wide"
+	case ListCompact:
+		return "list--compact"
 	default:
 		return ""
 	}
@@ -54,9 +54,19 @@ type ListColumn struct {
 	Flex  int
 }
 
-type ListRow struct {
+// RowAction — действие строки списка. Библиотека не знает бизнес-смысла
+// действия: она только рисует иконку-кнопку с URL.
+type RowAction struct {
+	ID    string
+	Icon  string
+	Label string
 	URL   string
-	Cells []string
+}
+
+type ListRow struct {
+	URL     string
+	Cells   []string
+	Actions []RowAction
 }
 
 type ListData struct {
