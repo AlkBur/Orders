@@ -54,15 +54,15 @@ func HandleCatalog(tmplFS fs.FS) http.HandlerFunc {
 			},
 			Icons: []string{
 				"house", "plus", "search", "save", "edit", "trash",
-				"arrow_left", "arrow_right", "user", "logout",
+				"arrow_left", "arrow_right", "user", "lock", "logout",
 				"building", "package", "chart", "settings", "people",
 				"more_vertical",
 			},
 			Fields: []ui.Field{
-				{Name: "name", Label: "Название", Type: ui.FieldText, Value: "ООО Ромашка"},
+				{Name: "name", Label: "Название", Type: ui.FieldText, Value: "ООО Ромашка", Icon: "user"},
 				{Name: "inn", Label: "ИНН", Type: ui.FieldText},
 				{Name: "employees", Label: "Сотрудники", Type: ui.FieldNumber, Value: "24"},
-				{Name: "secret", Label: "Пароль", Type: ui.FieldPassword, Autocomplete: "current-password"},
+				{Name: "secret", Label: "Пароль", Type: ui.FieldPassword, Autocomplete: "current-password", Icon: "lock"},
 				{Name: "active", Label: "Активна", Type: ui.FieldCheckbox, Value: "true"},
 			},
 			Alerts: []ui.AlertData{

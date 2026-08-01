@@ -36,4 +36,5 @@ type Field struct {
 	Required     bool
 	Autofocus    bool
 	Autocomplete string
+	Icon         string
 }
