@@ -93,8 +93,8 @@ func (a *App) loginPageData(login string, alert *ui.AlertData) pages.LoginPage {
 	return pages.LoginPage{
 		Title: "Вход",
 		Fields: []ui.Field{
-			{Name: "login", Label: "Пользователь", Type: ui.FieldText, Value: login, Autocomplete: "username", Autofocus: true},
-			{Name: "password", Label: "Пароль", Type: ui.FieldPassword, Autocomplete: "current-password"},
+			{Name: "login", Label: "Пользователь", Type: ui.FieldText, Value: login, Autocomplete: "username", Autofocus: true, Icon: "user"},
+			{Name: "password", Label: "Пароль", Type: ui.FieldPassword, Autocomplete: "current-password", Icon: "lock"},
 		},
 		Alert: alert,
 	}

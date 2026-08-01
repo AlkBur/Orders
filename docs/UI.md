@@ -531,7 +531,7 @@ Theme           →  themes/<name>/theme.css
 | Toolbar     | `components/toolbar.html` | `ToolbarData{Buttons}` / `SearchData{Placeholder, Value}` | Bulma level + button |
 | Card        | `components/card.html`   | `card_open` / `card_close` (title) | Bulma card        |
 | List        | `components/list.html`   | `ListData{Columns, Rows, RenderMode, Preset}` | Semantic Classes |
-| Form        | `components/form.html`   | `Field{Name, Label, Type, Value, Readonly, Required, Autofocus, Autocomplete}` | Bulma field/control/input |
+| Form        | `components/form.html`   | `Field{Name, Label, Type, Value, Readonly, Required, Autofocus, Autocomplete, Icon}` | Bulma field/control/input |
 | Alert       | `components/alert.html`  | `AlertData{Type, Messages}`   | Semantic (`alert`)    |
 | Dialog      | `components/dialog.html` | `DialogData{ID, Title}`         | Bulma modal           |
 | FAB         | `components/fab.html`    | `FAB{Icon, Text, URL}`          | Semantic (`app-fab`) |
@@ -827,3 +827,16 @@ POST /set-password
 Ошибки → RenderAuth + Alert
 Успех  → завершение сессии, Redirect (/)
 ```
+
+# UI Polish Process
+
+Визуальный полиш библиотеки выполняется **пакетами**. После завершения
+пакета команда возвращается к разработке функциональности. Новый полиш
+начинается только после появления новых реальных сценариев, требующих
+изменений компонентов.
+
+Полиш улучшает фундаментальные компоненты платформы, а не отдельные экраны
+(Login не является причиной изменения компонентов — только первым местом,
+где новое API используется). Новые косметические изменения не принимаются
+до появления нескольких новых реальных сценариев, выявляющих необходимость
+доработки компонентов.

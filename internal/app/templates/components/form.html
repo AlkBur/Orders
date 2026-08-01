@@ -1,11 +1,13 @@
 {{define "form_field"}}
 <div class="field">
   <label class="label" for="{{.Name}}">{{.Label}}</label>
-  <div class="control">
+  <div class="control{{if .Icon}} has-icons-left{{end}}">
     {{if eq .Type.String "text"}}
       <input class="input" type="text" id="{{.Name}}" name="{{.Name}}" value="{{.Value}}"{{if .Readonly}} readonly{{end}}{{if .Required}} required{{end}}{{if .Autocomplete}} autocomplete="{{.Autocomplete}}"{{end}}{{if .Autofocus}} autofocus{{end}}>
+      {{if .Icon}}<span class="icon is-left">{{icon .Icon}}</span>{{end}}
     {{else if eq .Type.String "number"}}
       <input class="input" type="number" id="{{.Name}}" name="{{.Name}}" value="{{.Value}}"{{if .Readonly}} readonly{{end}}>
+      {{if .Icon}}<span class="icon is-left">{{icon .Icon}}</span>{{end}}
     {{else if eq .Type.String "select"}}
       <div class="select is-fullwidth">
         <select id="{{.Name}}" name="{{.Name}}">
@@ -14,6 +16,7 @@
       </div>
     {{else if eq .Type.String "password"}}
       <input class="input" type="password" id="{{.Name}}" name="{{.Name}}"{{if .Required}} required{{end}}{{if .Autocomplete}} autocomplete="{{.Autocomplete}}"{{end}}{{if .Autofocus}} autofocus{{end}}>
+      {{if .Icon}}<span class="icon is-left">{{icon .Icon}}</span>{{end}}
     {{else if eq .Type.String "checkbox"}}
       <label class="checkbox">
         <input type="checkbox" id="{{.Name}}" name="{{.Name}}"{{if eq .Value "true"}} checked{{end}}>

@@ -87,8 +87,8 @@ func (a *App) setPasswordPageData(login string, alert *ui.AlertData) pages.SetPa
 		Title: "Установка пароля",
 		Login: login,
 		Fields: []ui.Field{
-			{Name: "password", Label: "Новый пароль", Type: ui.FieldPassword},
-			{Name: "confirm", Label: "Повторите пароль", Type: ui.FieldPassword},
+			{Name: "password", Label: "Новый пароль", Type: ui.FieldPassword, Icon: "lock"},
+			{Name: "confirm", Label: "Повторите пароль", Type: ui.FieldPassword, Icon: "lock"},
 		},
 		Alert: alert,
 	}
