@@ -22,25 +22,30 @@
 /* --- Alert: универсальный блок сообщений --- */
 .alert {
   padding: 0.75rem 1rem;
-  border-radius: var(--bulma-radius);
+  border-radius: var(--bulma-radius-medium);
+  border: 1px solid var(--bulma-border);
   font-size: 0.875rem;
   margin-bottom: 1rem;
 }
 .alert--info {
-  background-color: var(--bulma-info);
-  color: var(--bulma-info-invert);
+  background-color: var(--bulma-info-soft);
+  color: var(--bulma-info-soft-invert);
+  border-color: var(--bulma-info-soft);
 }
 .alert--success {
-  background-color: var(--bulma-success);
-  color: var(--bulma-success-invert);
+  background-color: var(--bulma-success-soft);
+  color: var(--bulma-success-soft-invert);
+  border-color: var(--bulma-success-soft);
 }
 .alert--warning {
-  background-color: var(--bulma-warning);
-  color: var(--bulma-warning-invert);
+  background-color: var(--bulma-warning-soft);
+  color: var(--bulma-warning-soft-invert);
+  border-color: var(--bulma-warning-soft);
 }
 .alert--error {
-  background-color: var(--bulma-danger);
-  color: var(--bulma-danger-invert);
+  background-color: var(--bulma-danger-soft);
+  color: var(--bulma-danger-soft-invert);
+  border-color: var(--bulma-danger-soft);
 }
 .alert-title {
   margin: 0 0 0.25rem;
@@ -415,9 +420,33 @@ html.js .app-menu.is-open .app-menu-panel {
   margin-bottom: 0.75rem;
 }
 
-/* --- Card component extras --- */
+/* --- Card: универсальный контейнер платформы ---
+   Чистый рефайн внешнего вида через токены Bulma. */
+:root {
+  --bulma-card-radius: var(--bulma-radius-large);
+  --bulma-card-shadow: 0 1px 3px rgb(0 0 0 / 6%), 0 4px 12px rgb(0 0 0 / 4%);
+  --bulma-card-header-background-color: var(--bulma-scheme-main-bis);
+  --bulma-card-header-color: var(--bulma-text-strong);
+  --bulma-card-header-weight: 600;
+}
+.card {
+  border: 1px solid var(--bulma-border);
+}
 .card-content .stats-value {
   margin-top: 0.25rem;
+}
+
+/* --- Focus-visible: кольцо только для клавиатуры ---
+   Мышь не подсвечивается, дефолтный :focus Bulma не меняется. */
+.input:focus-visible,
+.textarea:focus-visible,
+.select select:focus-visible {
+  box-shadow: 0 0 0 0.2rem var(--bulma-primary-soft);
+}
+.checkbox input:focus-visible,
+.radio input:focus-visible {
+  outline: 2px solid var(--bulma-primary-soft);
+  outline-offset: 2px;
 }
 
 /* --- Component Catalog --- */
