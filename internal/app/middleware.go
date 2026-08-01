@@ -93,7 +93,7 @@ func RequirePassword(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		user := CurrentUser(r)
 		if user.ID != 0 && user.NeedsPasswordSetup() {
-			http.Redirect(w, r, "/set-password", http.StatusSeeOther)
+			http.Redirect(w, r, RouteSetPassword, http.StatusSeeOther)
 			return
 		}
 		next.ServeHTTP(w, r)

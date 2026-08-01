@@ -49,17 +49,20 @@ func (a *App) NewRouter() *chi.Mux {
 			return RequireAuth(a.sessions, a.identity, next)
 		})
 
-		r.Get("/set-password", a.SetPasswordPage)
-		r.Post("/set-password", a.SetPasswordSubmit)
+		r.Get(RouteSetPassword, a.SetPasswordPage)
+		r.Post(RouteSetPassword, a.SetPasswordSubmit)
 		r.Post("/logout", a.Logout)
 
 		r.Group(func(r chi.Router) {
 			r.Use(RequirePassword)
 
-			r.Get("/", a.DashboardPage)
+			r.Group(func(r chi.Router) {
+				r.Use(RequireAdmin)
+				r.Get(RouteDashboard, a.DashboardPage)
+			})
 
 			// Receipts
-			r.Get("/receipts", a.ReceiptsPage)
+			r.Get(RouteReceipts, a.ReceiptsPage)
 			r.Get("/receipts/new", a.ReceiptCard)
 			r.Post("/receipts", a.ReceiptSave)
 			r.Get("/receipts/{id}", a.ReceiptCard)
