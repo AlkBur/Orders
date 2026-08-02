@@ -16,10 +16,6 @@ func (a *App) NewRouter() *chi.Mux {
 	r.Use(middleware.Recoverer)
 	r.Use(SessionMiddleware(a.sessions))
 
-	r.Get("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-
 	r.Get("/login", a.LoginPage)
 	r.Post("/login", a.Login)
 
