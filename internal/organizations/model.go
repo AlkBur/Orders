@@ -12,7 +12,7 @@ type Organization struct {
 	UUID      string `db:"uuid" label:"ID" order:"10"`
 	Name      string `db:"name" label:"Наименование" order:"20" list:"true"`
 	APIKey    string
-	Active    bool   `db:"active" label:"Статус" order:"30" list:"true"`
+	Active    bool `db:"active" label:"Статус" order:"30" list:"true"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }

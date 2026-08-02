@@ -162,5 +162,3 @@ func insertProduct(t *testing.T, dbt *sql.DB, orgID int64, name, unit string) (i
 	id, _ := res.LastInsertId()
 	return id, name
 }
-
-
