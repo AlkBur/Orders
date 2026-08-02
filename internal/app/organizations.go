@@ -78,7 +78,7 @@ func (a *App) OrganizationsPage(w http.ResponseWriter, r *http.Request) {
 				{Style: ui.ButtonPrimary, Text: "Добавить", URL: "/organizations/new", Icon: "plus"},
 			},
 		},
-		Search: ui.SearchData{Placeholder: "Поиск организаций...", Value: query},
+		Search: ui.SearchData{URL: "/organizations", Placeholder: "Поиск организаций...", Query: query},
 		List: ui.ListData{
 			Columns: []ui.ListColumn{
 				{Label: "Название"},

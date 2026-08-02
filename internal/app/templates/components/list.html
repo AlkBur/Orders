@@ -8,8 +8,14 @@
 
 {{end}}
 
+{{define "list_view"}}
+{{if .Toolbar}}{{template "toolbar" .Toolbar}}{{end}}
+{{if .Search}}{{template "search" .Search}}{{end}}
+{{template "list" .List}}
+{{end}}
+
 {{define "list_default"}}
-<section class="list {{.Preset.Modifier}}">
+<section id="list" class="list {{.Preset.Modifier}}">
   <div class="list-desktop">
     {{template "list_header_row" .}}
     {{range .Rows}}
@@ -33,7 +39,7 @@
 {{end}}
 
 {{define "list_cards"}}
-<section class="list {{.Preset.Modifier}}">
+<section id="list" class="list {{.Preset.Modifier}}">
   <div class="list-desktop">
     {{template "list_header_row" .}}
     {{range .Rows}}

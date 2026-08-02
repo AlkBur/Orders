@@ -1,5 +1,5 @@
 {{define "page_content"}}
-{{template "toolbar_list" .}}
+{{template "list_view" .ListView}}
 
 <div class="catalog-section">
   <div class="section-heading">Header и AppMenu</div>
@@ -21,9 +21,23 @@
 </div>
 
 <div class="catalog-section">
-  <div class="section-heading">Toolbar и поиск</div>
-  <p class="catalog-note">Toolbar выше — живой пример: действия слева, поиск справа.</p>
+  <div class="section-heading">Toolbar, поиск и список (ListView)</div>
+  <p class="catalog-note">
+    Композиция сверху — живой пример <code>ListView</code>: тулбар с действиями,
+    блок поиска и список. Поиск включён (<code>Live: true</code>): после 3 символов
+    он фильтрует список без перезагрузки страницы.
+  </p>
   {{template "catalog_code" (index .CodeSamples "toolbar")}}
+</div>
+
+<div class="catalog-section">
+  <div class="section-heading">Search</div>
+  <p class="catalog-note">
+    Самостоятельный блок поиска. <code>Live</code> добавляет живой поиск,
+    <code>URL</code> задаёт путь списка, к которому подставляется <code>?q=...</code>.
+  </p>
+  {{template "search" .Search}}
+  {{template "catalog_code" (index .CodeSamples "search")}}
 </div>
 
 <div class="catalog-section">
