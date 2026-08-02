@@ -24,8 +24,8 @@ type Receipt struct {
 	SentAt           *time.Time `db:"sent_at" order:"42"`
 	Status           string     `db:"status" label:"Статус" order:"45" list:"true"`
 	StatusColor      string     `db:"status_color" order:"46"`
-	CreatedAt        time.Time `order:"98"`
-	UpdatedAt        time.Time `order:"99"`
+	CreatedAt        time.Time  `order:"98"`
+	UpdatedAt        time.Time  `order:"99"`
 }
 
 type ReceiptItem struct {
