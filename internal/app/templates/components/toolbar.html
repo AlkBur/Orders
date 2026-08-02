@@ -1,3 +1,11 @@
+{{define "toolbar"}}
+<div class="buttons mb-3">
+  {{range .Buttons}}
+    {{template "toolbar_button" .}}
+  {{end}}
+</div>
+{{end}}
+
 {{define "toolbar_actions"}}
 <div class="buttons">
   {{range .Buttons}}
@@ -18,7 +26,7 @@
   <div class="field has-addons">
     <div class="control has-icons-left">
       <input class="input" type="search" placeholder="{{.Placeholder}}"
-             value="{{.Value}}" autocomplete="off" spellcheck="false">
+             value="{{.Query}}" autocomplete="off" spellcheck="false">
       <span class="icon is-left is-small">{{icon "search"}}</span>
     </div>
     <div class="control">

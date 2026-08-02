@@ -627,7 +627,9 @@ Theme           →  themes/<name>/theme.css
 |-------------|-----------------------|---------------------------------|-----------------------|
 | Header      | `components/header.html` | `HeaderData{Section, Username, Menu []MenuItem}` | Semantic (`app-header`) |
 | AppMenu     | `components/app_menu.html` | `MenuItem{ID, Label, Icon, URL, Danger, Separator}` | Semantic (`app-menu`) |
-| Toolbar     | `components/toolbar.html` | `ToolbarData{Buttons}` / `SearchData{Placeholder, Value}` | Bulma level + button |
+| Toolbar     | `components/toolbar.html` | `ToolbarData{Buttons}` | Bulma buttons |
+| Search      | `components/search.html` | `SearchData{URL, Query, Placeholder, Live}` | Bulma field/control/input |
+| ListView    | `components/list.html` (`list_view`) | `ListView{Toolbar *ToolbarData, Search *SearchData, List ListData}` | Композиция |
 | Card        | `components/card.html`   | `card_open` / `card_close` (title) | Bulma card        |
 | List        | `components/list.html`   | `ListData{Columns, Rows, RenderMode, Preset}`; строка `ListRow{URL, Cells, Actions []RowAction}` | Semantic Classes |
 | Form        | `components/form.html`   | `Field{Name, Label, Type, Value, Readonly, Required, Autofocus, Autocomplete, Icon, Placeholder, Options []SelectOption}` | Bulma field/control/input |
@@ -649,6 +651,55 @@ URL задаёт хендлер. Типичный пример — пикер: �
 `SelectOption{Value, Label, Disabled}` описывает только реальные данные.
 Placeholder для пустого значения — свойство `Field.Placeholder`, а не
 искусственная опция.
+
+#### Search
+
+`components/search.html` — блок поиска списка. Модель:
+
+```go
+type SearchData struct {
+    URL         string // базовый путь списка (?q=...)
+    Query       string // текущее значение запроса
+    Placeholder string
+    Live        bool   // живой поиск по мере ввода
+}
+```
+
+Форма выполняет GET на `URL` с параметром `q`. При `Live: true` поле ввода
+получает `hx-trigger="search, keyup changed delay:500ms"` и атрибут
+`data-auto-search`; `static/js/search.js` подавляет запросы короче 3 символов
+(отменяются только запросы самого поля — по мере набора; Enter и кнопка
+«Найти» работают всегда). Без JavaScript форма работает как обычный GET.
+
+`id="list"` на корне списка — целевой элемент `hx-target` поиска, поэтому
+фрагмент поиска подменяет список целиком.
+
+Правила платформы для поиска:
+
+> **Поиск всегда выполняется по тем данным, которые видит пользователь.** Handler определяет отображаемые поля списка. Store сопоставляет каждому отображаемому полю SQL-выражение, возвращающее ту же строку, которая отображается в интерфейсе. Модуль `internal/database/search` строит только условие `WHERE` и ничего не знает о структуре базы данных.
+
+> **Если колонка не отображается в списке, она не участвует в поиске.**
+
+> **Порядок поиска соответствует порядку отображения колонок списка.**
+
+> Поисковый запрос разбивается функцией `strings.Fields()` на слова. Для каждого слова должно существовать хотя бы одно совпадение в любой отображаемой колонке (AND между словами, OR между колонками).
+
+> **Поиск является фильтром текущего списка, а не глобальным поиском системы.**
+
+#### ListView
+
+`components/list.html` (`list_view`) — композиция «тулбар + поиск + список»:
+
+```go
+type ListView struct {
+    Toolbar *ToolbarData // nil — блок не рендерится
+    Search  *SearchData  // nil — блок не рендерится
+    List    ListData
+}
+```
+
+Страница-список собирается из `list_view`, а не раскладывает toolbar/search/list
+сама. Отдельные блоки остаются доступны для составных страниц.
 
 ### Header и AppMenu
 

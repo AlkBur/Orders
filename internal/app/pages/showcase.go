@@ -20,6 +20,7 @@ type CatalogPage struct {
 	Fields      []ui.Field
 	Alerts      []ui.AlertData
 	List        ui.ListData
+	ListView    ui.ListView
 	Dialog      ui.DialogData
 	CodeSamples map[string]string
 }
@@ -31,7 +32,7 @@ func (CatalogPage) FAB() *ui.FAB {
 func HandleCatalog(tmplFS fs.FS) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := CatalogPage{
-			Title:  "Компоненты",
+			Title: "Компоненты",
 			Header: ui.HeaderData{
 				Section:  "Компоненты",
 				Username: "Администратор",
@@ -45,7 +46,7 @@ func HandleCatalog(tmplFS fs.FS) http.HandlerFunc {
 					{Style: ui.ButtonOutline, Text: "Экспорт", URL: "#", Icon: "save"},
 				},
 			},
-			Search: ui.SearchData{Placeholder: "Поиск компонентов...", Value: ""},
+			Search: ui.SearchData{URL: "/ui", Placeholder: "Поиск компонентов...", Query: "", Live: true},
 			Buttons: []ui.Button{
 				{Style: ui.ButtonDefault, Text: "Обычная", URL: "#"},
 				{Style: ui.ButtonPrimary, Text: "Основная", URL: "#", Icon: "plus"},
@@ -97,17 +98,23 @@ func HandleCatalog(tmplFS fs.FS) http.HandlerFunc {
 				Content: template.HTML("<p>Удалить запись?</p>"),
 			},
 			CodeSamples: map[string]string{
-				"toolbar": `{{template "toolbar_list" .}}`,
+				"toolbar": `{{template "list_view" .ListView}}`,
 				"button":  `{{template "toolbar_button" .}}`,
 				"card": `{{template "card_open" "Заголовок"}}
   ...содержимое...
 {{template "card_close"}}`,
-				"list":  `{{template "list" .List}}`,
-				"form":  `{{template "form_group" .Fields}}`,
-				"menu":  `{{template "app_menu" .Header}}`,
-				"alert": `{{template "alert" .Alert}}`,
+				"list":   `{{template "list" .List}}`,
+				"search": `{{template "search" .Search}}`,
+				"form":   `{{template "form_group" .Fields}}`,
+				"menu":   `{{template "app_menu" .Header}}`,
+				"alert":  `{{template "alert" .Alert}}`,
 				"dialog": `{{template "dialog" .Dialog}}`,
 			},
+		}
+		data.ListView = ui.ListView{
+			Toolbar: &data.Toolbar,
+			Search:  &data.Search,
+			List:    data.List,
 		}
 		pageFS, err := fs.Sub(tmplFS, "pages/catalog")
 		if err != nil {

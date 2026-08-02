@@ -75,3 +75,11 @@ type ListData struct {
 	RenderMode RenderMode
 	Preset     ListPreset
 }
+
+// ListView — модель страницы-списка: опциональные тулбар и поиск поверх списка.
+// Указатели позволяют отключить блок: nil → блок не рендерится.
+type ListView struct {
+	Toolbar *ToolbarData
+	Search  *SearchData
+	List    ListData
+}

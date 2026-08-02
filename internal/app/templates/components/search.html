@@ -1,0 +1,16 @@
+{{define "search"}}
+<form class="search-form mb-3" method="get" action="{{.URL}}"
+      hx-get="{{.URL}}" hx-target="#list" hx-swap="outerHTML" hx-push-url="true">
+  <div class="field has-addons">
+    <div class="control has-icons-left">
+      <input class="input" type="search" name="q" value="{{.Query}}"
+             placeholder="{{.Placeholder}}" autocomplete="off" spellcheck="false"
+             {{if .Live}}hx-trigger="search, keyup changed delay:500ms" data-auto-search="true"{{end}}>
+      <span class="icon is-left is-small">{{icon "search"}}</span>
+    </div>
+    <div class="control">
+      <button class="button" type="submit">Найти</button>
+    </div>
+  </div>
+</form>
+{{end}}
