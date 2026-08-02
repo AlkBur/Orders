@@ -392,54 +392,54 @@ html.js .app-menu.is-open .app-menu-panel {
   text-align: right;
 }
 
-/* --- Badges (Organization status) --- */
-.badge {
-  display: inline-block;
-  padding: 0.2rem 0.6rem;
-  border-radius: var(--bulma-radius);
-  font-size: 0.875rem;
-  font-weight: 600;
+/* --- Switch: булево поле на чистом CSS ---
+   Обычный <input type="checkbox">, стилизованный под переключатель.
+   Без JS: клавиатура, screen reader и отправка формы работают как обычно. */
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  user-select: none;
 }
-.badge--success {
-  background-color: var(--bulma-success);
-  color: var(--bulma-success-invert);
+.switch input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
 }
-.badge--danger {
-  background-color: var(--bulma-danger);
-  color: var(--bulma-danger-invert);
-}
-
-/* --- Page heading (Organization) --- */
-.page-heading {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
-}
-.page-title {
-  font-size: 1.75rem;
-  font-weight: 700;
-  color: var(--bulma-text-strong);
-  width: 100%;
-  margin: 0;
-}
-.page-subtitle {
-  font-size: 1.125rem;
-  color: var(--bulma-text-light);
-  flex: 1;
-  margin: 0;
-}
-.page-actions {
+.switch__track {
+  position: relative;
+  width: 2.75rem;
+  height: 1.6rem;
+  border-radius: 999px;
+  background: var(--bulma-border);
+  transition: background-color 0.2s ease;
   flex-shrink: 0;
 }
-
-/* Inline forms (e.g. delete action on a card page) */
-.inline-form {
-  display: inline-block;
+.switch__track::before {
+  content: "";
+  position: absolute;
+  top: 0.2rem;
+  left: 0.2rem;
+  width: 1.2rem;
+  height: 1.2rem;
+  border-radius: 50%;
+  background: var(--bulma-scheme-main);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 30%);
+  transition: transform 0.2s ease;
 }
-.inline-form .button.is-danger {
-  margin-top: 0.75rem;
+.switch input[type="checkbox"]:checked ~ .switch__track {
+  background: var(--bulma-primary);
+}
+.switch input[type="checkbox"]:checked ~ .switch__track::before {
+  transform: translateX(1.15rem);
+}
+.switch input[type="checkbox"]:focus-visible ~ .switch__track {
+  outline: 2px solid var(--bulma-primary-soft);
+  outline-offset: 2px;
+}
+.switch__label {
+  color: var(--bulma-text);
 }
 
 /* --- Button (page-level actions, themed) --- */
@@ -508,7 +508,6 @@ html.js .app-menu.is-open .app-menu-panel {
 .select select:focus-visible {
   box-shadow: 0 0 0 0.2rem var(--bulma-primary-soft);
 }
-.checkbox input:focus-visible,
 .radio input:focus-visible {
   outline: 2px solid var(--bulma-primary-soft);
   outline-offset: 2px;

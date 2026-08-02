@@ -1,26 +1,12 @@
 {{define "page_content"}}
-<div class="page-heading">
-  <h1 class="page-title">{{.Name}}</h1>
-  {{if .Active}}
-    <span class="badge badge--success">Активна</span>
-  {{else if .ID}}
-    <span class="badge badge--danger">Неактивна</span>
-  {{end}}
-</div>
-
+{{template "card_open" "Основная информация"}}
 <form method="post" action="{{.FormAction}}">
   {{range .Fields}}
     {{template "form_field" .}}
   {{end}}
   <div class="buttons mt-2">
     <button type="submit" class="button is-primary">{{icon "save"}} <span>Сохранить</span></button>
-    <a class="button" href="/organizations">{{icon "arrow_left"}} <span>К списку</span></a>
   </div>
 </form>
-
-{{if .ID}}
-<form class="inline-form" method="post" action="/organizations/{{.ID}}/delete">
-  <button type="submit" class="button is-danger">{{icon "trash"}} <span>Удалить</span></button>
-</form>
-{{end}}
+{{template "card_close"}}
 {{end}}

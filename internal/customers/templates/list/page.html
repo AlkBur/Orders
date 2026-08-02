@@ -1,4 +1,5 @@
 {{define "page_content"}}
+{{if .Alert}}{{template "alert" .Alert}}{{end}}
 {{template "toolbar_actions" .Toolbar}}
 {{template "list" .List}}
 {{end}}

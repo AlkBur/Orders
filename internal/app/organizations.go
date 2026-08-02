@@ -9,6 +9,7 @@ import (
 
 	"Orders/internal/common"
 	"Orders/internal/organizations"
+	"Orders/internal/sessions"
 	"Orders/internal/ui"
 
 	"github.com/go-chi/chi/v5"
@@ -20,6 +21,7 @@ type organizationsListData struct {
 	Toolbar ui.ToolbarData
 	Search  ui.SearchData
 	List    ui.ListData
+	Alert   *ui.AlertData
 }
 
 func (organizationsListData) FAB() *ui.FAB {
@@ -29,9 +31,6 @@ func (organizationsListData) FAB() *ui.FAB {
 type organizationCardData struct {
 	Title      string
 	Header     ui.HeaderData
-	ID         int64
-	Name       string
-	Active     bool
 	FormAction string
 	Fields     []ui.Field
 }
@@ -65,6 +64,12 @@ func (a *App) OrganizationsPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	flash, err := a.consumeFlash(r)
+	if err != nil {
+		a.InternalError(w, err)
+		return
+	}
+
 	data := organizationsListData{
 		Title:  "Организации",
 		Header: pageHeader(r, "Организации"),
@@ -84,6 +89,9 @@ func (a *App) OrganizationsPage(w http.ResponseWriter, r *http.Request) {
 			RenderMode: ui.RenderComfortable,
 			Preset:     ui.ListWide,
 		},
+	}
+	if flash != nil {
+		data.Alert = FlashToAlert(*flash)
 	}
 
 	if err := ui.RenderPage(w, TemplateFS(), pageFS, data); err != nil {
@@ -130,22 +138,14 @@ func (a *App) OrganizationCard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	name := org.Name
-	if name == "" {
-		name = "Новая организация"
-	}
-
 	action := "/organizations"
 	if id > 0 {
 		action = "/organizations/" + strconv.FormatInt(id, 10)
 	}
 
 	data := organizationCardData{
-		Title:      name,
+		Title:      "Организация",
 		Header:     pageHeader(r, "Организации"),
-		ID:         id,
-		Name:       name,
-		Active:     org.Active,
 		FormAction: action,
 		Fields: []ui.Field{
 			{Name: "uuid", Label: "UUID", Type: ui.FieldText, Value: org.UUID, Readonly: true},
@@ -218,7 +218,12 @@ func (a *App) OrganizationSave(w http.ResponseWriter, r *http.Request) {
 	}
 	a.orgKeysMu.Unlock()
 
-	http.Redirect(w, r, "/organizations/"+strconv.FormatInt(org.ID, 10), http.StatusSeeOther)
+	if err := a.SetFlash(r, sessions.FlashSuccess, "Организация сохранена."); err != nil {
+		a.InternalError(w, err)
+		return
+	}
+
+	http.Redirect(w, r, "/organizations", http.StatusSeeOther)
 }
 
 func pageHeader(r *http.Request, section string) ui.HeaderData {

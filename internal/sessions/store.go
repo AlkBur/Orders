@@ -11,11 +11,6 @@ import (
 
 var idleTimeout = 8 * time.Hour
 
-type Flash struct {
-	Type    string
-	Message string
-}
-
 type Session struct {
 	ID        string
 	UserID    *int64
@@ -27,7 +22,7 @@ type Session struct {
 	ExpiresAt time.Time
 }
 
-func (s *Session) SetFlash(ftype, fmsg string) {
+func (s *Session) SetFlash(ftype FlashType, fmsg string) {
 	s.Flash = &Flash{Type: ftype, Message: fmsg}
 }
 
@@ -95,7 +90,7 @@ func (s *Store) Save(session *Session) error {
 	flashType := ""
 	flashMessage := ""
 	if session.Flash != nil {
-		flashType = session.Flash.Type
+		flashType = string(session.Flash.Type)
 		flashMessage = session.Flash.Message
 	}
 
@@ -164,7 +159,7 @@ WHERE id = ?
 	}
 
 	if flashType != "" || flashMessage != "" {
-		session.Flash = &Flash{Type: flashType, Message: flashMessage}
+		session.Flash = &Flash{Type: FlashType(flashType), Message: flashMessage}
 	}
 
 	if valuesJSON != "" && valuesJSON != "{}" {

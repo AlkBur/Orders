@@ -1,6 +1,6 @@
 {{define "form_field"}}
 <div class="field">
-  <label class="label" for="{{.Name}}">{{.Label}}</label>
+  {{if ne .Type.String "checkbox"}}<label class="label" for="{{.Name}}">{{.Label}}</label>{{end}}
   <div class="control{{if .Icon}} has-icons-left{{end}}">
     {{if eq .Type.String "text"}}
       <input class="input" type="text" id="{{.Name}}" name="{{.Name}}" value="{{.Value}}"{{if .Readonly}} readonly{{end}}{{if .Required}} required{{end}}{{if .Autocomplete}} autocomplete="{{.Autocomplete}}"{{end}}{{if .Autofocus}} autofocus{{end}}>
@@ -23,9 +23,10 @@
       <input class="input" type="password" id="{{.Name}}" name="{{.Name}}"{{if .Required}} required{{end}}{{if .Autocomplete}} autocomplete="{{.Autocomplete}}"{{end}}{{if .Autofocus}} autofocus{{end}}>
       {{if .Icon}}<span class="icon is-left">{{icon .Icon}}</span>{{end}}
     {{else if eq .Type.String "checkbox"}}
-      <label class="checkbox">
+      <label class="switch">
         <input type="checkbox" id="{{.Name}}" name="{{.Name}}"{{if eq .Value "true"}} checked{{end}}>
-        {{.Label}}
+        <span class="switch__label">{{.Label}}</span>
+        <span class="switch__track" aria-hidden="true"></span>
       </label>
     {{end}}
   </div>

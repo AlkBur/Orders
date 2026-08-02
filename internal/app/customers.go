@@ -14,6 +14,7 @@ import (
 	"Orders/internal/customers"
 	"Orders/internal/entity"
 	"Orders/internal/organizations"
+	"Orders/internal/sessions"
 	"Orders/internal/ui"
 	"Orders/internal/ui/display"
 
@@ -32,6 +33,7 @@ type customersListData struct {
 	Toolbar ui.ToolbarData
 	List    ui.ListData
 	NewURL  string
+	Alert   *ui.AlertData
 }
 
 func (d customersListData) FAB() *ui.FAB {
@@ -45,7 +47,6 @@ type customerCardData struct {
 	Title      string
 	Header     ui.HeaderData
 	FormAction string
-	BackURL    string
 	Fields     []ui.Field
 }
 
@@ -140,6 +141,15 @@ func (a *App) CustomersPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	flash, err := a.consumeFlash(r)
+	if err != nil {
+		a.InternalError(w, err)
+		return
+	}
+	if flash != nil {
+		data.Alert = FlashToAlert(*flash)
+	}
+
 	if err := ui.RenderPage(w, TemplateFS(), pageFS, data); err != nil {
 		a.InternalError(w, err)
 	}
@@ -189,10 +199,7 @@ func (a *App) CustomerCard(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	title := customer.Name
-	if title == "" {
-		title = "Новый контрагент"
-	}
+	title := "Контрагент"
 
 	fields := []ui.Field{
 		{Name: "uuid", Label: "UUID", Type: ui.FieldText, Value: customer.UUID, Readonly: true},
@@ -230,10 +237,8 @@ func (a *App) CustomerCard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	action := "/customers"
-	back := "/customers"
 	if oid > 0 {
-		back = "/organizations/" + strconv.FormatInt(oid, 10) + "/customers"
-		action = back
+		action = "/organizations/" + strconv.FormatInt(oid, 10) + "/customers"
 		if id > 0 {
 			action += "/" + strconv.FormatInt(id, 10)
 		}
@@ -243,7 +248,6 @@ func (a *App) CustomerCard(w http.ResponseWriter, r *http.Request) {
 		Title:      title,
 		Header:     pageHeader(r, "Контрагенты"),
 		FormAction: action,
-		BackURL:    back,
 		Fields:     fields,
 	}
 
@@ -297,10 +301,16 @@ func (a *App) CustomerSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r,
-		"/organizations/"+strconv.FormatInt(customer.OrganizationID, 10)+"/customers/"+strconv.FormatInt(customer.ID, 10),
-		http.StatusSeeOther,
-	)
+	if err := a.SetFlash(r, sessions.FlashSuccess, "Контрагент сохранён."); err != nil {
+		a.InternalError(w, err)
+		return
+	}
+
+	target := "/customers"
+	if oid > 0 {
+		target = "/organizations/" + strconv.FormatInt(oid, 10) + "/customers"
+	}
+	http.Redirect(w, r, target, http.StatusSeeOther)
 }
 
 func (a *App) CustomerDelete(w http.ResponseWriter, r *http.Request) {
