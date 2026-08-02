@@ -215,7 +215,7 @@ func TestCustomerSave_Create(t *testing.T) {
 		t.Fatalf("expected redirect to %s, got %q", want, got)
 	}
 
-	list, _ := app.customers.List(context.Background(), orgID)
+	list, _ := app.customers.List(context.Background(), orgID, customers.ListOptions{}, nil)
 	if len(list) != 1 {
 		t.Fatalf("expected 1 customer, got %d", len(list))
 	}
@@ -343,4 +343,3 @@ func TestCustomersPage_ShowsFlash(t *testing.T) {
 		t.Fatalf("expected flash to be cleared in the store")
 	}
 }
-

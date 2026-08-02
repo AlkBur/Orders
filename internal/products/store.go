@@ -5,6 +5,9 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+
+	"Orders/internal/database/search"
+	"Orders/internal/entity"
 )
 
 type SyncResult struct {
@@ -12,8 +15,27 @@ type SyncResult struct {
 	Updated  int `json:"updated"`
 }
 
+// ListOptions управляет выборкой списка товаров.
+type ListOptions struct {
+	Query   string
+	Limit   int
+	Offset  int
+	OrderBy string
+}
+
 type Store struct {
 	db *sql.DB
+}
+
+// productSearchColumns — поисковые колонки списка товаров.
+var productSearchColumns = []search.SearchColumn{
+	{Field: entity.FieldName("OrganizationName"), SearchExpr: "o.name"},
+	{Field: entity.FieldName("Name"), SearchExpr: "p.name"},
+	{Field: entity.FieldName("Unit"), SearchExpr: "p.unit"},
+}
+
+func (s *Store) searchableColumns() []search.SearchColumn {
+	return productSearchColumns
 }
 
 func NewStore(db *sql.DB) *Store {
@@ -72,7 +94,9 @@ func (s *Store) Count(ctx context.Context) (int64, error) {
 	return n, err
 }
 
-func (s *Store) List(ctx context.Context, organizationID int64) ([]*Product, error) {
+// List возвращает товары. visibleFields — поля, отображаемые в списке:
+// поиск выполняется только по ним.
+func (s *Store) List(ctx context.Context, organizationID int64, opts ListOptions, visibleFields []entity.FieldName) ([]*Product, error) {
 	var rows *sql.Rows
 	var err error
 
@@ -82,10 +106,24 @@ func (s *Store) List(ctx context.Context, organizationID int64) ([]*Product, err
 		FROM products p
 		JOIN organizations o ON o.id = p.organization_id
 	`
-	args := []interface{}{}
+	var conds []string
+	var args []interface{}
 	if organizationID > 0 {
-		query += ` WHERE p.organization_id = ?`
+		conds = append(conds, `p.organization_id = ?`)
 		args = append(args, organizationID)
+	}
+
+	where, whereArgs := search.BuildWhere(
+		search.FilterColumns(s.searchableColumns(), visibleFields),
+		search.NormalizeQuery(opts.Query),
+	)
+	if where != "" {
+		conds = append(conds, where)
+		args = append(args, whereArgs...)
+	}
+
+	if len(conds) > 0 {
+		query += ` WHERE ` + strings.Join(conds, ` AND `)
 	}
 	query += ` ORDER BY p.name`
 

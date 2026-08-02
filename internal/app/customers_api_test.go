@@ -210,7 +210,7 @@ func TestCustomersAPI_SyncToDifferentOrgs(t *testing.T) {
 	sync(orgUUID1, `[{"id":"shared","name":"In Org1"}]`)
 	sync(orgUUID2, `[{"id":"shared","name":"In Org2"}]`)
 
-	list, err := app.customers.List(context.Background(), 0)
+	list, err := app.customers.List(context.Background(), 0, customers.ListOptions{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

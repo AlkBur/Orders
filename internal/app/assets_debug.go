@@ -22,14 +22,6 @@ func LoadTemplates(page string) (*template.Template, error) {
 	tmplDir := assetDir("templates")
 	icons := filepath.Join(tmplDir, "icons.html")
 
-	if page == "products" || page == "users" || page == "receipts" {
-		return template.ParseFiles(
-			filepath.Join(tmplDir, "layout.html"),
-			filepath.Join(tmplDir, "list.html"),
-			icons,
-		)
-	}
-
 	content := page + ".html"
 
 	return template.ParseFiles(

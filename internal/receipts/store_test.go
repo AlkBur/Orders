@@ -182,7 +182,7 @@ func TestStore_List(t *testing.T) {
 		}
 	}
 
-	list, err := store.List(ctx)
+	list, err := store.List(ctx, ListOptions{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -4,15 +4,18 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"io/fs"
 	"mime"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"Orders/internal/app/pages"
 	"Orders/internal/common"
 	"Orders/internal/entity"
 	"Orders/internal/organizations"
 	"Orders/internal/products"
+	"Orders/internal/ui"
 	"Orders/internal/ui/display"
 
 	"github.com/go-chi/chi/v5"
@@ -41,12 +44,7 @@ func (a *App) ProductsPage(w http.ResponseWriter, r *http.Request) {
 	NoCache(w)
 
 	oid := orgIDFromURL(r)
-
-	list, err := a.products.List(r.Context(), oid)
-	if err != nil {
-		a.InternalError(w, err)
-		return
-	}
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
 
 	showOrg := oid == 0
 
@@ -61,15 +59,24 @@ func (a *App) ProductsPage(w http.ResponseWriter, r *http.Request) {
 		fields = filtered
 	}
 
-	var pageColumns []pages.Column
-	for _, f := range fields {
-		pageColumns = append(pageColumns, pages.Column{
-			Name:  f.GoName,
-			Label: f.Label,
-		})
+	visibleFields := entity.Names(fields)
+
+	list, err := a.products.List(r.Context(), oid, products.ListOptions{Query: query}, visibleFields)
+	if err != nil {
+		a.InternalError(w, err)
+		return
 	}
 
-	var rows []pages.Row
+	var columns []ui.ListColumn
+	for _, f := range fields {
+		columns = append(columns, ui.ListColumn{Label: f.Label})
+	}
+
+	mode := r.URL.Query().Get("mode")
+	pickerField := r.URL.Query().Get("field")
+	pickerMode := mode == "picker" && pickerField != ""
+
+	var rows []ui.ListRow
 	for _, p := range list {
 		var item display.Values = p
 
@@ -82,42 +89,59 @@ func (a *App) ProductsPage(w http.ResponseWriter, r *http.Request) {
 			}
 			cells = append(cells, value)
 		}
-		rows = append(rows, pages.Row{
-			Cells: cells,
-			ID:    strconv.FormatInt(p.ID, 10),
-			URL:   p.URL(),
-		})
-	}
 
-	mode := r.URL.Query().Get("mode")
-	pickerField := r.URL.Query().Get("field")
-
-	page := pages.ListPage{
-		Title:   "Товары",
-		Columns: pageColumns,
-		Rows:    rows,
-
-		EmptyText: "Нет товаров",
-	}
-
-	if mode == "picker" && pickerField != "" {
-		page.PickerMode = true
-		page.PickerField = pickerField
-		page.ReturnURL = r.URL.Query().Get("return_to")
-		page.RowAction = pages.RowAction{Label: "Выбрать"}
-	} else {
-		newURL := "/organizations/" + chi.URLParam(r, "oid") + "/products/new"
-		if oid == 0 {
-			newURL = "/products/new"
+		row := ui.ListRow{Cells: cells}
+		if pickerMode {
+			row.Actions = []ui.RowAction{{
+				ID:    "select",
+				Icon:  "check",
+				Label: "Выбрать",
+				URL:   pickerSelectURL(r, p.ID),
+			}}
+		} else {
+			row.URL = p.URL()
 		}
+		rows = append(rows, row)
+	}
+
+	pageFS, err := fs.Sub(products.Templates(), "list")
+	if err != nil {
+		a.InternalError(w, err)
+		return
+	}
+
+	oidPath := chi.URLParam(r, "oid")
+	listPath := "/products"
+	newURL := "/products/new"
+	if oidPath != "" {
+		listPath = "/organizations/" + oidPath + "/products"
+		newURL = listPath + "/new"
+	}
+
+	page := pages.ListViewPage{
+		Title:  "Товары",
+		Header: pageHeader(r, "Товары"),
+		List: ui.ListView{
+			List: ui.ListData{
+				Columns:    columns,
+				Rows:       rows,
+				RenderMode: ui.RenderComfortable,
+				Preset:     ui.ListDefault,
+			},
+		},
+	}
+
+	if !pickerMode {
 		page.NewURL = newURL
-		page.RowAction = pages.RowAction{
-			Label:   "Открыть",
-			BaseURL: "/organizations/" + chi.URLParam(r, "oid") + "/products",
+		page.List.Toolbar = &ui.ToolbarData{
+			Buttons: []ui.Button{
+				{Style: ui.ButtonPrimary, Text: "Добавить", URL: newURL, Icon: "plus"},
+			},
 		}
+		page.List.Search = &ui.SearchData{URL: listPath, Placeholder: "Поиск товаров...", Query: query}
 	}
 
-	a.Render(w, "products", page)
+	a.renderListView(w, r, TemplateFS(), pageFS, page)
 }
 
 func productIDFromURL(r *http.Request) int64 {
@@ -164,7 +188,7 @@ func (a *App) ProductCard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if product.ID == 0 && oid == 0 {
-		orgs, err := a.organizations.List(r.Context(), organizations.ListOptions{})
+		orgs, err := a.organizations.List(r.Context(), organizations.ListOptions{}, nil)
 		if err != nil {
 			a.InternalError(w, err)
 			return

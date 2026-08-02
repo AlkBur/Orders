@@ -48,7 +48,7 @@ func NewIdentityService() *IdentityService {
 }
 
 func (s *IdentityService) Load(ctx context.Context, store *Store) error {
-	list, err := store.List(ctx)
+	list, err := store.List(ctx, ListOptions{}, nil)
 	if err != nil {
 		return err
 	}
