@@ -262,7 +262,7 @@ func TestList_ByOrganization(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	list, err := store.List(context.Background(), orgID1)
+	list, err := store.List(context.Background(), orgID1, ListOptions{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -296,7 +296,7 @@ func TestList_AllOrganizations(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	list, err := store.List(context.Background(), 0)
+	list, err := store.List(context.Background(), 0, ListOptions{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -315,7 +315,7 @@ func TestList_Empty(t *testing.T) {
 	store := NewStore(db)
 	orgID := insertOrg(t, db, "Org1", "key1")
 
-	list, err := store.List(context.Background(), orgID)
+	list, err := store.List(context.Background(), orgID, ListOptions{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -420,7 +420,7 @@ func TestList_OrderedByName(t *testing.T) {
 		}
 	}
 
-	list, err := store.List(context.Background(), orgID)
+	list, err := store.List(context.Background(), orgID, ListOptions{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -461,7 +461,7 @@ func TestSynchronize_WithOrganizationIDParam(t *testing.T) {
 	}
 
 	// Verify both exist independently
-	list, err := store.List(context.Background(), 0)
+	list, err := store.List(context.Background(), 0, ListOptions{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

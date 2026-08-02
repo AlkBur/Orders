@@ -205,7 +205,7 @@ func TestProductsAPI_SyncToDifferentOrgs(t *testing.T) {
 	sync(orgUUID1, `[{"id":"shared","name":"In Org1","unit":"шт"}]`)
 	sync(orgUUID2, `[{"id":"shared","name":"In Org2","unit":"шт"}]`)
 
-	list, err := app.products.List(context.Background(), 0)
+	list, err := app.products.List(context.Background(), 0, products.ListOptions{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

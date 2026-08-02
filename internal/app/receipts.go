@@ -2,12 +2,16 @@ package app
 
 import (
 	"errors"
+	"io/fs"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"Orders/internal/app/pages"
 	"Orders/internal/common"
+	"Orders/internal/customers"
+	"Orders/internal/entity"
 	"Orders/internal/organizations"
 	"Orders/internal/receipts"
 	"Orders/internal/ui"
@@ -38,23 +42,23 @@ func receiptIDFromURL(r *http.Request) int64 {
 func (a *App) ReceiptsPage(w http.ResponseWriter, r *http.Request) {
 	NoCache(w)
 
-	list, err := a.receipts.List(r.Context())
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+
+	fields := receipts.Descriptor.ListFields()
+	visibleFields := entity.Names(fields)
+
+	list, err := a.receipts.List(r.Context(), receipts.ListOptions{Query: query}, visibleFields)
 	if err != nil {
 		a.InternalError(w, err)
 		return
 	}
 
-	fields := receipts.Descriptor.ListFields()
-
-	var pageColumns []pages.Column
+	var columns []ui.ListColumn
 	for _, f := range fields {
-		pageColumns = append(pageColumns, pages.Column{
-			Name:  f.GoName,
-			Label: f.Label,
-		})
+		columns = append(columns, ui.ListColumn{Label: f.Label})
 	}
 
-	var rows []pages.Row
+	var rows []ui.ListRow
 	for _, rec := range list {
 		var item display.Values = *rec
 
@@ -67,26 +71,39 @@ func (a *App) ReceiptsPage(w http.ResponseWriter, r *http.Request) {
 			}
 			cells = append(cells, value)
 		}
-		rows = append(rows, pages.Row{
+		rows = append(rows, ui.ListRow{
 			Cells: cells,
-			ID:    strconv.FormatInt(rec.ID, 10),
 			URL:   rec.URL(),
 		})
 	}
 
-	page := pages.ListPage{
-		Title:     "Товарные чеки",
-		Columns:   pageColumns,
-		Rows:      rows,
-		NewURL:    "/receipts/new",
-		RowAction: pages.RowAction{
-			Label:   "Открыть",
-			BaseURL: "/receipts",
-		},
-		EmptyText: "Нет товарных чеков",
+	pageFS, err := fs.Sub(receipts.Templates(), "list")
+	if err != nil {
+		a.InternalError(w, err)
+		return
 	}
 
-	a.Render(w, "receipts", page)
+	page := pages.ListViewPage{
+		Title:  "Товарные чеки",
+		Header: pageHeader(r, "Товарные чеки"),
+		List: ui.ListView{
+			Toolbar: &ui.ToolbarData{
+				Buttons: []ui.Button{
+					{Style: ui.ButtonPrimary, Text: "Добавить", URL: "/receipts/new", Icon: "plus"},
+				},
+			},
+			Search: &ui.SearchData{URL: "/receipts", Placeholder: "Поиск чеков...", Query: query},
+			List: ui.ListData{
+				Columns:    columns,
+				Rows:       rows,
+				RenderMode: ui.RenderComfortable,
+				Preset:     ui.ListWide,
+			},
+		},
+		NewURL: "/receipts/new",
+	}
+
+	a.renderListView(w, r, TemplateFS(), pageFS, page)
 }
 
 func (a *App) ReceiptCard(w http.ResponseWriter, r *http.Request) {
@@ -161,14 +178,14 @@ func (a *App) ReceiptCard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if doc.Receipt.ID == 0 && a.organizations != nil {
-		orgs, err := a.organizations.List(r.Context(), organizations.ListOptions{})
+		orgs, err := a.organizations.List(r.Context(), organizations.ListOptions{}, nil)
 		if err != nil {
 			a.InternalError(w, err)
 			return
 		}
 		page.Orgs = orgs
 	} else if a.customers != nil {
-		customers, err := a.customers.List(r.Context(), doc.Receipt.OrganizationID)
+		customers, err := a.customers.List(r.Context(), doc.Receipt.OrganizationID, customers.ListOptions{}, nil)
 		if err != nil {
 			a.InternalError(w, err)
 			return
@@ -319,7 +336,7 @@ func renderReceiptFormWithErrors(w http.ResponseWriter, r *http.Request, a *App,
 		ItemsJSON:      itemsJSON,
 	}
 	if a.organizations != nil {
-		orgs, err := a.organizations.List(r.Context(), organizations.ListOptions{})
+		orgs, err := a.organizations.List(r.Context(), organizations.ListOptions{}, nil)
 		if err == nil {
 			page.Orgs = orgs
 		}

@@ -20,15 +20,6 @@ var showcaseTemplatesFS embed.FS
 var staticFS embed.FS
 
 func LoadTemplates(page string) (*template.Template, error) {
-	if page == "products" || page == "users" || page == "receipts" {
-		return template.ParseFS(
-			templatesFS,
-			"templates/layout.html",
-			"templates/list.html",
-			"templates/icons.html",
-		)
-	}
-
 	content := "templates/" + page + ".html"
 
 	return template.ParseFS(

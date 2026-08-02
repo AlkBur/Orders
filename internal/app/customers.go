@@ -9,7 +9,9 @@ import (
 	"mime"
 	"net/http"
 	"strconv"
+	"strings"
 
+	"Orders/internal/app/pages"
 	"Orders/internal/common"
 	"Orders/internal/customers"
 	"Orders/internal/entity"
@@ -27,22 +29,6 @@ type customerSyncItem struct {
 	Active *bool  `json:"active,omitempty"`
 }
 
-type customersListData struct {
-	Title   string
-	Header  ui.HeaderData
-	Toolbar ui.ToolbarData
-	List    ui.ListData
-	NewURL  string
-	Alert   *ui.AlertData
-}
-
-func (d customersListData) FAB() *ui.FAB {
-	if d.NewURL == "" {
-		return nil
-	}
-	return &ui.FAB{Icon: "plus", URL: d.NewURL, Text: "Добавить"}
-}
-
 type customerCardData struct {
 	Title      string
 	Header     ui.HeaderData
@@ -54,12 +40,7 @@ func (a *App) CustomersPage(w http.ResponseWriter, r *http.Request) {
 	NoCache(w)
 
 	oid := orgIDFromURL(r)
-
-	list, err := a.customers.List(r.Context(), oid)
-	if err != nil {
-		a.InternalError(w, err)
-		return
-	}
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
 
 	showOrg := oid == 0
 
@@ -72,6 +53,14 @@ func (a *App) CustomersPage(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		fields = filtered
+	}
+
+	visibleFields := entity.Names(fields)
+
+	list, err := a.customers.List(r.Context(), oid, customers.ListOptions{Query: query}, visibleFields)
+	if err != nil {
+		a.InternalError(w, err)
+		return
 	}
 
 	var columns []ui.ListColumn
@@ -117,42 +106,47 @@ func (a *App) CustomersPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data := customersListData{
-		Title:  "Контрагенты",
-		Header: pageHeader(r, "Контрагенты"),
-		List: ui.ListData{
-			Columns:    columns,
-			Rows:       rows,
-			RenderMode: ui.RenderComfortable,
-			Preset:     ui.ListDefault,
-		},
-	}
-
-	if !pickerMode {
-		newURL := "/customers/new"
-		if oid > 0 {
-			newURL = "/organizations/" + strconv.FormatInt(oid, 10) + "/customers/new"
-		}
-		data.NewURL = newURL
-		data.Toolbar = ui.ToolbarData{
-			Buttons: []ui.Button{
-				{Style: ui.ButtonPrimary, Text: "Добавить", URL: newURL, Icon: "plus"},
-			},
-		}
-	}
-
 	flash, err := a.consumeFlash(r)
 	if err != nil {
 		a.InternalError(w, err)
 		return
 	}
-	if flash != nil {
-		data.Alert = FlashToAlert(*flash)
+
+	listPath := "/customers"
+	newURL := "/customers/new"
+	if oid > 0 {
+		listPath = "/organizations/" + strconv.FormatInt(oid, 10) + "/customers"
+		newURL = listPath + "/new"
 	}
 
-	if err := ui.RenderPage(w, TemplateFS(), pageFS, data); err != nil {
-		a.InternalError(w, err)
+	page := pages.ListViewPage{
+		Title:  "Контрагенты",
+		Header: pageHeader(r, "Контрагенты"),
+		List: ui.ListView{
+			List: ui.ListData{
+				Columns:    columns,
+				Rows:       rows,
+				RenderMode: ui.RenderComfortable,
+				Preset:     ui.ListDefault,
+			},
+		},
 	}
+
+	if !pickerMode {
+		page.NewURL = newURL
+		page.List.Toolbar = &ui.ToolbarData{
+			Buttons: []ui.Button{
+				{Style: ui.ButtonPrimary, Text: "Добавить", URL: newURL, Icon: "plus"},
+			},
+		}
+		page.List.Search = &ui.SearchData{URL: listPath, Placeholder: "Поиск контрагентов...", Query: query}
+	}
+
+	if flash != nil {
+		page.Alert = FlashToAlert(*flash)
+	}
+
+	a.renderListView(w, r, TemplateFS(), pageFS, page)
 }
 
 // pickerSelectURL builds the picker callback link consumed by the
@@ -206,7 +200,7 @@ func (a *App) CustomerCard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if customer.ID == 0 && oid == 0 {
-		orgs, err := a.organizations.List(r.Context(), organizations.ListOptions{})
+		orgs, err := a.organizations.List(r.Context(), organizations.ListOptions{}, nil)
 		if err != nil {
 			a.InternalError(w, err)
 			return

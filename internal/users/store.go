@@ -3,6 +3,9 @@ package users
 import (
 	"context"
 	"database/sql"
+
+	"Orders/internal/database/search"
+	"Orders/internal/entity"
 )
 
 type Store struct {
@@ -35,12 +38,44 @@ func (s *Store) Count(ctx context.Context) (int64, error) {
 	return n, err
 }
 
-func (s *Store) List(ctx context.Context) ([]*User, error) {
-	rows, err := s.db.QueryContext(ctx, `
+// ListOptions управляет выборкой списка пользователей.
+type ListOptions struct {
+	Query   string
+	Limit   int
+	Offset  int
+	OrderBy string
+}
+
+// userSearchColumns — поисковые колонки списка пользователей.
+var userSearchColumns = []search.SearchColumn{
+	{Field: entity.FieldName("Login"), SearchExpr: "login"},
+	{Field: entity.FieldName("Email"), SearchExpr: "email"},
+}
+
+func (s *Store) searchableColumns() []search.SearchColumn {
+	return userSearchColumns
+}
+
+// List возвращает пользователей. visibleFields — поля, отображаемые в списке:
+// поиск выполняется только по ним.
+func (s *Store) List(ctx context.Context, opts ListOptions, visibleFields []entity.FieldName) ([]*User, error) {
+	query := `
 		SELECT id, uuid, login, email, password_hash, is_admin, created_at, updated_at
 		FROM users
-		ORDER BY login
-	`)
+	`
+	var args []any
+
+	where, whereArgs := search.BuildWhere(
+		search.FilterColumns(s.searchableColumns(), visibleFields),
+		search.NormalizeQuery(opts.Query),
+	)
+	if where != "" {
+		query += ` WHERE ` + where
+		args = append(args, whereArgs...)
+	}
+	query += ` ORDER BY login`
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

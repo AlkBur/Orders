@@ -5,6 +5,9 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+
+	"Orders/internal/database/search"
+	"Orders/internal/entity"
 )
 
 type SyncResult struct {
@@ -12,8 +15,26 @@ type SyncResult struct {
 	Updated  int `json:"updated"`
 }
 
+// ListOptions управляет выборкой списка контрагентов.
+type ListOptions struct {
+	Query   string
+	Limit   int
+	Offset  int
+	OrderBy string
+}
+
 type Store struct {
 	db *sql.DB
+}
+
+// customerSearchColumns — поисковые колонки списка контрагентов.
+var customerSearchColumns = []search.SearchColumn{
+	{Field: entity.FieldName("Name"), SearchExpr: "c.name"},
+	{Field: entity.FieldName("OrganizationName"), SearchExpr: "o.name"},
+}
+
+func (s *Store) searchableColumns() []search.SearchColumn {
+	return customerSearchColumns
 }
 
 func NewStore(db *sql.DB) *Store {
@@ -68,7 +89,9 @@ func (s *Store) Count(ctx context.Context) (int64, error) {
 	return n, err
 }
 
-func (s *Store) List(ctx context.Context, organizationID int64) ([]*Customer, error) {
+// List возвращает контрагентов. visibleFields — поля, отображаемые в списке:
+// поиск выполняется только по ним.
+func (s *Store) List(ctx context.Context, organizationID int64, opts ListOptions, visibleFields []entity.FieldName) ([]*Customer, error) {
 	var rows *sql.Rows
 	var err error
 
@@ -77,10 +100,24 @@ func (s *Store) List(ctx context.Context, organizationID int64) ([]*Customer, er
 		FROM customers c
 		JOIN organizations o ON o.id = c.organization_id
 	`
-	args := []interface{}{}
+	var conds []string
+	var args []interface{}
 	if organizationID > 0 {
-		query += ` WHERE c.organization_id = ?`
+		conds = append(conds, `c.organization_id = ?`)
 		args = append(args, organizationID)
+	}
+
+	where, whereArgs := search.BuildWhere(
+		search.FilterColumns(s.searchableColumns(), visibleFields),
+		search.NormalizeQuery(opts.Query),
+	)
+	if where != "" {
+		conds = append(conds, where)
+		args = append(args, whereArgs...)
+	}
+
+	if len(conds) > 0 {
+		query += ` WHERE ` + strings.Join(conds, ` AND `)
 	}
 	query += ` ORDER BY c.name`
 

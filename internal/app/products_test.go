@@ -37,7 +37,6 @@ func TestProductsPage_Global(t *testing.T) {
 		products:      products.NewStore(db),
 		organizations: orgs,
 	}
-	loadPageTemplates(t, app, "products")
 
 	p := app.products.New()
 	p.OrganizationID = orgID
@@ -74,7 +73,6 @@ func TestProductsPage_Org(t *testing.T) {
 		products:      products.NewStore(db),
 		organizations: orgs,
 	}
-	loadPageTemplates(t, app, "products")
 
 	p := app.products.New()
 	p.OrganizationID = orgID
@@ -236,7 +234,7 @@ func TestProductSave_Create(t *testing.T) {
 		t.Fatalf("expected 303, got %d: %s", w.Code, w.Body.String())
 	}
 
-	list, _ := app.products.List(context.Background(), orgID)
+	list, _ := app.products.List(context.Background(), orgID, products.ListOptions{}, nil)
 	if len(list) != 1 {
 		t.Fatalf("expected 1 product, got %d", len(list))
 	}

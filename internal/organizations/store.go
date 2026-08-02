@@ -5,7 +5,9 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"fmt"
-	"strings"
+
+	"Orders/internal/database/search"
+	"Orders/internal/entity"
 )
 
 // ListOptions управляет выборкой списка организаций.
@@ -19,6 +21,16 @@ type ListOptions struct {
 
 type Store struct {
 	db *sql.DB
+}
+
+// organizationSearchColumns — поисковые колонки списка организаций.
+// SearchExpr возвращает ту же строку, что показывается в списке.
+var organizationSearchColumns = []search.SearchColumn{
+	{Field: entity.FieldName("Name"), SearchExpr: "name"},
+}
+
+func (s *Store) searchableColumns() []search.SearchColumn {
+	return organizationSearchColumns
 }
 
 func NewStore(db *sql.DB) *Store {
@@ -81,16 +93,22 @@ func (s *Store) GetByUUID(ctx context.Context, uuid string) (*Organization, erro
 	return o, nil
 }
 
-func (s *Store) List(ctx context.Context, opts ListOptions) ([]*Organization, error) {
+// List возвращает организации. visibleFields — поля, отображаемые в списке
+// (entity.FieldName по GoName): поиск выполняется только по ним.
+func (s *Store) List(ctx context.Context, opts ListOptions, visibleFields []entity.FieldName) ([]*Organization, error) {
 	q := `
 		SELECT id, uuid, name, active, created_at, updated_at
 		FROM organizations
 	`
 	var args []any
 
-	if opts.Query != "" {
-		q += ` WHERE name LIKE ? ESCAPE '\'`
-		args = append(args, "%"+escapeLike(opts.Query)+"%")
+	where, whereArgs := search.BuildWhere(
+		search.FilterColumns(s.searchableColumns(), visibleFields),
+		search.NormalizeQuery(opts.Query),
+	)
+	if where != "" {
+		q += ` WHERE ` + where
+		args = append(args, whereArgs...)
 	}
 
 	switch opts.OrderBy {
@@ -148,14 +166,6 @@ func (s *Store) Count(ctx context.Context) (int64, error) {
 		return 0, err
 	}
 	return n, nil
-}
-
-// escapeLike экранирует спецсимволы подстановки LIKE.
-func escapeLike(s string) string {
-	s = strings.ReplaceAll(s, `\`, `\\`)
-	s = strings.ReplaceAll(s, `%`, `\%`)
-	s = strings.ReplaceAll(s, `_`, `\_`)
-	return s
 }
 
 // Save inserts or updates an organization.

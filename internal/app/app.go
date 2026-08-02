@@ -92,11 +92,8 @@ func New(configPath string) (*App, error) {
 	}
 
 	for _, page := range []string{
-		"receipts",
 		"receipt_card",
-		"products",
 		"product_card",
-		"users",
 		"user_card",
 	} {
 		tmpl, err := LoadTemplates(page)

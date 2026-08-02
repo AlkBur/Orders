@@ -7,26 +7,15 @@ import (
 	"strconv"
 	"strings"
 
+	"Orders/internal/app/pages"
 	"Orders/internal/common"
+	"Orders/internal/entity"
 	"Orders/internal/organizations"
 	"Orders/internal/sessions"
 	"Orders/internal/ui"
 
 	"github.com/go-chi/chi/v5"
 )
-
-type organizationsListData struct {
-	Title   string
-	Header  ui.HeaderData
-	Toolbar ui.ToolbarData
-	Search  ui.SearchData
-	List    ui.ListData
-	Alert   *ui.AlertData
-}
-
-func (organizationsListData) FAB() *ui.FAB {
-	return &ui.FAB{Icon: "plus", URL: "/organizations/new", Text: "Добавить"}
-}
 
 type organizationCardData struct {
 	Title      string
@@ -40,7 +29,14 @@ func (a *App) OrganizationsPage(w http.ResponseWriter, r *http.Request) {
 
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
 
-	orgs, err := a.organizations.List(r.Context(), organizations.ListOptions{Query: query})
+	// Видимые колонки списка: поиск выполняется только по ним.
+	visibleFields := []entity.FieldName{
+		entity.FieldName("Name"),
+		entity.FieldName("Active"),
+		entity.FieldName("CreatedAt"),
+	}
+
+	orgs, err := a.organizations.List(r.Context(), organizations.ListOptions{Query: query}, visibleFields)
 	if err != nil {
 		a.InternalError(w, err)
 		return
@@ -70,33 +66,34 @@ func (a *App) OrganizationsPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data := organizationsListData{
+	page := pages.ListViewPage{
 		Title:  "Организации",
 		Header: pageHeader(r, "Организации"),
-		Toolbar: ui.ToolbarData{
-			Buttons: []ui.Button{
-				{Style: ui.ButtonPrimary, Text: "Добавить", URL: "/organizations/new", Icon: "plus"},
+		List: ui.ListView{
+			Toolbar: &ui.ToolbarData{
+				Buttons: []ui.Button{
+					{Style: ui.ButtonPrimary, Text: "Добавить", URL: "/organizations/new", Icon: "plus"},
+				},
+			},
+			Search: &ui.SearchData{URL: "/organizations", Placeholder: "Поиск организаций...", Query: query},
+			List: ui.ListData{
+				Columns: []ui.ListColumn{
+					{Label: "Название"},
+					{Label: "Статус"},
+					{Label: "Создана"},
+				},
+				Rows:       rows,
+				RenderMode: ui.RenderComfortable,
+				Preset:     ui.ListWide,
 			},
 		},
-		Search: ui.SearchData{URL: "/organizations", Placeholder: "Поиск организаций...", Query: query},
-		List: ui.ListData{
-			Columns: []ui.ListColumn{
-				{Label: "Название"},
-				{Label: "Статус"},
-				{Label: "Создана"},
-			},
-			Rows:       rows,
-			RenderMode: ui.RenderComfortable,
-			Preset:     ui.ListWide,
-		},
+		NewURL: "/organizations/new",
 	}
 	if flash != nil {
-		data.Alert = FlashToAlert(*flash)
+		page.Alert = FlashToAlert(*flash)
 	}
 
-	if err := ui.RenderPage(w, TemplateFS(), pageFS, data); err != nil {
-		a.InternalError(w, err)
-	}
+	a.renderListView(w, r, TemplateFS(), pageFS, page)
 }
 
 func organizationID(r *http.Request) int64 {

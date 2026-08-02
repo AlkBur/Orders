@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"Orders/internal/common"
+	"Orders/internal/database/search"
+	"Orders/internal/entity"
 )
 
 type Store struct {
@@ -56,8 +58,30 @@ func (s *Store) Count(ctx context.Context) (int64, error) {
 	return n, err
 }
 
-func (s *Store) List(ctx context.Context) ([]*Receipt, error) {
-	rows, err := s.db.QueryContext(ctx, `
+// ListOptions управляет выборкой списка чеков.
+type ListOptions struct {
+	Query   string
+	Limit   int
+	Offset  int
+	OrderBy string
+}
+
+// receiptSearchColumns — поисковые колонки списка чеков.
+// COALESCE нужен: организации и клиенты подключаются через LEFT JOIN.
+var receiptSearchColumns = []search.SearchColumn{
+	{Field: entity.FieldName("Number"), SearchExpr: "r.number"},
+	{Field: entity.FieldName("OrganizationName"), SearchExpr: "COALESCE(o.name, '')"},
+	{Field: entity.FieldName("CustomerName"), SearchExpr: "COALESCE(c.name, '')"},
+}
+
+func (s *Store) searchableColumns() []search.SearchColumn {
+	return receiptSearchColumns
+}
+
+// List возвращает чеки. visibleFields — поля, отображаемые в списке:
+// поиск выполняется только по ним.
+func (s *Store) List(ctx context.Context, opts ListOptions, visibleFields []entity.FieldName) ([]*Receipt, error) {
+	query := `
 		SELECT
 			r.id, r.uuid, r.exchange_id, r.number, r.date,
 			r.organization_id, COALESCE(o.name, '') AS org_name,
@@ -69,8 +93,18 @@ func (s *Store) List(ctx context.Context) ([]*Receipt, error) {
 		LEFT JOIN organizations o ON o.id = r.organization_id
 		LEFT JOIN users u ON u.id = r.user_id
 		LEFT JOIN customers c ON c.id = r.customer_id
-		ORDER BY r.date DESC, r.id DESC
-	`)
+	`
+
+	where, args := search.BuildWhere(
+		search.FilterColumns(s.searchableColumns(), visibleFields),
+		search.NormalizeQuery(opts.Query),
+	)
+	if where != "" {
+		query += ` WHERE ` + where
+	}
+	query += ` ORDER BY r.date DESC, r.id DESC`
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

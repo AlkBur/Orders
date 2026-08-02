@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"Orders/internal/database"
+	"Orders/internal/entity"
 	"Orders/internal/testutil"
 )
 
@@ -174,7 +175,7 @@ func TestList_Empty(t *testing.T) {
 	db := testDB(t)
 	store := NewStore(db)
 
-	list, err := store.List(context.Background(), ListOptions{})
+	list, err := store.List(context.Background(), ListOptions{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,7 +197,7 @@ func TestList_OrderedByName(t *testing.T) {
 		}
 	}
 
-	list, err := store.List(context.Background(), ListOptions{})
+	list, err := store.List(context.Background(), ListOptions{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -205,6 +206,49 @@ func TestList_OrderedByName(t *testing.T) {
 	}
 	if list[0].Name != "A" || list[1].Name != "B" || list[2].Name != "C" {
 		t.Fatalf("expected sorted order, got %+v", list)
+	}
+}
+
+func TestList_Search(t *testing.T) {
+	db := testDB(t)
+	store := NewStore(db)
+
+	for _, name := range []string{"ООО Ромашка", "ООО Рога", "ИП Кузнецов"} {
+		o := store.New()
+		o.Name = name
+		o.UUID = "org-" + name
+		if err := store.Save(context.Background(), o); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	visible := []entity.FieldName{entity.FieldName("Name")}
+
+	// Слова запроса соединяются через AND.
+	list, err := store.List(context.Background(), ListOptions{Query: "ООО Ромашка"}, visible)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 1 || list[0].Name != "ООО Ромашка" {
+		t.Fatalf("expected single match, got %+v", list)
+	}
+
+	// Невидимое поле не участвует в поиске: Name невидим → без фильтра.
+	list, err = store.List(context.Background(), ListOptions{Query: "ООО"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 3 {
+		t.Fatalf("expected all orgs without visible fields, got %d", len(list))
+	}
+
+	// Спецсимволы LIKE не расширяют запрос.
+	list, err = store.List(context.Background(), ListOptions{Query: "ооо_ромашка"}, visible)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 0 {
+		t.Fatalf("expected no match for escaped wildcard, got %+v", list)
 	}
 }
 

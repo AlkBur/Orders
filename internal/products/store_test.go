@@ -151,7 +151,7 @@ func TestStore_ListAll(t *testing.T) {
 	p2.UUID = "prod-list-all-b"
 	store.Save(context.Background(), p2)
 
-	list, err := store.List(context.Background(), 0)
+	list, err := store.List(context.Background(), 0, ListOptions{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,7 +171,7 @@ func TestStore_ListByOrg(t *testing.T) {
 	p.UUID = "prod-only"
 	store.Save(context.Background(), p)
 
-	list, err := store.List(context.Background(), orgID)
+	list, err := store.List(context.Background(), orgID, ListOptions{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -325,7 +325,7 @@ func TestStore_ListOrganizationName(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	list, err := store.List(context.Background(), orgID)
+	list, err := store.List(context.Background(), orgID, ListOptions{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -351,7 +351,7 @@ func TestStore_SynchronizeDifferentOrgs(t *testing.T) {
 		{UUID: "shared", Name: "In Org2", Unit: "шт", Active: true},
 	})
 
-	list, err := store.List(context.Background(), 0)
+	list, err := store.List(context.Background(), 0, ListOptions{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

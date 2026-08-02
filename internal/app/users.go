@@ -2,11 +2,15 @@ package app
 
 import (
 	"errors"
+	"io/fs"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"Orders/internal/app/pages"
 	"Orders/internal/common"
+	"Orders/internal/entity"
+	"Orders/internal/ui"
 	"Orders/internal/ui/display"
 	"Orders/internal/users"
 
@@ -16,23 +20,23 @@ import (
 func (a *App) UsersPage(w http.ResponseWriter, r *http.Request) {
 	NoCache(w)
 
-	list, err := a.users.List(r.Context())
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+
+	fields := users.Descriptor.ListFields()
+	visibleFields := entity.Names(fields)
+
+	list, err := a.users.List(r.Context(), users.ListOptions{Query: query}, visibleFields)
 	if err != nil {
 		a.InternalError(w, err)
 		return
 	}
 
-	fields := users.Descriptor.ListFields()
-
-	var pageColumns []pages.Column
+	var columns []ui.ListColumn
 	for _, f := range fields {
-		pageColumns = append(pageColumns, pages.Column{
-			Name:  f.GoName,
-			Label: f.Label,
-		})
+		columns = append(columns, ui.ListColumn{Label: f.Label})
 	}
 
-	var rows []pages.Row
+	var rows []ui.ListRow
 	for _, u := range list {
 		var item display.Values = u
 
@@ -45,28 +49,39 @@ func (a *App) UsersPage(w http.ResponseWriter, r *http.Request) {
 			}
 			cells = append(cells, value)
 		}
-		rows = append(rows, pages.Row{
+		rows = append(rows, ui.ListRow{
 			Cells: cells,
-			ID:    strconv.FormatInt(u.ID, 10),
 			URL:   u.URL(),
 		})
 	}
 
-	page := pages.ListPage{
-		Title:   "Пользователи",
-		Columns: pageColumns,
-		Rows:    rows,
-
-		NewURL: "/users/new",
-		RowAction: pages.RowAction{
-			Label:   "Открыть",
-			BaseURL: "/users",
-		},
-
-		EmptyText: "Нет пользователей",
+	pageFS, err := fs.Sub(users.Templates(), "list")
+	if err != nil {
+		a.InternalError(w, err)
+		return
 	}
 
-	a.Render(w, "users", page)
+	page := pages.ListViewPage{
+		Title:  "Пользователи",
+		Header: pageHeader(r, "Пользователи"),
+		List: ui.ListView{
+			Toolbar: &ui.ToolbarData{
+				Buttons: []ui.Button{
+					{Style: ui.ButtonPrimary, Text: "Добавить", URL: "/users/new", Icon: "plus"},
+				},
+			},
+			Search: &ui.SearchData{URL: "/users", Placeholder: "Поиск пользователей...", Query: query},
+			List: ui.ListData{
+				Columns:    columns,
+				Rows:       rows,
+				RenderMode: ui.RenderComfortable,
+				Preset:     ui.ListDefault,
+			},
+		},
+		NewURL: "/users/new",
+	}
+
+	a.renderListView(w, r, TemplateFS(), pageFS, page)
 }
 
 func userIDFromURL(r *http.Request) int64 {

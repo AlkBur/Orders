@@ -136,7 +136,7 @@ func TestOrganizationSave_Create(t *testing.T) {
 		t.Fatalf("expected redirect to /organizations, got %q", got)
 	}
 
-	list, err := orgs.List(context.Background(), organizations.ListOptions{})
+	list, err := orgs.List(context.Background(), organizations.ListOptions{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
