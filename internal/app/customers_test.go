@@ -344,38 +344,3 @@ func TestCustomersPage_ShowsFlash(t *testing.T) {
 	}
 }
 
-func TestCustomerDelete(t *testing.T) {
-	db := testutil.NewTestDB(t, NewSchema())
-	orgs := organizations.NewStore(db)
-	orgID, _ := insertOrg(t, db, "Org One", "key_org1")
-
-	app := &App{
-		customers:     customers.NewStore(db),
-		organizations: orgs,
-	}
-
-	c := app.customers.New()
-	c.OrganizationID = orgID
-	c.Name = "To Delete"
-	c.UUID = "app-cust-delete"
-	if err := app.customers.Save(context.Background(), c); err != nil {
-		t.Fatal(err)
-	}
-
-	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodDelete, "/organizations/"+strconv.FormatInt(orgID, 10)+"/customers/"+strconv.FormatInt(c.ID, 10), nil)
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("oid", strconv.FormatInt(orgID, 10))
-	rctx.URLParams.Add("id", strconv.FormatInt(c.ID, 10))
-	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
-
-	app.CustomerDelete(w, r)
-
-	if w.Code != http.StatusSeeOther {
-		t.Fatalf("expected 303, got %d", w.Code)
-	}
-
-	if _, err := app.customers.GetByID(context.Background(), c.ID); err == nil {
-		t.Fatal("expected not found after delete")
-	}
-}

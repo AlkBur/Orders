@@ -160,25 +160,6 @@ func (a *App) OrganizationCard(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (a *App) OrganizationDelete(w http.ResponseWriter, r *http.Request) {
-	id := organizationID(r)
-	if id == 0 {
-		http.NotFound(w, r)
-		return
-	}
-
-	if err := a.organizations.DeleteByID(r.Context(), id); err != nil {
-		if errors.Is(err, organizations.ErrNotFound) {
-			http.NotFound(w, r)
-			return
-		}
-		a.InternalError(w, err)
-		return
-	}
-
-	http.Redirect(w, r, "/organizations", http.StatusSeeOther)
-}
-
 func (a *App) OrganizationSave(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		a.BadRequest(w, "Invalid request")

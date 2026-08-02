@@ -313,21 +313,6 @@ func (a *App) CustomerSave(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, target, http.StatusSeeOther)
 }
 
-func (a *App) CustomerDelete(w http.ResponseWriter, r *http.Request) {
-	id := customerIDFromURL(r)
-
-	if err := a.customers.DeleteByID(r.Context(), id); err != nil {
-		a.InternalError(w, err)
-		return
-	}
-
-	oid := orgIDFromURL(r)
-	http.Redirect(w, r,
-		"/organizations/"+strconv.FormatInt(oid, 10)+"/customers",
-		http.StatusSeeOther,
-	)
-}
-
 func (a *App) HandlePutCustomers(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
 	defer r.Body.Close()
