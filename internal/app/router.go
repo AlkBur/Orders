@@ -83,7 +83,6 @@ func (a *App) NewRouter() *chi.Mux {
 				r.Group(func(r chi.Router) {
 					r.Use(RequireAdmin)
 					r.Post("/{id}", a.CustomerSave)
-					r.Delete("/{id}", a.CustomerDelete)
 				})
 			})
 
@@ -110,7 +109,6 @@ func (a *App) NewRouter() *chi.Mux {
 			r.Post("/organizations", a.OrganizationSave)
 			r.Get("/organizations/{id}", a.OrganizationCard)
 			r.Post("/organizations/{id}", a.OrganizationSave)
-			r.Post("/organizations/{id}/delete", a.OrganizationDelete)
 
 			// Users
 			r.Route("/users", func(r chi.Router) {
