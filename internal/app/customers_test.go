@@ -11,6 +11,7 @@ import (
 
 	"Orders/internal/customers"
 	"Orders/internal/organizations"
+	"Orders/internal/sessions"
 	"Orders/internal/testutil"
 
 	"github.com/go-chi/chi/v5"
@@ -209,6 +210,11 @@ func TestCustomerSave_Create(t *testing.T) {
 		t.Fatalf("expected 303, got %d", w.Code)
 	}
 
+	want := "/organizations/" + strconv.FormatInt(orgID, 10) + "/customers"
+	if got := w.Header().Get("Location"); got != want {
+		t.Fatalf("expected redirect to %s, got %q", want, got)
+	}
+
 	list, _ := app.customers.List(context.Background(), orgID)
 	if len(list) != 1 {
 		t.Fatalf("expected 1 customer, got %d", len(list))
@@ -251,12 +257,90 @@ func TestCustomerSave_Update(t *testing.T) {
 		t.Fatalf("expected 303, got %d", w.Code)
 	}
 
+	want := "/organizations/" + strconv.FormatInt(orgID, 10) + "/customers"
+	if got := w.Header().Get("Location"); got != want {
+		t.Fatalf("expected redirect to %s, got %q", want, got)
+	}
+
 	got, err := app.customers.GetByExternal(context.Background(), orgID, c.UUID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got.Name != "Updated" {
 		t.Fatalf("expected 'Updated', got '%s'", got.Name)
+	}
+}
+
+func TestCustomerSave_SetsFlash(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	orgID, _ := insertOrg(t, db, "Org One", "key_org1")
+	sessionStore := sessions.NewStore(db)
+	session := newSession(sessionStore, "sess-cust-save")
+
+	app := &App{
+		customers:     customers.NewStore(db),
+		organizations: organizations.NewStore(db),
+		sessions:      sessionStore,
+	}
+
+	body := "name=New+Customer"
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPost, "/organizations/"+strconv.FormatInt(orgID, 10)+"/customers",
+		strings.NewReader(body))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("oid", strconv.FormatInt(orgID, 10))
+	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+	r = r.WithContext(context.WithValue(r.Context(), sessionContextKey, session))
+
+	app.CustomerSave(w, r)
+
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", w.Code)
+	}
+	if session.Flash == nil || session.Flash.Type != sessions.FlashSuccess || session.Flash.Message != "Контрагент сохранён." {
+		t.Fatalf("expected success flash, got %+v", session.Flash)
+	}
+}
+
+func TestCustomersPage_ShowsFlash(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	orgID, _ := insertOrg(t, db, "Org One", "key_org1")
+	sessionStore := sessions.NewStore(db)
+	session := newSession(sessionStore, "sess-cust-list")
+	session.SetFlash(sessions.FlashSuccess, "Контрагент сохранён.")
+	sessionStore.Save(session)
+
+	app := &App{
+		customers:     customers.NewStore(db),
+		organizations: organizations.NewStore(db),
+		sessions:      sessionStore,
+	}
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/organizations/"+strconv.FormatInt(orgID, 10)+"/customers", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("oid", strconv.FormatInt(orgID, 10))
+	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+	r = r.WithContext(context.WithValue(r.Context(), sessionContextKey, session))
+
+	app.CustomersPage(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "Контрагент сохранён.") {
+		t.Fatalf("expected flash message on the page")
+	}
+	if session.Flash != nil {
+		t.Fatalf("expected flash to be cleared in memory")
+	}
+	loaded, err := sessionStore.FindByID(session.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Flash != nil {
+		t.Fatalf("expected flash to be cleared in the store")
 	}
 }
 
