@@ -70,7 +70,7 @@ func (a *App) UsersPage(w http.ResponseWriter, r *http.Request) {
 					{Style: ui.ButtonPrimary, Text: "Добавить", URL: "/users/new", Icon: "plus"},
 				},
 			},
-			Search: &ui.SearchData{URL: "/users", Placeholder: "Поиск пользователей...", Query: query},
+			Search: &ui.SearchData{URL: "/users", Placeholder: "Поиск пользователей...", Query: query, Mode: ui.SearchLive},
 			List: ui.ListData{
 				Columns:    columns,
 				Rows:       rows,

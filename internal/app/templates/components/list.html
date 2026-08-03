@@ -9,8 +9,10 @@
 {{end}}
 
 {{define "list_view"}}
-{{if .Toolbar}}{{template "toolbar" .Toolbar}}{{end}}
-{{if .Search}}{{template "search" .Search}}{{end}}
+<div class="level mb-3">
+  {{if .Toolbar}}<div class="level-left"><div class="level-item">{{template "toolbar" .Toolbar}}</div></div>{{end}}
+  {{if .Search}}<div class="level-right"><div class="level-item">{{template "search" .Search}}</div></div>{{end}}
+</div>
 {{template "list" .List}}
 {{end}}
 

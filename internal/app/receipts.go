@@ -92,7 +92,7 @@ func (a *App) ReceiptsPage(w http.ResponseWriter, r *http.Request) {
 					{Style: ui.ButtonPrimary, Text: "Добавить", URL: "/receipts/new", Icon: "plus"},
 				},
 			},
-			Search: &ui.SearchData{URL: "/receipts", Placeholder: "Поиск чеков...", Query: query},
+			Search: &ui.SearchData{URL: "/receipts", Placeholder: "Поиск чеков...", Query: query, Mode: ui.SearchLive},
 			List: ui.ListData{
 				Columns:    columns,
 				Rows:       rows,

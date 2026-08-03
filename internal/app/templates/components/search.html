@@ -1,11 +1,12 @@
 {{define "search"}}
-<form class="search-form mb-3" method="get" action="{{.URL}}"
+<form class="search-form" method="get" action="{{.URL}}"
       hx-get="{{.URL}}" hx-target="#list" hx-swap="outerHTML" hx-push-url="true">
   <div class="field has-addons">
     <div class="control has-icons-left">
       <input class="input" type="search" name="q" value="{{.Query}}"
              placeholder="{{.Placeholder}}" autocomplete="off" spellcheck="false"
-             {{if .Live}}hx-trigger="search, keyup changed delay:500ms" data-auto-search="true"{{end}}>
+             {{if .Mode.IsLive}}hx-trigger="search, keyup changed delay:500ms" data-auto-search="true"{{end}}
+             {{if gt .MinLength 0}}data-min-length="{{.MinLength}}"{{end}}>
       <span class="icon is-left is-small">{{icon "search"}}</span>
     </div>
     <div class="control">

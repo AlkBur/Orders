@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"Orders/internal/database/search"
+
 	_ "modernc.org/sqlite"
 )
 
@@ -16,6 +18,10 @@ func OpenPath(path string) (*sql.DB, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return nil, err
 	}
+
+	// SQL-функции поиска регистрируются до открытия соединений:
+	// новые коннекты драйвера получают их автоматически.
+	search.RegisterFunctions()
 
 	db, err := sql.Open("sqlite", path)
 	if err != nil {

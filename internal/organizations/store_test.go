@@ -222,7 +222,7 @@ func TestList_Search(t *testing.T) {
 		}
 	}
 
-	visible := []entity.FieldName{entity.FieldName("Name")}
+	visible := []entity.FieldName{entity.FieldNameName}
 
 	// Слова запроса соединяются через AND.
 	list, err := store.List(context.Background(), ListOptions{Query: "ООО Ромашка"}, visible)
@@ -231,6 +231,33 @@ func TestList_Search(t *testing.T) {
 	}
 	if len(list) != 1 || list[0].Name != "ООО Ромашка" {
 		t.Fatalf("expected single match, got %+v", list)
+	}
+
+	// Поиск регистронезависим: нижний регистр находит запись.
+	list, err = store.List(context.Background(), ListOptions{Query: "ооо ромашка"}, visible)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 1 || list[0].Name != "ООО Ромашка" {
+		t.Fatalf("expected case-insensitive match, got %+v", list)
+	}
+
+	// Множественные пробелы схлопываются.
+	list, err = store.List(context.Background(), ListOptions{Query: "ООО    Ромашка"}, visible)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 1 || list[0].Name != "ООО Ромашка" {
+		t.Fatalf("expected match with collapsed spaces, got %+v", list)
+	}
+
+	// Порядок слов не важен.
+	list, err = store.List(context.Background(), ListOptions{Query: "Ромашка ООО"}, visible)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 1 || list[0].Name != "ООО Ромашка" {
+		t.Fatalf("expected match regardless of word order, got %+v", list)
 	}
 
 	// Невидимое поле не участвует в поиске: Name невидим → без фильтра.

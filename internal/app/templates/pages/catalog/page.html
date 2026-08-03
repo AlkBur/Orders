@@ -24,7 +24,7 @@
   <div class="section-heading">Toolbar, поиск и список (ListView)</div>
   <p class="catalog-note">
     Композиция сверху — живой пример <code>ListView</code>: тулбар с действиями,
-    блок поиска и список. Поиск включён (<code>Live: true</code>): после 3 символов
+    блок поиска и список. Поиск включён (<code>Mode: SearchLive</code>): после 3 символов
     он фильтрует список без перезагрузки страницы.
   </p>
   {{template "catalog_code" (index .CodeSamples "toolbar")}}
@@ -33,10 +33,10 @@
 <div class="catalog-section">
   <div class="section-heading">Search</div>
   <p class="catalog-note">
-    Самостоятельный блок поиска. <code>Live</code> добавляет живой поиск,
+    Самостоятельный блок поиска. <code>Mode: SearchLive</code> добавляет живой поиск,
     <code>URL</code> задаёт путь списка, к которому подставляется <code>?q=...</code>.
   </p>
-  {{template "search" .Search}}
+  <div class="mb-3">{{template "search" .Search}}</div>
   {{template "catalog_code" (index .CodeSamples "search")}}
 </div>
 

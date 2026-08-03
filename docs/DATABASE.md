@@ -191,10 +191,13 @@ Descriptor предоставляет:
 - `ListFields()` — поля с `list:"true"`.
 
 Поиск списка не использует тег `search`. Store определяет собственные
-поисковые колонки (`searchableColumns()`) и сопоставляет им SQL-выражения,
-возвращающие строку, которую видит пользователь. Handler передаёт только
-видимые поля списка (`entity.FieldName`). Условие `WHERE` строит
-`internal/database/search` (см. `docs/UI.md`).
+поисковые колонки (`searchableColumns()` → `search.MappedColumn{Field, Expression}`)
+и сопоставляет им SQL-выражения, возвращающие строку, которую видит
+пользователь. Handler передаёт только видимые поля списка
+(`entity.FieldName`). Условие `WHERE` строит `internal/database/search`
+(см. `docs/UI.md`). Поиск регистронезависим: обе стороны нормализуются
+единым алгоритмом `normalizeWord`, SQL-функция `search_normalize`
+регистрируется при открытии БД (`database.OpenPath`).
 
 ---
 

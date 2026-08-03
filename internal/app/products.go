@@ -138,7 +138,7 @@ func (a *App) ProductsPage(w http.ResponseWriter, r *http.Request) {
 				{Style: ui.ButtonPrimary, Text: "Добавить", URL: newURL, Icon: "plus"},
 			},
 		}
-		page.List.Search = &ui.SearchData{URL: listPath, Placeholder: "Поиск товаров...", Query: query}
+		page.List.Search = &ui.SearchData{URL: listPath, Placeholder: "Поиск товаров...", Query: query, Mode: ui.SearchLive}
 	}
 
 	a.renderListView(w, r, TemplateFS(), pageFS, page)
