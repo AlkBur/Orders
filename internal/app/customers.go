@@ -33,6 +33,7 @@ type customerSyncItem struct {
 type customerCardData struct {
 	Title      string
 	Header     ui.HeaderData
+	Card       ui.CardData
 	FormAction string
 	Fields     []ui.Field
 }
@@ -259,8 +260,12 @@ func (a *App) CustomerCard(w http.ResponseWriter, r *http.Request) {
 	data := customerCardData{
 		Title:      title,
 		Header:     pageHeader(r, "Контрагенты"),
+		Card:       ui.CardData{Title: "Основная информация", CloseURL: "/customers"},
 		FormAction: action,
 		Fields:     fields,
+	}
+	if oid > 0 {
+		data.Card.CloseURL = "/organizations/" + strconv.FormatInt(oid, 10) + "/customers"
 	}
 
 	if err := ui.RenderPage(w, TemplateFS(), pageFS, data); err != nil {

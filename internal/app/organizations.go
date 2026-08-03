@@ -20,6 +20,7 @@ import (
 type organizationCardData struct {
 	Title      string
 	Header     ui.HeaderData
+	Card       ui.CardData
 	FormAction string
 	Fields     []ui.Field
 }
@@ -143,6 +144,7 @@ func (a *App) OrganizationCard(w http.ResponseWriter, r *http.Request) {
 	data := organizationCardData{
 		Title:      "Организация",
 		Header:     pageHeader(r, "Организации"),
+		Card:       ui.CardData{Title: "Основная информация", CloseURL: "/organizations"},
 		FormAction: action,
 		Fields: []ui.Field{
 			{Name: "uuid", Label: "UUID", Type: ui.FieldText, Value: org.UUID, Readonly: true},

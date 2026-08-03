@@ -8,3 +8,16 @@
 */}}
 {{define "card_open"}}<div class="card">{{if .}}<div class="card-header"><p class="card-header-title">{{.}}</p></div>{{end}}<div class="card-content">{{end}}
 {{define "card_close"}}</div></div>{{end}}
+
+{{define "card_open_closable"}}
+<div class="card">
+  <header class="card-header">
+    <p class="card-header-title">{{.Title}}</p>
+    {{if .CloseURL}}
+    <a class="card-header-icon" href="{{.CloseURL}}" aria-label="Закрыть">
+      <span class="icon">{{icon "close"}}</span>
+    </a>
+    {{end}}
+  </header>
+  <div class="card-content">
+{{end}}
