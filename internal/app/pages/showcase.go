@@ -46,7 +46,7 @@ func HandleCatalog(tmplFS fs.FS) http.HandlerFunc {
 					{Style: ui.ButtonOutline, Text: "Экспорт", URL: "#", Icon: "save"},
 				},
 			},
-			Search: ui.SearchData{URL: "/ui", Placeholder: "Поиск компонентов...", Query: "", Live: true},
+			Search: ui.SearchData{URL: "/ui", Placeholder: "Поиск компонентов...", Mode: ui.SearchLive},
 			Buttons: []ui.Button{
 				{Style: ui.ButtonDefault, Text: "Обычная", URL: "#"},
 				{Style: ui.ButtonPrimary, Text: "Основная", URL: "#", Icon: "plus"},

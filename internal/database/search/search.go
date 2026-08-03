@@ -6,78 +6,121 @@ import (
 	"Orders/internal/entity"
 )
 
-// SearchColumn связывает отображаемое поле списка с SQL-выражением,
+// SearchQuery — результат лексического разбора поискового запроса.
+//
+// Неизменяемое значение с инвариантами:
+//
+//	Original — всегда исходная строка пользователя без изменений.
+//	Words    — всегда нормализованы (normalizeWord) и никогда
+//	          не содержат пустых строк.
+//
+// Все последующие функции полагаются на эти инварианты и не делают
+// повторных проверок или нормализации.
+//
+// Future extensions:
+//
+//   - quoted phrases
+//   - excluded words
+//   - field:value
+//   - OR groups
+type SearchQuery struct {
+	Original string
+	Words    []string
+}
+
+// MappedColumn связывает отображаемое поле списка с SQL-выражением,
 // которое возвращает ту же строку, которую видит пользователь.
 //
-// SearchExpr — SQL-выражение, готовое к использованию в LIKE (диалект
+// Field — entity.FieldName по GoName, ключ соответствия с visibleFields.
+// Expression — SQL-выражение, готовое к использованию в LIKE (диалект
 // текущей СУБД). Точное представление строки (COALESCE, CAST и т.п.)
 // определяет Store, а не модуль поиска.
 //
-// SearchColumn неизменяем: экземпляры создаются как пакетные литералы
+// MappedColumn неизменяем: экземпляры создаются как пакетные литералы
 // в Store и никогда не модифицируются.
-type SearchColumn struct {
+type MappedColumn struct {
 	Field      entity.FieldName
-	SearchExpr string
+	Expression string
 }
 
-// NormalizeQuery разбивает поисковый запрос на слова. Пустой или
-// пробельный запрос возвращает nil. Модуль не знает о SQL: слова
-// используются только как значения для LIKE.
-func NormalizeQuery(query string) []string {
-	query = strings.TrimSpace(query)
-	if query == "" {
-		return nil
-	}
-	return strings.Fields(query)
+// SearchColumn — колонка поиска после фильтрации по отображаемым полям.
+// Содержит только Expression: BuildWhere и BuildPredicate не знают о Field.
+type SearchColumn struct {
+	Expression string
 }
 
-// FilterColumns оставляет только те колонки, чьи поля перечислены в fields.
-// Порядок исходного слайса сохраняется; порядок fields не влияет на результат.
-func FilterColumns(columns []SearchColumn, fields []entity.FieldName) []SearchColumn {
-	if len(fields) == 0 {
+// NormalizeQuery разбивает поисковый запрос на нормализованные слова.
+//
+// Original сохраняет исходную строку пользователя без изменений.
+// Пустой или пробельный запрос возвращает нулевой SearchQuery.
+// Words не содержат пустых строк (слова разделяются strings.Fields).
+func NormalizeQuery(query string) SearchQuery {
+	trimmed := strings.TrimSpace(query)
+	if trimmed == "" {
+		return SearchQuery{}
+	}
+
+	words := strings.Fields(trimmed)
+	for i, w := range words {
+		words[i] = normalizeWord(w)
+	}
+
+	return SearchQuery{Original: query, Words: words}
+}
+
+// VisibleColumns оставляет только те поисковые колонки, чьи поля
+// перечислены в visible. Порядок исходного слайса сохраняется.
+// Возвращает SearchColumn без Field — колонки, готовые для BuildWhere.
+func VisibleColumns(columns []MappedColumn, visible []entity.FieldName) []SearchColumn {
+	if len(visible) == 0 {
 		return nil
 	}
-	want := make(map[entity.FieldName]struct{}, len(fields))
-	for _, f := range fields {
+
+	want := make(map[entity.FieldName]struct{}, len(visible))
+	for _, f := range visible {
 		want[f] = struct{}{}
 	}
+
 	var out []SearchColumn
 	for _, c := range columns {
 		if _, ok := want[c.Field]; ok {
-			out = append(out, c)
+			out = append(out, SearchColumn{Expression: c.Expression})
 		}
 	}
 	return out
 }
 
-// BuildCondition возвращает SQL-условие для одной колонки и одного слова.
-// Это единственная точка, где SearchExpr попадает в LIKE: смена движка
+// BuildPredicate возвращает SQL-предикат для одного слова и одной колонки.
+// Это единственная точка, где Expression попадает в LIKE: смена движка
 // поиска (ILIKE, FTS5, триграммные индексы) затрагивает только её.
-func BuildCondition(column SearchColumn, word string) (string, []any) {
-	return column.SearchExpr + ` LIKE ? ESCAPE '\'`, []any{"%" + escapeLike(word) + "%"}
+//
+// Слово уже нормализовано (инвариант SearchQuery) — здесь не нормализуется.
+func BuildPredicate(column SearchColumn, word string) (string, []any) {
+	return `search_normalize(` + column.Expression + `) LIKE ? ESCAPE '\'`,
+		[]any{"%" + escapeLike(word) + "%"}
 }
 
 // BuildWhere строит условие WHERE для колонок и слов.
 //
 // Слова соединяются через AND, колонки — через OR:
 //
-//	(name LIKE ? ESCAPE '\' OR unit LIKE ? ESCAPE '\')
-//	AND (name LIKE ? ESCAPE '\' OR unit LIKE ? ESCAPE '\')
+//	(search_normalize(name) LIKE ? ESCAPE '\' OR search_normalize(unit) LIKE ? ESCAPE '\')
+//	AND (search_normalize(name) LIKE ? ESCAPE '\' OR search_normalize(unit) LIKE ? ESCAPE '\')
 //
 // Чистая функция: не зависит от контекста и не обращается к базе.
 // Пустые колонки или слова возвращают пустую строку без аргументов.
-func BuildWhere(columns []SearchColumn, words []string) (string, []any) {
-	if len(columns) == 0 || len(words) == 0 {
+func BuildWhere(columns []SearchColumn, q SearchQuery) (string, []any) {
+	if len(columns) == 0 || len(q.Words) == 0 {
 		return "", nil
 	}
 
 	var conds []string
 	var args []any
-	for _, word := range words {
+	for _, word := range q.Words {
 		var ors []string
 		for _, c := range columns {
-			cond, arg := BuildCondition(c, word)
-			ors = append(ors, cond)
+			pred, arg := BuildPredicate(c, word)
+			ors = append(ors, pred)
 			args = append(args, arg...)
 		}
 		conds = append(conds, "("+strings.Join(ors, " OR ")+")")

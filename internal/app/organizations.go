@@ -31,9 +31,9 @@ func (a *App) OrganizationsPage(w http.ResponseWriter, r *http.Request) {
 
 	// Видимые колонки списка: поиск выполняется только по ним.
 	visibleFields := []entity.FieldName{
-		entity.FieldName("Name"),
-		entity.FieldName("Active"),
-		entity.FieldName("CreatedAt"),
+		entity.FieldNameName,
+		entity.FieldNameActive,
+		entity.FieldNameCreatedAt,
 	}
 
 	orgs, err := a.organizations.List(r.Context(), organizations.ListOptions{Query: query}, visibleFields)
@@ -75,7 +75,7 @@ func (a *App) OrganizationsPage(w http.ResponseWriter, r *http.Request) {
 					{Style: ui.ButtonPrimary, Text: "Добавить", URL: "/organizations/new", Icon: "plus"},
 				},
 			},
-			Search: &ui.SearchData{URL: "/organizations", Placeholder: "Поиск организаций...", Query: query},
+			Search: &ui.SearchData{URL: "/organizations", Placeholder: "Поиск организаций...", Query: query, Mode: ui.SearchLive},
 			List: ui.ListData{
 				Columns: []ui.ListColumn{
 					{Label: "Название"},

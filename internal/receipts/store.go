@@ -68,13 +68,13 @@ type ListOptions struct {
 
 // receiptSearchColumns — поисковые колонки списка чеков.
 // COALESCE нужен: организации и клиенты подключаются через LEFT JOIN.
-var receiptSearchColumns = []search.SearchColumn{
-	{Field: entity.FieldName("Number"), SearchExpr: "r.number"},
-	{Field: entity.FieldName("OrganizationName"), SearchExpr: "COALESCE(o.name, '')"},
-	{Field: entity.FieldName("CustomerName"), SearchExpr: "COALESCE(c.name, '')"},
+var receiptSearchColumns = []search.MappedColumn{
+	{Field: entity.FieldNameNumber, Expression: "r.number"},
+	{Field: entity.FieldNameOrganizationName, Expression: "COALESCE(o.name, '')"},
+	{Field: entity.FieldNameCustomerName, Expression: "COALESCE(c.name, '')"},
 }
 
-func (s *Store) searchableColumns() []search.SearchColumn {
+func (s *Store) searchableColumns() []search.MappedColumn {
 	return receiptSearchColumns
 }
 
@@ -96,7 +96,7 @@ func (s *Store) List(ctx context.Context, opts ListOptions, visibleFields []enti
 	`
 
 	where, args := search.BuildWhere(
-		search.FilterColumns(s.searchableColumns(), visibleFields),
+		search.VisibleColumns(s.searchableColumns(), visibleFields),
 		search.NormalizeQuery(opts.Query),
 	)
 	if where != "" {

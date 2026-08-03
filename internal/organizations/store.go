@@ -24,12 +24,12 @@ type Store struct {
 }
 
 // organizationSearchColumns — поисковые колонки списка организаций.
-// SearchExpr возвращает ту же строку, что показывается в списке.
-var organizationSearchColumns = []search.SearchColumn{
-	{Field: entity.FieldName("Name"), SearchExpr: "name"},
+// Expression возвращает ту же строку, что показывается в списке.
+var organizationSearchColumns = []search.MappedColumn{
+	{Field: entity.FieldNameName, Expression: "name"},
 }
 
-func (s *Store) searchableColumns() []search.SearchColumn {
+func (s *Store) searchableColumns() []search.MappedColumn {
 	return organizationSearchColumns
 }
 
@@ -103,7 +103,7 @@ func (s *Store) List(ctx context.Context, opts ListOptions, visibleFields []enti
 	var args []any
 
 	where, whereArgs := search.BuildWhere(
-		search.FilterColumns(s.searchableColumns(), visibleFields),
+		search.VisibleColumns(s.searchableColumns(), visibleFields),
 		search.NormalizeQuery(opts.Query),
 	)
 	if where != "" {

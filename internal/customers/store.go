@@ -28,12 +28,12 @@ type Store struct {
 }
 
 // customerSearchColumns — поисковые колонки списка контрагентов.
-var customerSearchColumns = []search.SearchColumn{
-	{Field: entity.FieldName("Name"), SearchExpr: "c.name"},
-	{Field: entity.FieldName("OrganizationName"), SearchExpr: "o.name"},
+var customerSearchColumns = []search.MappedColumn{
+	{Field: entity.FieldNameName, Expression: "c.name"},
+	{Field: entity.FieldNameOrganizationName, Expression: "o.name"},
 }
 
-func (s *Store) searchableColumns() []search.SearchColumn {
+func (s *Store) searchableColumns() []search.MappedColumn {
 	return customerSearchColumns
 }
 
@@ -108,7 +108,7 @@ func (s *Store) List(ctx context.Context, organizationID int64, opts ListOptions
 	}
 
 	where, whereArgs := search.BuildWhere(
-		search.FilterColumns(s.searchableColumns(), visibleFields),
+		search.VisibleColumns(s.searchableColumns(), visibleFields),
 		search.NormalizeQuery(opts.Query),
 	)
 	if where != "" {

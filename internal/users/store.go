@@ -47,12 +47,12 @@ type ListOptions struct {
 }
 
 // userSearchColumns — поисковые колонки списка пользователей.
-var userSearchColumns = []search.SearchColumn{
-	{Field: entity.FieldName("Login"), SearchExpr: "login"},
-	{Field: entity.FieldName("Email"), SearchExpr: "email"},
+var userSearchColumns = []search.MappedColumn{
+	{Field: entity.FieldNameLogin, Expression: "login"},
+	{Field: entity.FieldNameEmail, Expression: "email"},
 }
 
-func (s *Store) searchableColumns() []search.SearchColumn {
+func (s *Store) searchableColumns() []search.MappedColumn {
 	return userSearchColumns
 }
 
@@ -66,7 +66,7 @@ func (s *Store) List(ctx context.Context, opts ListOptions, visibleFields []enti
 	var args []any
 
 	where, whereArgs := search.BuildWhere(
-		search.FilterColumns(s.searchableColumns(), visibleFields),
+		search.VisibleColumns(s.searchableColumns(), visibleFields),
 		search.NormalizeQuery(opts.Query),
 	)
 	if where != "" {

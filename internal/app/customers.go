@@ -139,7 +139,7 @@ func (a *App) CustomersPage(w http.ResponseWriter, r *http.Request) {
 				{Style: ui.ButtonPrimary, Text: "Добавить", URL: newURL, Icon: "plus"},
 			},
 		}
-		page.List.Search = &ui.SearchData{URL: listPath, Placeholder: "Поиск контрагентов...", Query: query}
+		page.List.Search = &ui.SearchData{URL: listPath, Placeholder: "Поиск контрагентов...", Query: query, Mode: ui.SearchLive}
 	}
 
 	if flash != nil {
