@@ -30,7 +30,6 @@ func TestReceiptSubmit_FullCycle(t *testing.T) {
 		organizations: orgs,
 		products:      prodStore,
 	}
-	loadPageTemplates(t, app, "receipt_card")
 
 	// 1. Create via ReceiptSave (id=0)
 	body := "number=001&organization_id=" + strconv.FormatInt(orgID, 10) +
@@ -69,6 +68,12 @@ func TestReceiptSubmit_FullCycle(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("step 2: expected 200, got %d", w.Code)
+	}
+	if body := w.Body.String(); !strings.Contains(body, `class="card-header"`) || !strings.Contains(body, `class="card-content"`) {
+		t.Fatal("expected receipt card to use the shared card component")
+	}
+	if strings.Contains(w.Body.String(), "page-card") {
+		t.Fatal("unexpected legacy receipt card markup")
 	}
 	if !strings.Contains(w.Body.String(), "Отправить") {
 		t.Fatal("step 2: expected submit button before send")

@@ -4,6 +4,10 @@
    Uses Bulma CSS variables for consistency.
    ================================================================ */
 
+[x-cloak] {
+  display: none !important;
+}
+
 /* --- Auth layout: minimal centered page (no navigation) --- */
 .auth-layout {
   display: grid;

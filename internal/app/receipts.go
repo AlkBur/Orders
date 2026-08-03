@@ -13,6 +13,7 @@ import (
 	"Orders/internal/customers"
 	"Orders/internal/entity"
 	"Orders/internal/organizations"
+	"Orders/internal/products"
 	"Orders/internal/receipts"
 	"Orders/internal/ui"
 	"Orders/internal/ui/display"
@@ -26,6 +27,75 @@ const (
 	lookupCustomer = "customer"
 	lookupProduct  = "product"
 )
+
+type receiptEditorItem struct {
+	ProductID   int64   `json:"product_id"`
+	ProductName string  `json:"product_name"`
+	Unit        string  `json:"unit"`
+	Quantity    float64 `json:"quantity"`
+	Price       float64 `json:"price"`
+	Amount      float64 `json:"amount"`
+}
+
+type receiptCustomerOption struct {
+	ID             int64  `json:"id"`
+	Name           string `json:"name"`
+	OrganizationID int64  `json:"organization_id"`
+}
+
+type receiptProductOption struct {
+	ID             int64  `json:"id"`
+	Name           string `json:"name"`
+	Unit           string `json:"unit"`
+	OrganizationID int64  `json:"organization_id"`
+}
+
+func receiptEditorJSON(items []receipts.ReceiptItem, customers []*customers.Customer, products []*products.Product) (string, string, string, error) {
+	itemViews := make([]receiptEditorItem, 0, len(items))
+	for _, item := range items {
+		itemViews = append(itemViews, receiptEditorItem{
+			ProductID:   item.ProductID,
+			ProductName: item.ProductName,
+			Unit:        item.Unit,
+			Quantity:    item.Quantity,
+			Price:       item.Price,
+			Amount:      item.Amount,
+		})
+	}
+
+	customerViews := make([]receiptCustomerOption, 0, len(customers))
+	for _, customer := range customers {
+		customerViews = append(customerViews, receiptCustomerOption{
+			ID:             customer.ID,
+			Name:           customer.Name,
+			OrganizationID: customer.OrganizationID,
+		})
+	}
+
+	productViews := make([]receiptProductOption, 0, len(products))
+	for _, product := range products {
+		productViews = append(productViews, receiptProductOption{
+			ID:             product.ID,
+			Name:           product.Name,
+			Unit:           product.Unit,
+			OrganizationID: product.OrganizationID,
+		})
+	}
+
+	itemsJSON, err := common.ToJSON(itemViews)
+	if err != nil {
+		return "", "", "", err
+	}
+	customersJSON, err := common.ToJSON(customerViews)
+	if err != nil {
+		return "", "", "", err
+	}
+	productsJSON, err := common.ToJSON(productViews)
+	if err != nil {
+		return "", "", "", err
+	}
+	return itemsJSON, customersJSON, productsJSON, nil
+}
 
 func receiptIDFromURL(r *http.Request) int64 {
 	idStr := chi.URLParam(r, "id")
@@ -114,6 +184,7 @@ func (a *App) ReceiptCard(w http.ResponseWriter, r *http.Request) {
 	var doc *receipts.Document
 	if id == 0 {
 		rec := a.receipts.New()
+		rec.Date = time.Now()
 		var items []receipts.ReceiptItem
 
 		if lookup, ok := ui.ReadLookup(r); ok {
@@ -163,9 +234,48 @@ func (a *App) ReceiptCard(w http.ResponseWriter, r *http.Request) {
 		title = "Новый товарный чек"
 	}
 
-	itemsJSON, _ := common.ToJSON(doc.Items)
+	var pickerCustomers []*customers.Customer
+	var pickerProducts []*products.Product
+	var organizationOptions []pages.ReceiptOrganizationOption
+
+	if doc.Receipt.ID == 0 {
+		if a.organizations != nil {
+			orgs, err := a.organizations.List(r.Context(), organizations.ListOptions{}, nil)
+			if err != nil {
+				a.InternalError(w, err)
+				return
+			}
+			organizationOptions = make([]pages.ReceiptOrganizationOption, 0, len(orgs))
+			for _, org := range orgs {
+				organizationOptions = append(organizationOptions, pages.ReceiptOrganizationOption{ID: org.ID, Name: org.Name})
+			}
+		}
+		if a.customers != nil {
+			var err error
+			pickerCustomers, err = a.customers.List(r.Context(), 0, customers.ListOptions{}, nil)
+			if err != nil {
+				a.InternalError(w, err)
+				return
+			}
+		}
+		if a.products != nil {
+			var err error
+			pickerProducts, err = a.products.List(r.Context(), 0, products.ListOptions{}, nil)
+			if err != nil {
+				a.InternalError(w, err)
+				return
+			}
+		}
+	}
+
+	itemsJSON, customersJSON, productsJSON, err := receiptEditorJSON(doc.Items, pickerCustomers, pickerProducts)
+	if err != nil {
+		a.InternalError(w, err)
+		return
+	}
 
 	page := pages.ReceiptCardPage{
+		Header:         pageHeader(r, "Товарные чеки"),
 		Title:          title,
 		Receipt:        doc.Receipt,
 		Items:          doc.Items,
@@ -175,25 +285,19 @@ func (a *App) ReceiptCard(w http.ResponseWriter, r *http.Request) {
 		Errors:         make(map[string]string),
 		ErrorsJSON:     "{}",
 		ItemsJSON:      itemsJSON,
+		CustomersJSON:  customersJSON,
+		ProductsJSON:   productsJSON,
+		Orgs:           organizationOptions,
 	}
 
-	if doc.Receipt.ID == 0 && a.organizations != nil {
-		orgs, err := a.organizations.List(r.Context(), organizations.ListOptions{}, nil)
-		if err != nil {
-			a.InternalError(w, err)
-			return
-		}
-		page.Orgs = orgs
-	} else if a.customers != nil {
-		customers, err := a.customers.List(r.Context(), doc.Receipt.OrganizationID, customers.ListOptions{}, nil)
-		if err != nil {
-			a.InternalError(w, err)
-			return
-		}
-		page.Customers = customers
+	pageFS, err := fs.Sub(receipts.Templates(), "card")
+	if err != nil {
+		a.InternalError(w, err)
+		return
 	}
-
-	a.Render(w, "receipt_card", page)
+	if err := ui.RenderPage(w, TemplateFS(), pageFS, page); err != nil {
+		a.InternalError(w, err)
+	}
 }
 
 func (a *App) ReceiptSave(w http.ResponseWriter, r *http.Request) {
@@ -222,9 +326,9 @@ func (a *App) ReceiptSave(w http.ResponseWriter, r *http.Request) {
 
 	orgID := parseInt64(r.FormValue("organization_id"))
 	customerID := parseInt64(r.FormValue("customer_id"))
-	total := parseFloat(r.FormValue("total"))
 
 	var items []receipts.ReceiptItem
+	var total float64
 	for i := 0; ; i++ {
 		productID := parseInt64(r.FormValue("items[" + strconv.Itoa(i) + "][product_id]"))
 		if productID == 0 && i > 0 {
@@ -233,14 +337,35 @@ func (a *App) ReceiptSave(w http.ResponseWriter, r *http.Request) {
 		if productID == 0 {
 			continue
 		}
+		if a.products == nil {
+			renderReceiptFormWithErrors(w, r, a, map[string]string{"": "Товар недоступен"}, items)
+			return
+		}
+		product, err := a.products.GetByID(r.Context(), productID)
+		if err != nil || product.OrganizationID != orgID {
+			renderReceiptFormWithErrors(w, r, a, map[string]string{"": "Товар не принадлежит выбранной организации"}, items)
+			return
+		}
+		quantity := parseFloat(r.FormValue("items[" + strconv.Itoa(i) + "][quantity]"))
+		price := parseFloat(r.FormValue("items[" + strconv.Itoa(i) + "][price]"))
+		amount := quantity * price
 		items = append(items, receipts.ReceiptItem{
 			LineNum:   i + 1,
 			ProductID: productID,
-			Unit:      r.FormValue("items[" + strconv.Itoa(i) + "][unit]"),
-			Quantity:  parseFloat(r.FormValue("items[" + strconv.Itoa(i) + "][quantity]")),
-			Price:     parseFloat(r.FormValue("items[" + strconv.Itoa(i) + "][price]")),
-			Amount:    parseFloat(r.FormValue("items[" + strconv.Itoa(i) + "][amount]")),
+			Unit:      product.Unit,
+			Quantity:  quantity,
+			Price:     price,
+			Amount:    amount,
 		})
+		total += amount
+	}
+
+	if customerID > 0 && a.customers != nil {
+		customer, err := a.customers.GetByID(r.Context(), customerID)
+		if err != nil || customer.OrganizationID != orgID {
+			renderReceiptFormWithErrors(w, r, a, map[string]string{"customer_id": "Контрагент не принадлежит выбранной организации"}, items)
+			return
+		}
 	}
 
 	dateStr := r.FormValue("date")
@@ -316,8 +441,8 @@ func (a *App) ReceiptSave(w http.ResponseWriter, r *http.Request) {
 }
 
 func renderReceiptFormWithErrors(w http.ResponseWriter, r *http.Request, a *App, errs map[string]string, items []receipts.ReceiptItem) {
-	itemsJSON, _ := common.ToJSON(items)
 	customerID := parseInt64(r.FormValue("customer_id"))
+	organizationID := parseInt64(r.FormValue("organization_id"))
 	var customerName string
 	if customerID > 0 && a.customers != nil {
 		if c, err := a.customers.GetByID(r.Context(), customerID); err == nil {
@@ -325,28 +450,69 @@ func renderReceiptFormWithErrors(w http.ResponseWriter, r *http.Request, a *App,
 		}
 	}
 
+	var orgOptions []pages.ReceiptOrganizationOption
+	if a.organizations != nil {
+		orgs, err := a.organizations.List(r.Context(), organizations.ListOptions{}, nil)
+		if err == nil {
+			orgOptions = make([]pages.ReceiptOrganizationOption, 0, len(orgs))
+			for _, org := range orgs {
+				orgOptions = append(orgOptions, pages.ReceiptOrganizationOption{ID: org.ID, Name: org.Name})
+			}
+		}
+	}
+
+	var pickerCustomers []*customers.Customer
+	if a.customers != nil {
+		pickerCustomers, _ = a.customers.List(r.Context(), 0, customers.ListOptions{}, nil)
+	}
+	var pickerProducts []*products.Product
+	if a.products != nil {
+		pickerProducts, _ = a.products.List(r.Context(), 0, products.ListOptions{}, nil)
+	}
+	itemsJSON, customersJSON, productsJSON, err := receiptEditorJSON(items, pickerCustomers, pickerProducts)
+	if err != nil {
+		a.InternalError(w, err)
+		return
+	}
+
+	receipt := a.receipts.New()
+	receipt.Number = r.FormValue("number")
+	receipt.OrganizationID = organizationID
+	receipt.CustomerID = customerID
+	receipt.CustomerName = customerName
+	if date, err := time.Parse("2006-01-02", r.FormValue("date")); err == nil {
+		receipt.Date = date
+	} else {
+		receipt.Date = time.Now()
+	}
+
 	page := pages.ReceiptCardPage{
+		Header:         pageHeader(r, "Товарные чеки"),
 		Title:          "Новый товарный чек",
-		Receipt:        a.receipts.New(),
+		Receipt:        receipt,
 		Errors:         errs,
-		OrganizationID: parseInt64(r.FormValue("organization_id")),
+		OrganizationID: organizationID,
 		CustomerID:     customerID,
 		CustomerName:   customerName,
 		Items:          items,
 		ItemsJSON:      itemsJSON,
-	}
-	if a.organizations != nil {
-		orgs, err := a.organizations.List(r.Context(), organizations.ListOptions{}, nil)
-		if err == nil {
-			page.Orgs = orgs
-		}
+		CustomersJSON:  customersJSON,
+		ProductsJSON:   productsJSON,
+		Orgs:           orgOptions,
 	}
 	page.ErrorsJSON, _ = common.ToJSON(errs)
 	if page.ErrorsJSON == "" {
 		page.ErrorsJSON = "{}"
 	}
+	pageFS, err := fs.Sub(receipts.Templates(), "card")
+	if err != nil {
+		a.InternalError(w, err)
+		return
+	}
 	w.WriteHeader(http.StatusUnprocessableEntity)
-	a.Render(w, "receipt_card", page)
+	if err := ui.RenderPage(w, TemplateFS(), pageFS, page); err != nil {
+		a.InternalError(w, err)
+	}
 }
 
 func isHtmxRequest(r *http.Request) bool {

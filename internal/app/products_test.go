@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"html/template"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -15,18 +14,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 )
-
-func loadPageTemplates(t *testing.T, a *App, page string) {
-	t.Helper()
-	tmpl, err := LoadTemplates(page)
-	if err != nil {
-		t.Fatalf("failed to load template %q: %v", page, err)
-	}
-	if a.templates == nil {
-		a.templates = make(map[string]*template.Template)
-	}
-	a.templates[page] = tmpl
-}
 
 func TestProductsPage_Global(t *testing.T) {
 	db := testutil.NewTestDB(t, NewSchema())
@@ -125,6 +112,12 @@ func TestProductCard_NewFromGlobal(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if body := w.Body.String(); !strings.Contains(body, `class="card-header"`) || !strings.Contains(body, `class="card-content"`) {
+		t.Fatal("expected product card to use the shared card component")
+	}
+	if strings.Contains(w.Body.String(), "page-card") {
+		t.Fatal("unexpected legacy product card markup")
 	}
 }
 

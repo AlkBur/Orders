@@ -138,8 +138,12 @@ func (a *App) ProductsPage(w http.ResponseWriter, r *http.Request) {
 				{Style: ui.ButtonPrimary, Text: "Добавить", URL: newURL, Icon: "plus"},
 			},
 		}
-		page.List.Search = &ui.SearchData{URL: listPath, Placeholder: "Поиск товаров...", Query: query, Mode: ui.SearchLive}
 	}
+	searchURL := listPath
+	if pickerMode {
+		searchURL = pickerListURL(r, listPath)
+	}
+	page.List.Search = &ui.SearchData{URL: searchURL, Placeholder: "Поиск товаров...", Query: query, Mode: ui.SearchLive}
 
 	a.renderListView(w, r, TemplateFS(), pageFS, page)
 }
@@ -181,10 +185,24 @@ func (a *App) ProductCard(w http.ResponseWriter, r *http.Request) {
 		title = "Новый товар"
 	}
 
-	page := pages.ProductCardPage{
-		Title:          title,
-		Product:        product,
-		OrganizationID: oid,
+	pageFS, err := fs.Sub(products.Templates(), "card")
+	if err != nil {
+		a.InternalError(w, err)
+		return
+	}
+
+	formAction := "/products"
+	if oid > 0 {
+		formAction = "/organizations/" + strconv.FormatInt(oid, 10) + "/products"
+		if product.ID > 0 {
+			formAction += "/" + strconv.FormatInt(product.ID, 10)
+		}
+	} else if product.ID > 0 {
+		formAction = "/organizations/" + strconv.FormatInt(product.OrganizationID, 10) + "/products/" + strconv.FormatInt(product.ID, 10)
+	}
+
+	fields := []ui.Field{
+		{Name: "uuid", Label: "UUID", Type: ui.FieldText, Value: product.UUID},
 	}
 
 	if product.ID == 0 && oid == 0 {
@@ -193,10 +211,42 @@ func (a *App) ProductCard(w http.ResponseWriter, r *http.Request) {
 			a.InternalError(w, err)
 			return
 		}
-		page.Orgs = orgs
+		options := make([]ui.SelectOption, 0, len(orgs))
+		for _, org := range orgs {
+			options = append(options, ui.SelectOption{Value: org.UUID, Label: org.Name})
+		}
+		fields = append(fields, ui.Field{
+			Name:        "organization_id",
+			Label:       "Организация",
+			Type:        ui.FieldSelect,
+			Value:       "",
+			Required:    true,
+			Placeholder: "Выберите организацию",
+			Options:     options,
+		})
 	}
 
-	a.Render(w, "product_card", page)
+	fields = append(fields,
+		ui.Field{Name: "name", Label: "Наименование", Type: ui.FieldText, Value: product.Name, Required: true},
+		ui.Field{Name: "unit", Label: "Ед. изм", Type: ui.FieldText, Value: product.Unit},
+		ui.Field{Name: "active", Label: "Активен", Type: ui.FieldCheckbox, Value: checkValue(product.Active)},
+	)
+
+	data := struct {
+		Title      string
+		Header     ui.HeaderData
+		FormAction string
+		Fields     []ui.Field
+	}{
+		Title:      title,
+		Header:     pageHeader(r, "Товары"),
+		FormAction: formAction,
+		Fields:     fields,
+	}
+
+	if err := ui.RenderPage(w, TemplateFS(), pageFS, data); err != nil {
+		a.InternalError(w, err)
+	}
 }
 
 func (a *App) ProductSave(w http.ResponseWriter, r *http.Request) {

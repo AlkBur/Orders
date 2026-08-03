@@ -122,12 +122,39 @@ func (a *App) UserCard(w http.ResponseWriter, r *http.Request) {
 		title = "Новый пользователь"
 	}
 
-	page := pages.UserCardPage{
-		Title: title,
-		User:  user,
+	pageFS, err := fs.Sub(users.Templates(), "card")
+	if err != nil {
+		a.InternalError(w, err)
+		return
 	}
 
-	a.Render(w, "user_card", page)
+	formAction := "/users"
+	if user.ID > 0 {
+		formAction = "/users/" + strconv.FormatInt(user.ID, 10)
+	}
+
+	data := struct {
+		Title       string
+		Header      ui.HeaderData
+		FormAction  string
+		Fields      []ui.Field
+		HasPassword bool
+	}{
+		Title:      title,
+		Header:     pageHeader(r, "Пользователи"),
+		FormAction: formAction,
+		Fields: []ui.Field{
+			{Name: "uuid", Label: "UUID", Type: ui.FieldText, Value: user.UUID},
+			{Name: "login", Label: "Логин", Type: ui.FieldText, Value: user.Login, Required: true},
+			{Name: "email", Label: "Email", Type: ui.FieldText, Value: user.Email},
+			{Name: "is_admin", Label: "Администратор", Type: ui.FieldCheckbox, Value: checkValue(user.IsAdmin)},
+		},
+		HasPassword: user.HasPassword,
+	}
+
+	if err := ui.RenderPage(w, TemplateFS(), pageFS, data); err != nil {
+		a.InternalError(w, err)
+	}
 }
 
 func (a *App) UserSave(w http.ResponseWriter, r *http.Request) {

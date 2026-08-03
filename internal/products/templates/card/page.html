@@ -1,0 +1,12 @@
+{{define "page_content"}}
+{{template "card_open" "Основная информация"}}
+<form method="post" action="{{.FormAction}}">
+  {{range .Fields}}
+    {{template "form_field" .}}
+  {{end}}
+  <div class="buttons mt-2">
+    <button type="submit" class="button is-primary">{{icon "save"}} <span>Сохранить</span></button>
+  </div>
+</form>
+{{template "card_close"}}
+{{end}}
