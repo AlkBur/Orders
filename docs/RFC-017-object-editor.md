@@ -151,19 +151,30 @@ Editor Engine не знает конкретных сущностей и не с
   ошибками.
 - Без Alpine форма работает через полную перезагрузку.
 
-### 4. HTTP 422 для ошибок валидации
+### 4. Ошибки валидации (ValidationError)
+
+Модель ошибок — `ValidationError` (`internal/app/validation.go`),
+представление — `ValidationResponse` (`internal/app/validation_response.go`).
+См. ARCHITECTURE.md §16.1.
 
 ```
 POST /resource
     ↓
-Валидация
+Валидация (ValidationError)
     ↓
-Ошибки? → 422 + рендер формы с errors
+Ошибки? → dispatch по ResponseModeFromRequest
+    ├── Fragment → транспортное представление ValidationError (сегодня JSON)
+    └── FullPage → 422 + рендер формы с ошибками
     ↓
-Успех   → 302 Redirect
+Успех → 303 Redirect / HX-Redirect
 ```
 
-- htmx заменяет форму при 422 — данные не теряются.
+- `ValidationError` — единственная модель ошибок валидации; параллельные
+  механизмы (`map[string]string`, `[]string`, голый `error`) запрещены.
+- `ValidationError` описывает только ошибки пользовательского ввода и не
+  содержит кодов, HTTP-статусов и сведений о транспорте.
+- В htmx-режиме ошибки приходят как JSON `{title, errors, fields}`;
+  клиент отображает их (модальное окно) через `htmx:afterRequest`.
 - Без htmx (progressive enhancement) — обычный POST, сервер рендерит
   форму с ошибками и статусом 422.
 
@@ -207,6 +218,6 @@ Receipt (товарный чек). Commit B реализует:
 - Alpine + htmx в layout
 - Editor Context (Alpine)
 - LookupField для организации, контрагента, товара
-- `POST /receipts` с валидацией + 422
+- `POST /receipts` с валидацией (ValidationError)
 - `Save(*Document)` в одной транзакции
 - Picker mode для customers и products

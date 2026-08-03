@@ -344,12 +344,14 @@ func (a *App) ReceiptSave(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if a.products == nil {
-			renderReceiptFormWithErrors(w, r, a, map[string]string{"": "Товар недоступен"}, items)
+			ve := NewValidationError("Ошибка документа").Add("Товар недоступен")
+			a.RenderReceiptValidationError(w, r, ve, items)
 			return
 		}
 		product, err := a.products.GetByID(r.Context(), productID)
 		if err != nil || product.OrganizationID != orgID {
-			renderReceiptFormWithErrors(w, r, a, map[string]string{"": "Товар не принадлежит выбранной организации"}, items)
+			ve := NewValidationError("Ошибка документа").Add("Товар не принадлежит выбранной организации")
+			a.RenderReceiptValidationError(w, r, ve, items)
 			return
 		}
 		quantity := parseFloat(r.FormValue("items[" + strconv.Itoa(i) + "][quantity]"))
@@ -369,7 +371,8 @@ func (a *App) ReceiptSave(w http.ResponseWriter, r *http.Request) {
 	if customerID > 0 && a.customers != nil {
 		customer, err := a.customers.GetByID(r.Context(), customerID)
 		if err != nil || customer.OrganizationID != orgID {
-			renderReceiptFormWithErrors(w, r, a, map[string]string{"customer_id": "Контрагент не принадлежит выбранной организации"}, items)
+			ve := NewValidationError("Ошибка документа").AddField("customer_id", "Контрагент не принадлежит выбранной организации")
+			a.RenderReceiptValidationError(w, r, ve, items)
 			return
 		}
 	}
@@ -418,18 +421,14 @@ func (a *App) ReceiptSave(w http.ResponseWriter, r *http.Request) {
 
 	if id == 0 {
 		if orgID == 0 || customerID == 0 {
-			errs := map[string]string{}
+			ve := NewValidationError("Ошибка документа")
 			if orgID == 0 {
-				errs["organization_id"] = "Выберите организацию"
+				ve.AddField("organization_id", "Выберите организацию")
 			}
 			if customerID == 0 {
-				errs["customer_id"] = "Выберите клиента"
+				ve.AddField("customer_id", "Выберите клиента")
 			}
-			renderReceiptFormWithErrors(w, r, a, errs, items)
-			return
-		}
-		if len(items) == 0 {
-			renderReceiptFormWithErrors(w, r, a, map[string]string{"": "Добавьте хотя бы одну позицию"}, items)
+			a.RenderReceiptValidationError(w, r, ve, items)
 			return
 		}
 
@@ -441,13 +440,19 @@ func (a *App) ReceiptSave(w http.ResponseWriter, r *http.Request) {
 		rec.ExchangeID = uuid
 	}
 
+	if sendTo1C && len(items) == 0 {
+		ve := NewValidationError("Ошибка документа").Add("Добавьте хотя бы одну позицию")
+		a.RenderReceiptValidationError(w, r, ve, items)
+		return
+	}
+
 	doc := &receipts.Document{Receipt: rec, Items: items}
 	if err := a.receipts.Save(r.Context(), doc); err != nil {
 		a.InternalError(w, err)
 		return
 	}
 
-	if isHtmxRequest(r) {
+	if ResponseModeFromRequest(r) == Fragment {
 		w.Header().Set("HX-Redirect", "/receipts")
 		w.WriteHeader(http.StatusOK)
 		return
@@ -455,7 +460,18 @@ func (a *App) ReceiptSave(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/receipts", http.StatusSeeOther)
 }
 
-func renderReceiptFormWithErrors(w http.ResponseWriter, r *http.Request, a *App, errs map[string]string, items []receipts.ReceiptItem) {
+// RenderReceiptValidationError доставляет ошибки валидации чека в зависимости
+// от режима ответа: Fragment — транспортное представление ValidationError,
+// FullPage — форма с ошибками и статусом 422.
+func (a *App) RenderReceiptValidationError(w http.ResponseWriter, r *http.Request, ve *ValidationError, items []receipts.ReceiptItem) {
+	if ResponseModeFromRequest(r) == Fragment {
+		WriteValidationResponse(w, r, NewValidationResponse(*ve))
+		return
+	}
+	a.renderReceiptForm(w, r, ve, items)
+}
+
+func (a *App) renderReceiptForm(w http.ResponseWriter, r *http.Request, ve *ValidationError, items []receipts.ReceiptItem) {
 	id := receiptIDFromURL(r)
 	customerID := parseInt64(r.FormValue("customer_id"))
 	organizationID := parseInt64(r.FormValue("organization_id"))
@@ -509,7 +525,7 @@ func renderReceiptFormWithErrors(w http.ResponseWriter, r *http.Request, a *App,
 		FormAction:     "/receipts",
 		Card:           ui.CardData{Title: "Новый товарный чек", CloseURL: "/receipts"},
 		Receipt:        receipt,
-		Errors:         errs,
+		Errors:         ve.ErrorsMap(),
 		OrganizationID: organizationID,
 		CustomerID:     customerID,
 		CustomerName:   customerName,
@@ -522,7 +538,7 @@ func renderReceiptFormWithErrors(w http.ResponseWriter, r *http.Request, a *App,
 	if id > 0 {
 		page.FormAction = "/receipts/" + strconv.FormatInt(id, 10)
 	}
-	page.ErrorsJSON, _ = common.ToJSON(errs)
+	page.ErrorsJSON, _ = common.ToJSON(ve.ErrorsMap())
 	if page.ErrorsJSON == "" {
 		page.ErrorsJSON = "{}"
 	}
@@ -535,10 +551,6 @@ func renderReceiptFormWithErrors(w http.ResponseWriter, r *http.Request, a *App,
 	if err := ui.RenderPage(w, TemplateFS(), pageFS, page); err != nil {
 		a.InternalError(w, err)
 	}
-}
-
-func isHtmxRequest(r *http.Request) bool {
-	return r.Header.Get("HX-Request") == "true"
 }
 
 func (a *App) ReceiptDelete(w http.ResponseWriter, r *http.Request) {

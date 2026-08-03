@@ -610,10 +610,54 @@ Editor Context (Alpine)
         ↓
 HTML + htmx
         ↓
-Server Validation (HTTP 422)
+Server Validation (ValidationError)
+        ↓
+Fragment → транспортное представление / FullPage → 422 + форма
 ```
 
 Первый пользователь: Receipt (Commit B).
+
+---
+
+# 16.1. ValidationError
+
+`ValidationError` — платформенная модель ошибок валидации. Располагается в
+`internal/app/validation.go`; `ValidationResponse` — её сериализуемое
+представление (`internal/app/validation_response.go`).
+
+```
+ValidationError
+        ↓
+NewValidationResponse()
+        ↓
+ValidationResponse
+        ↓
+WriteValidationResponse()   (транспорт, сегодня — JSON)
+```
+
+Правила:
+
+1. **`ValidationError` — единственная модель ошибок валидации.**
+   `ValidationResponse` — единственное сериализуемое представление
+   `ValidationError`. Любая форма платформы обязана использовать их
+   независимо от способа отображения (HTML, HTMX, API). Параллельные
+   механизмы (`map[string]string`, `[]string`, голый `error`) запрещены.
+2. **`ValidationError` описывает только ошибки пользовательского ввода.**
+   Внутренние ошибки приложения (ошибки БД, файловой системы, сети, паники
+   и т.п.) не передаются через `ValidationError`.
+3. **`ValidationError` не содержит локализованных кодов, HTTP-идентификаторов,
+   статусов ответа и информации о транспорте.** Модель ничего не знает о
+   представлении; преобразование в представление — ответственность
+   транспортного слоя (`NewValidationResponse`).
+4. **Fragment → транспортное представление ValidationError** (сегодня это
+   JSON `{title, errors, fields}`). **FullPage → 422 + форма с ошибками**.
+   Успех в обоих режимах — обычный редирект (`HX-Redirect` для htmx,
+   `303` без htmx).
+
+Выбор режима ответа — `ResponseModeFromRequest()`; единая точка ветвления —
+диспетчер на уровне App (например, `RenderReceiptValidationError`), запись
+в HTTP — `WriteValidationResponse`. Способ доставки (JSON сегодня, что-то
+другое завтра) — внутренняя деталь платформы.
 
 ---
 
