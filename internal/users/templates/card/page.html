@@ -1,5 +1,5 @@
 {{define "page_content"}}
-{{template "card_open" "Основная информация"}}
+{{template "card_open_closable" .Card}}
 <form method="post" action="{{.FormAction}}">
   {{range .Fields}}
     {{template "form_field" .}}

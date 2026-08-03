@@ -48,15 +48,15 @@ func TestReceiptSubmit_FullCycle(t *testing.T) {
 		t.Fatalf("step 1: expected 303, got %d: %s", w.Code, w.Body.String())
 	}
 
-	loc := w.Header().Get("Location")
-	if loc == "" {
-		t.Fatal("step 1: missing Location header")
+	if loc := w.Header().Get("Location"); loc != "/receipts" {
+		t.Fatalf("step 1: expected redirect to list, got %s", loc)
 	}
-	idStr := strings.TrimPrefix(loc, "/receipts/")
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil || id == 0 {
-		t.Fatalf("step 1: invalid receipt ID from Location: %s", loc)
+	list, err := app.receipts.List(context.Background(), receipts.ListOptions{}, nil)
+	if err != nil || len(list) != 1 {
+		t.Fatalf("step 1: expected one saved receipt, got %d: %v", len(list), err)
 	}
+	id := list[0].ID
+	idStr := strconv.FormatInt(id, 10)
 
 	// 2. GET /receipts/{id} — page renders with submit button
 	w = httptest.NewRecorder()
@@ -78,6 +78,12 @@ func TestReceiptSubmit_FullCycle(t *testing.T) {
 	if !strings.Contains(w.Body.String(), "Отправить") {
 		t.Fatal("step 2: expected submit button before send")
 	}
+	if !strings.Contains(w.Body.String(), `name="number"`) || !strings.Contains(w.Body.String(), `name="date"`) {
+		t.Fatal("step 2: expected editable receipt form before send")
+	}
+	if strings.Contains(w.Body.String(), "К списку") {
+		t.Fatal("step 2: unexpected list button")
+	}
 
 	// 3. POST /receipts/{id}/send — submit
 	w = httptest.NewRecorder()
@@ -89,6 +95,9 @@ func TestReceiptSubmit_FullCycle(t *testing.T) {
 
 	if w.Code != http.StatusSeeOther {
 		t.Fatalf("step 3: expected 303, got %d: %s", w.Code, w.Body.String())
+	}
+	if loc := w.Header().Get("Location"); loc != "/receipts" {
+		t.Fatalf("step 3: expected redirect to list, got %s", loc)
 	}
 
 	// 4. GET /receipts/{id} — button should be gone
@@ -104,6 +113,9 @@ func TestReceiptSubmit_FullCycle(t *testing.T) {
 	}
 	if strings.Contains(w.Body.String(), "Отправить") {
 		t.Fatal("step 4: expected no submit button after send")
+	}
+	if strings.Contains(w.Body.String(), `name="number"`) {
+		t.Fatal("step 4: expected read-only receipt after send")
 	}
 
 	// 5. POST /receipts/{id}/send again — should fail

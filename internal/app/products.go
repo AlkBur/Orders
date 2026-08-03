@@ -192,8 +192,10 @@ func (a *App) ProductCard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	formAction := "/products"
+	closeURL := "/products"
 	if oid > 0 {
 		formAction = "/organizations/" + strconv.FormatInt(oid, 10) + "/products"
+		closeURL = formAction
 		if product.ID > 0 {
 			formAction += "/" + strconv.FormatInt(product.ID, 10)
 		}
@@ -235,11 +237,13 @@ func (a *App) ProductCard(w http.ResponseWriter, r *http.Request) {
 	data := struct {
 		Title      string
 		Header     ui.HeaderData
+		Card       ui.CardData
 		FormAction string
 		Fields     []ui.Field
 	}{
 		Title:      title,
 		Header:     pageHeader(r, "Товары"),
+		Card:       ui.CardData{Title: "Основная информация", CloseURL: closeURL},
 		FormAction: formAction,
 		Fields:     fields,
 	}

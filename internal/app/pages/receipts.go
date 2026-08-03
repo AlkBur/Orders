@@ -13,6 +13,8 @@ type ReceiptOrganizationOption struct {
 type ReceiptCardPage struct {
 	Header         ui.HeaderData
 	Title          string
+	FormAction     string
+	Card           ui.CardData
 	Receipt        *receipts.Receipt
 	Items          []receipts.ReceiptItem
 	Orgs           []ReceiptOrganizationOption

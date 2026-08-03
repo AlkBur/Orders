@@ -136,12 +136,14 @@ func (a *App) UserCard(w http.ResponseWriter, r *http.Request) {
 	data := struct {
 		Title       string
 		Header      ui.HeaderData
+		Card        ui.CardData
 		FormAction  string
 		Fields      []ui.Field
 		HasPassword bool
 	}{
 		Title:      title,
 		Header:     pageHeader(r, "Пользователи"),
+		Card:       ui.CardData{Title: "Основная информация", CloseURL: "/users"},
 		FormAction: formAction,
 		Fields: []ui.Field{
 			{Name: "uuid", Label: "UUID", Type: ui.FieldText, Value: user.UUID},

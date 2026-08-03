@@ -123,6 +123,29 @@ func TestStore_CreateAndGetByID(t *testing.T) {
 	}
 }
 
+func TestStore_GeneratesNumber(t *testing.T) {
+	ctx, store, orgID, _ := setupTestData(t)
+
+	first := &Receipt{OrganizationID: orgID, Date: time.Now()}
+	if first.Number != "" {
+		t.Fatal("expected number to remain empty before save")
+	}
+	if err := store.Save(ctx, &Document{Receipt: first}); err != nil {
+		t.Fatal(err)
+	}
+	if first.Number != "000001" {
+		t.Fatalf("expected generated number 000001, got %s", first.Number)
+	}
+
+	second := &Receipt{OrganizationID: orgID, Date: time.Now()}
+	if err := store.Save(ctx, &Document{Receipt: second}); err != nil {
+		t.Fatal(err)
+	}
+	if second.Number != "000002" {
+		t.Fatalf("expected generated number 000002, got %s", second.Number)
+	}
+}
+
 func TestStore_CreateAndUpdate(t *testing.T) {
 	ctx, store, orgID, _ := setupTestData(t)
 

@@ -230,15 +230,17 @@ func (a *App) ReceiptCard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	title := "Товарный чек №" + doc.Receipt.Number
-	if doc.Receipt.ID == 0 {
-		title = "Новый товарный чек"
+	editable := doc.Receipt.ID == 0 || doc.Receipt.SentAt == nil
+	formAction := "/receipts"
+	if doc.Receipt.ID > 0 {
+		formAction = "/receipts/" + strconv.FormatInt(doc.Receipt.ID, 10)
 	}
 
 	var pickerCustomers []*customers.Customer
 	var pickerProducts []*products.Product
 	var organizationOptions []pages.ReceiptOrganizationOption
 
-	if doc.Receipt.ID == 0 {
+	if editable {
 		if a.organizations != nil {
 			orgs, err := a.organizations.List(r.Context(), organizations.ListOptions{}, nil)
 			if err != nil {
@@ -277,6 +279,8 @@ func (a *App) ReceiptCard(w http.ResponseWriter, r *http.Request) {
 	page := pages.ReceiptCardPage{
 		Header:         pageHeader(r, "Товарные чеки"),
 		Title:          title,
+		FormAction:     formAction,
+		Card:           ui.CardData{Title: title, CloseURL: "/receipts"},
 		Receipt:        doc.Receipt,
 		Items:          doc.Items,
 		CustomerID:     doc.Receipt.CustomerID,
@@ -308,8 +312,10 @@ func (a *App) ReceiptSave(w http.ResponseWriter, r *http.Request) {
 
 	id := receiptIDFromURL(r)
 
+	var existing *receipts.Document
 	if id > 0 {
-		existing, err := a.receipts.GetByID(r.Context(), id)
+		var err error
+		existing, err = a.receipts.GetByID(r.Context(), id)
 		if err != nil {
 			if errors.Is(err, receipts.ErrNotFound) {
 				http.NotFound(w, r)
@@ -390,6 +396,7 @@ func (a *App) ReceiptSave(w http.ResponseWriter, r *http.Request) {
 		userID = parseInt64(r.FormValue("user_id"))
 	}
 
+	sendTo1C := r.FormValue("send_to_1c") == "1"
 	rec := &receipts.Receipt{
 		ID:             id,
 		Number:         r.FormValue("number"),
@@ -399,6 +406,14 @@ func (a *App) ReceiptSave(w http.ResponseWriter, r *http.Request) {
 		CustomerID:     customerID,
 		CustomerName:   customerName,
 		Total:          total,
+	}
+	if existing != nil {
+		rec.UUID = existing.Receipt.UUID
+		rec.ExchangeID = existing.Receipt.ExchangeID
+	}
+	if sendTo1C {
+		now := time.Now()
+		rec.SentAt = &now
 	}
 
 	if id == 0 {
@@ -433,14 +448,15 @@ func (a *App) ReceiptSave(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if isHtmxRequest(r) {
-		w.Header().Set("HX-Redirect", "/receipts/"+strconv.FormatInt(rec.ID, 10))
+		w.Header().Set("HX-Redirect", "/receipts")
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-	http.Redirect(w, r, "/receipts/"+strconv.FormatInt(rec.ID, 10), http.StatusSeeOther)
+	http.Redirect(w, r, "/receipts", http.StatusSeeOther)
 }
 
 func renderReceiptFormWithErrors(w http.ResponseWriter, r *http.Request, a *App, errs map[string]string, items []receipts.ReceiptItem) {
+	id := receiptIDFromURL(r)
 	customerID := parseInt64(r.FormValue("customer_id"))
 	organizationID := parseInt64(r.FormValue("organization_id"))
 	var customerName string
@@ -476,6 +492,7 @@ func renderReceiptFormWithErrors(w http.ResponseWriter, r *http.Request, a *App,
 	}
 
 	receipt := a.receipts.New()
+	receipt.ID = id
 	receipt.Number = r.FormValue("number")
 	receipt.OrganizationID = organizationID
 	receipt.CustomerID = customerID
@@ -489,6 +506,8 @@ func renderReceiptFormWithErrors(w http.ResponseWriter, r *http.Request, a *App,
 	page := pages.ReceiptCardPage{
 		Header:         pageHeader(r, "Товарные чеки"),
 		Title:          "Новый товарный чек",
+		FormAction:     "/receipts",
+		Card:           ui.CardData{Title: "Новый товарный чек", CloseURL: "/receipts"},
 		Receipt:        receipt,
 		Errors:         errs,
 		OrganizationID: organizationID,
@@ -499,6 +518,9 @@ func renderReceiptFormWithErrors(w http.ResponseWriter, r *http.Request, a *App,
 		CustomersJSON:  customersJSON,
 		ProductsJSON:   productsJSON,
 		Orgs:           orgOptions,
+	}
+	if id > 0 {
+		page.FormAction = "/receipts/" + strconv.FormatInt(id, 10)
 	}
 	page.ErrorsJSON, _ = common.ToJSON(errs)
 	if page.ErrorsJSON == "" {
@@ -583,7 +605,7 @@ func (a *App) ReceiptSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, "/receipts/"+idStr, http.StatusSeeOther)
+	http.Redirect(w, r, "/receipts", http.StatusSeeOther)
 }
 
 func parseInt64(s string) int64 {

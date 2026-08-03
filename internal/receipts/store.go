@@ -3,6 +3,7 @@ package receipts
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"time"
 
 	"Orders/internal/common"
@@ -138,6 +139,19 @@ func (s *Store) Save(ctx context.Context, doc *Document) error {
 	r := doc.Receipt
 
 	if r.ID == 0 {
+		// Allocate the number only inside the insert transaction. Opening an
+		// editor or returning a validation error must not consume a number.
+		if r.Number == "" {
+			var next int64
+			if err := tx.QueryRowContext(ctx, `
+				SELECT COALESCE(MAX(CAST(number AS INTEGER)), 0) + 1
+				FROM receipts
+				WHERE organization_id = ?
+			`, r.OrganizationID).Scan(&next); err != nil {
+				return err
+			}
+			r.Number = fmt.Sprintf("%06d", next)
+		}
 		uuid, err := common.GenerateUUID()
 		if err != nil {
 			return err
