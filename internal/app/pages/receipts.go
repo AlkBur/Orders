@@ -1,19 +1,23 @@
 package pages
 
 import (
-	"Orders/internal/customers"
-	"Orders/internal/organizations"
-	"Orders/internal/products"
 	"Orders/internal/receipts"
+	"Orders/internal/ui"
 )
 
+type ReceiptOrganizationOption struct {
+	ID   int64
+	Name string
+}
+
 type ReceiptCardPage struct {
+	Header         ui.HeaderData
 	Title          string
 	Receipt        *receipts.Receipt
 	Items          []receipts.ReceiptItem
-	Orgs           []*organizations.Organization
-	Customers      []*customers.Customer
-	Products       []*products.Product
+	Orgs           []ReceiptOrganizationOption
+	CustomersJSON  string
+	ProductsJSON   string
 	CustomerID     int64
 	CustomerName   string
 	OrganizationID int64

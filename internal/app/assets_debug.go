@@ -3,7 +3,6 @@
 package app
 
 import (
-	"html/template"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -16,19 +15,6 @@ import (
 func assetDir(sub string) string {
 	_, file, _, _ := runtime.Caller(0)
 	return filepath.Join(filepath.Dir(file), sub)
-}
-
-func LoadTemplates(page string) (*template.Template, error) {
-	tmplDir := assetDir("templates")
-	icons := filepath.Join(tmplDir, "icons.html")
-
-	content := page + ".html"
-
-	return template.ParseFiles(
-		filepath.Join(tmplDir, "layout.html"),
-		filepath.Join(tmplDir, content),
-		icons,
-	)
 }
 
 func StaticFS() fs.FS {

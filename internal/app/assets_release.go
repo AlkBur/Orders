@@ -4,12 +4,8 @@ package app
 
 import (
 	"embed"
-	"html/template"
 	"io/fs"
 )
-
-//go:embed templates/*
-var templatesFS embed.FS
 
 //go:embed templates/layout
 //go:embed templates/components
@@ -18,17 +14,6 @@ var showcaseTemplatesFS embed.FS
 
 //go:embed static/**
 var staticFS embed.FS
-
-func LoadTemplates(page string) (*template.Template, error) {
-	content := "templates/" + page + ".html"
-
-	return template.ParseFS(
-		templatesFS,
-		"templates/layout.html",
-		content,
-		"templates/icons.html",
-	)
-}
 
 func StaticFS() fs.FS {
 	sub, err := fs.Sub(staticFS, "static")

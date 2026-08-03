@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"mime"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -139,8 +140,12 @@ func (a *App) CustomersPage(w http.ResponseWriter, r *http.Request) {
 				{Style: ui.ButtonPrimary, Text: "Добавить", URL: newURL, Icon: "plus"},
 			},
 		}
-		page.List.Search = &ui.SearchData{URL: listPath, Placeholder: "Поиск контрагентов...", Query: query, Mode: ui.SearchLive}
 	}
+	searchURL := listPath
+	if pickerMode {
+		searchURL = pickerListURL(r, listPath)
+	}
+	page.List.Search = &ui.SearchData{URL: searchURL, Placeholder: "Поиск контрагентов...", Query: query, Mode: ui.SearchLive}
 
 	if flash != nil {
 		page.Alert = FlashToAlert(*flash)
@@ -155,6 +160,19 @@ func pickerSelectURL(r *http.Request, id int64) string {
 	returnURL := r.URL.Query().Get("return_to")
 	return fmt.Sprintf("%s?select_id=%d&select_field=%s&return_to=%s",
 		returnURL, id, r.URL.Query().Get("field"), returnURL)
+}
+
+func pickerListURL(r *http.Request, path string) string {
+	values := url.Values{}
+	for _, name := range []string{"mode", "field", "return_to"} {
+		if value := r.URL.Query().Get(name); value != "" {
+			values.Set(name, value)
+		}
+	}
+	if encoded := values.Encode(); encoded != "" {
+		return path + "?" + encoded
+	}
+	return path
 }
 
 func customerIDFromURL(r *http.Request) int64 {

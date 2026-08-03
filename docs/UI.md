@@ -366,20 +366,22 @@ Flash-сообщение устанавливается до редиректа 
 # Entity Selection (Lookup)
 
 Large directories (customers, products) are selected via a `[Выбрать]` button,
-not a `<select>` element. The pattern:
+not a free-form input. In the receipt editor the button opens a modal picker;
+the selected value is transferred into the editor and the picker closes.
+The same list can also be opened in URL picker mode:
 
-1. Form shows current value (or "Не выбран") with a `[Выбрать]` link.
-2. `[Выбрать]` navigates to the entity list page in picker mode
-   (`?mode=picker&organization_id={oid}`).
-3. In picker mode, rows link back to the origin form with
-   `?customer_id={id}&return_to=...`.
-4. The origin handler reads the selected ID from query params and
-   re-renders the form with the entity pre-filled.
+1. Form shows current value (or "Не выбран") with a `[Выбрать]` button.
+2. The picker is always scoped to the selected organization.
+3. Search remains available in picker mode.
+4. The picker has no `[Добавить]` action.
+5. A normal list row opens the entity card; a picker row has only the
+   `Выбрать` action and returns the selected ID to the origin form.
 
 Picker mode rules:
 
 - `[Выбрать]` is disabled if no organization is selected.
 - The picker list only shows entities of the selected organization.
+- Changing the organization clears dependent customer/product values.
 - This mechanism is used for customers, products, and any future
   large directories.
 
@@ -507,12 +509,12 @@ Business logic never executes in the browser.
    - активация/деактивация элементов (`:disabled`)
    - модальные окна (отображение HTML, полученного от сервера)
    - реактивные вычисления (сумма документа)
-   - Всегда progressive enhancement — форма работает и без Alpine
-     (с полной перезагрузкой страницы)
+   - Alpine подключается из локального `/static/js/alpine.min.js`; без него
+     серверные поля сохраняются, но modal-операции редактора недоступны.
 
 3. **htmx** отвечает только за обмен с сервером:
    - сохранение документа (`hx-post`)
-   - загрузка пикера (`hx-get`)
+    - обмен с сервером и сохранение документа (`hx-get`/`hx-post`)
    - частичная подмена HTML
    - Всегда progressive enhancement — htmx-эндпоинты возвращают полную
      HTML-разметку, пригодную для обычного POST
@@ -555,8 +557,18 @@ Business logic never executes in the browser.
 `[Выбрать]` и отображение текущего значения, а не `<select>`.
 
 Picker mode — list page в режиме выбора:
-- скрыта кнопка «Добавить»
-- каждая строка ссылается на возврат с выбранным значением
+- скрыта кнопка «Добавить»;
+- обычная строка не открывает карточку;
+- действие строки возвращает выбранное значение в исходную форму.
+
+## Receipt Editor
+
+Редактор документа содержит номер и дату в одной строке, затем организацию
+и контрагента. Табличная часть имеет собственный toolbar с добавлением и
+поиском по уже добавленным строкам. Добавление строки открывает modal с
+товаром, количеством, ценой и вычисляемой суммой. Выбор товара фильтруется
+по организации документа. Сервер повторно проверяет принадлежность товара
+и контрагента организации перед сохранением.
 
 
 # List Pages
@@ -590,12 +602,7 @@ ui.RenderPage(w, TemplateFS(), pageFS, data)
 Легаси `pages.ListPage` больше не используется для новых страниц.
 Пока остаётся в:
 
-- Products
-- Receipts
-- Users
-
-(переносятся по мере миграции; Organizations и Customers уже переведены
-на `ui.ListData`).
+- Все текущие списки используют `ui.ListData` и доменный шаблон списка.
 
 ---
 
@@ -628,7 +635,7 @@ Theme           →  themes/<name>/theme.css
 | Header      | `components/header.html` | `HeaderData{Section, Username, Menu []MenuItem}` | Semantic (`app-header`) |
 | AppMenu     | `components/app_menu.html` | `MenuItem{ID, Label, Icon, URL, Danger, Separator}` | Semantic (`app-menu`) |
 | Toolbar     | `components/toolbar.html` | `ToolbarData{Buttons}` | Bulma buttons |
-| Search      | `components/search.html` | `SearchData{URL, Query, Placeholder, Live}` | Bulma field/control/input |
+| Search      | `components/search.html` | `SearchData{URL, Query, Placeholder, Mode, MinLength}` | Bulma field/control/input |
 | ListView    | `components/list.html` (`list_view`) | `ListView{Toolbar *ToolbarData, Search *SearchData, List ListData}` | Композиция |
 | Card        | `components/card.html`   | `card_open` / `card_close` (title) | Bulma card        |
 | List        | `components/list.html`   | `ListData{Columns, Rows, RenderMode, Preset}`; строка `ListRow{URL, Cells, Actions []RowAction}` | Semantic Classes |
@@ -736,6 +743,17 @@ type ListView struct {
 
 Страница-список собирается из `list_view`, а не раскладывает toolbar/search/list
 сама. Отдельные блоки остаются доступны для составных страниц.
+
+#### Entity cards
+
+Страницы создания и редактирования организаций, контрагентов, товаров,
+пользователей и чеков используют общий внешний контейнер `card_open` /
+`card_close` и Bulma-стиль формы. Простые формы выводят поля через
+`form_field`; специализированный редактор чеков сохраняет собственную
+Alpine-разметку внутри того же card-контейнера.
+
+Legacy-шаблоны `page-card` и отдельные плоские card-шаблоны для товаров,
+пользователей и чеков не используются.
 
 ### Header и AppMenu
 

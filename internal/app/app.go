@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"database/sql"
-	"html/template"
 	"net/http"
 	"sync"
 
@@ -32,8 +31,6 @@ type App struct {
 
 	router *chi.Mux
 	server *http.Server
-
-	templates map[string]*template.Template
 
 	orgKeys   map[string]string
 	orgKeysMu sync.RWMutex
@@ -87,20 +84,7 @@ func New(configPath string) (*App, error) {
 		organizations: orgStore,
 		products:      products.NewStore(db),
 		receipts:      receipts.NewStore(db),
-		templates:     make(map[string]*template.Template),
 		orgKeys:       orgKeys,
-	}
-
-	for _, page := range []string{
-		"receipt_card",
-		"product_card",
-		"user_card",
-	} {
-		tmpl, err := LoadTemplates(page)
-		if err != nil {
-			return nil, err
-		}
-		app.templates[page] = tmpl
 	}
 
 	app.router = app.NewRouter()

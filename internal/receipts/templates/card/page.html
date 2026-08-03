@@ -1,0 +1,316 @@
+{{define "page_content"}}
+{{template "card_open" .Title}}
+
+{{if not .Receipt.ID}}
+<div x-data="{
+  values: {
+    organization_id: {{.OrganizationID}},
+    customer_id: {{.CustomerID}},
+    customer_name: {{printf "%q" .CustomerName}},
+    number: {{printf "%q" .Receipt.Number}},
+    date: {{printf "%q" (.Receipt.Date.Format "2006-01-02")}}
+  },
+  items: {{.ItemsJSON}},
+  customers: {{.CustomersJSON}},
+  products: {{.ProductsJSON}},
+  lineQuery: '',
+  lineModalOpen: false,
+  pickerOpen: false,
+  pickerType: '',
+  pickerQuery: '',
+  newLine: { product_id: 0, product_name: '', unit: '', quantity: 1, price: 0, amount: 0 },
+  get orgSelected() { return Number(this.values.organization_id) > 0; },
+  get availablePickerItems() {
+    const organizationID = Number(this.values.organization_id);
+    const items = this.pickerType === 'customer' ? this.customers : this.products;
+    return items.filter(item => Number(item.organization_id) === organizationID);
+  },
+  get filteredLineCount() {
+    return this.items.filter(item => this.matchesLine(item)).length;
+  },
+  matchesLine(item) {
+    const query = this.lineQuery.trim().toLowerCase();
+    if (!query) return true;
+    return (item.product_name || '').toLowerCase().includes(query) ||
+      (item.unit || '').toLowerCase().includes(query);
+  },
+  matchesPicker(item) {
+    const query = this.pickerQuery.trim().toLowerCase();
+    if (!query) return true;
+    return (item.name || '').toLowerCase().includes(query) ||
+      (item.unit || '').toLowerCase().includes(query);
+  },
+  emptyLine() {
+    return { product_id: 0, product_name: '', unit: '', quantity: 1, price: 0, amount: 0 };
+  },
+  resetDependentFields() {
+    this.values.customer_id = 0;
+    this.values.customer_name = '';
+    this.items = [];
+    this.newLine = this.emptyLine();
+  },
+  calcNewLine() {
+    this.newLine.amount = (Number(this.newLine.quantity) || 0) * (Number(this.newLine.price) || 0);
+  },
+  openLineModal() {
+    if (!this.orgSelected) return;
+    this.newLine = this.emptyLine();
+    this.lineModalOpen = true;
+  },
+  openPicker(type) {
+    if (!this.orgSelected) return;
+    this.pickerType = type;
+    this.pickerQuery = '';
+    this.pickerOpen = true;
+  },
+  selectPickerItem(item) {
+    if (this.pickerType === 'customer') {
+      this.values.customer_id = item.id;
+      this.values.customer_name = item.name;
+    } else {
+      this.newLine.product_id = item.id;
+      this.newLine.product_name = item.name;
+      this.newLine.unit = item.unit || '';
+      this.calcNewLine();
+    }
+    this.pickerOpen = false;
+  },
+  addLine() {
+    if (!this.newLine.product_id) return;
+    this.calcNewLine();
+    this.items.push({...this.newLine});
+    this.newLine = this.emptyLine();
+    this.lineModalOpen = false;
+  },
+  removeLine(index) {
+    this.items.splice(index, 1);
+  },
+  get total() {
+    return this.items.reduce((sum, item) => sum + ((Number(item.quantity) || 0) * (Number(item.price) || 0)), 0);
+  }
+}">
+  <form hx-post="/receipts" hx-target="this" hx-swap="outerHTML" method="post">
+    <div class="columns">
+      <div class="column">
+        <div class="field">
+          <label class="label" for="number">Номер</label>
+          <div class="control">
+            <input class="input" id="number" name="number" type="text" x-model="values.number" required>
+          </div>
+        </div>
+      </div>
+      <div class="column">
+        <div class="field">
+          <label class="label" for="date">Дата</label>
+          <div class="control">
+            <input class="input" id="date" name="date" type="date" x-model="values.date" required>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="field">
+      <label class="label" for="organization_id">Организация</label>
+      <div class="control">
+        <div class="select is-fullwidth">
+          <select id="organization_id" name="organization_id" x-model="values.organization_id" @change="resetDependentFields" required>
+            <option value="0">Выберите организацию</option>
+            {{range .Orgs}}
+            <option value="{{.ID}}">{{.Name}}</option>
+            {{end}}
+          </select>
+        </div>
+      </div>
+    </div>
+    {{if index .Errors "organization_id"}}
+    <p class="help is-danger">{{index .Errors "organization_id"}}</p>
+    {{end}}
+
+    <div class="field">
+      <label class="label" for="customer_display">Контрагент</label>
+      <div class="field has-addons">
+        <div class="control is-expanded">
+          <input class="input" id="customer_display" type="text" :value="values.customer_name || 'Не выбран'" readonly disabled>
+        </div>
+        <div class="control">
+          <button type="button" class="button is-outlined" @click="openPicker('customer')" :disabled="!orgSelected">{{icon "search"}}<span>Выбрать</span></button>
+        </div>
+      </div>
+      <input type="hidden" name="customer_id" :value="values.customer_id">
+    </div>
+    {{if index .Errors "customer_id"}}
+    <p class="help is-danger">{{index .Errors "customer_id"}}</p>
+    {{end}}
+
+    <div class="level mb-3">
+      <div class="level-left">
+        <div class="level-item">
+          <button type="button" class="button is-primary" @click="openLineModal" :disabled="!orgSelected">{{icon "plus"}}<span>Добавить</span></button>
+        </div>
+      </div>
+      <div class="level-right">
+        <div class="level-item">
+          <div class="field has-addons">
+            <div class="control is-expanded">
+              <input class="input" x-ref="lineSearch" type="search" x-model="lineQuery" placeholder="Поиск по строкам" autocomplete="off">
+            </div>
+            <div class="control">
+              <button type="button" class="button is-outlined" @click="$refs.lineSearch.focus()">{{icon "search"}}<span>Поиск</span></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <table class="table is-fullwidth">
+      <thead>
+        <tr>
+          <th>№</th>
+          <th>Товар</th>
+          <th>Е. изм</th>
+          <th>Количество</th>
+          <th>Цена</th>
+          <th>Сумма</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="(item, i) in items" :key="i">
+          <tr x-show="matchesLine(item)">
+            <td x-text="i + 1"></td>
+            <td>
+              <input type="hidden" :name="'items[' + i + '][product_id]'" x-model="item.product_id">
+              <span x-text="item.product_name"></span>
+            </td>
+            <td x-text="item.unit"></td>
+            <td><input class="input" type="number" step="0.001" :name="'items[' + i + '][quantity]'" x-model="item.quantity"></td>
+            <td><input class="input" type="number" step="0.01" :name="'items[' + i + '][price]'" x-model="item.price"></td>
+            <td x-text="((Number(item.quantity) || 0) * (Number(item.price) || 0)).toFixed(2)"></td>
+            <td><button type="button" class="button is-small is-danger is-light" @click="removeLine(i)" aria-label="Удалить">{{icon "trash"}}</button></td>
+          </tr>
+        </template>
+        <template x-if="items.length === 0">
+          <tr><td colspan="7" class="has-text-centered">Нет позиций</td></tr>
+        </template>
+        <template x-if="items.length > 0 && filteredLineCount === 0">
+          <tr><td colspan="7" class="has-text-centered">Ничего не найдено</td></tr>
+        </template>
+      </tbody>
+    </table>
+
+    <input type="hidden" name="total" :value="total">
+    <div class="is-flex is-justify-content-flex-end mb-4">
+      <strong>Итого: <span x-text="total.toFixed(2)"></span></strong>
+    </div>
+
+    {{if index .Errors ""}}
+    <p class="help is-danger">{{index .Errors ""}}</p>
+    {{end}}
+
+    <div class="buttons">
+      <button type="submit" class="button is-primary">{{icon "save"}}<span>Сохранить</span></button>
+      <a href="/receipts" class="button is-light">К списку</a>
+    </div>
+  </form>
+
+  <div class="modal" x-cloak :class="{ 'is-active': lineModalOpen }">
+    <div class="modal-background" @click="lineModalOpen = false"></div>
+    <div class="modal-card">
+      <header class="modal-card-head">
+        <p class="modal-card-title">Добавить позицию</p>
+        <button type="button" class="delete" aria-label="Закрыть" @click="lineModalOpen = false"></button>
+      </header>
+      <section class="modal-card-body">
+        <div class="field">
+          <label class="label" for="line_product">Товар</label>
+          <div class="field has-addons">
+            <div class="control is-expanded">
+              <input class="input" id="line_product" type="text" :value="newLine.product_name || 'Не выбран'" readonly disabled>
+            </div>
+            <div class="control">
+              <button type="button" class="button is-outlined" @click="openPicker('product')">{{icon "search"}}<span>Выбрать</span></button>
+            </div>
+          </div>
+        </div>
+        <div class="field">
+          <label class="label" for="line_quantity">Количество</label>
+          <input class="input" id="line_quantity" type="number" step="0.001" min="0" x-model="newLine.quantity" @input="calcNewLine">
+        </div>
+        <div class="field">
+          <label class="label" for="line_price">Цена</label>
+          <input class="input" id="line_price" type="number" step="0.01" min="0" x-model="newLine.price" @input="calcNewLine">
+        </div>
+        <div class="field">
+          <label class="label" for="line_amount">Сумма</label>
+          <input class="input" id="line_amount" type="text" :value="newLine.amount.toFixed(2)" readonly disabled>
+        </div>
+      </section>
+      <footer class="modal-card-foot">
+        <div class="buttons">
+          <button type="button" class="button is-primary" @click="addLine" :disabled="!newLine.product_id">Добавить</button>
+          <button type="button" class="button" @click="lineModalOpen = false">Отмена</button>
+        </div>
+      </footer>
+    </div>
+  </div>
+
+  <div class="modal" x-cloak :class="{ 'is-active': pickerOpen }">
+    <div class="modal-background" @click="pickerOpen = false"></div>
+    <div class="modal-card">
+      <header class="modal-card-head">
+        <p class="modal-card-title" x-text="pickerType === 'customer' ? 'Выбор контрагента' : 'Выбор товара'"></p>
+        <button type="button" class="delete" aria-label="Закрыть" @click="pickerOpen = false"></button>
+      </header>
+      <section class="modal-card-body">
+        <div class="field has-addons mb-4">
+          <div class="control is-expanded">
+            <input class="input" type="search" x-model="pickerQuery" placeholder="Поиск" autocomplete="off">
+          </div>
+          <div class="control"><button type="button" class="button is-outlined">{{icon "search"}}<span>Поиск</span></button></div>
+        </div>
+        <div class="buttons is-flex is-flex-direction-column is-align-items-stretch">
+          <template x-for="item in availablePickerItems" :key="item.id">
+            <button type="button" class="button is-light is-justify-content-space-between" x-show="matchesPicker(item)" @click="selectPickerItem(item)">
+              <span x-text="item.name"></span>
+              <span class="has-text-grey" x-text="item.unit || ''"></span>
+            </button>
+          </template>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+{{else}}
+  {{$r := .Receipt}}
+  <table class="table is-fullwidth">
+    <tr><td>Номер</td><td>{{$r.Number}}</td></tr>
+    <tr><td>Дата</td><td>{{$r.Date.Format "2006-01-02"}}</td></tr>
+    <tr><td>Организация</td><td>{{$r.OrganizationName}}</td></tr>
+    <tr><td>Пользователь</td><td>{{$r.UserLogin}}</td></tr>
+    <tr><td>Клиент</td><td>{{$r.CustomerName}}</td></tr>
+    <tr><td>Сумма</td><td>{{printf "%.2f" $r.Total}}</td></tr>
+    <tr><td>Статус</td><td>{{if $r.Status}}{{$r.Status}}{{else if $r.SentAt}}Отправлен{{else}}Не отправлен{{end}}</td></tr>
+  </table>
+
+  <h2>Позиции</h2>
+  <table class="table is-fullwidth">
+    <thead><tr><th>№</th><th>Товар</th><th>Е. изм</th><th>Количество</th><th>Цена</th><th>Сумма</th></tr></thead>
+    <tbody>
+      {{range .Items}}
+      <tr><td>{{.LineNum}}</td><td>{{.ProductName}}</td><td>{{.Unit}}</td><td>{{printf "%.2f" .Quantity}}</td><td>{{printf "%.2f" .Price}}</td><td>{{printf "%.2f" .Amount}}</td></tr>
+      {{else}}
+      <tr><td colspan="6">Нет позиций</td></tr>
+      {{end}}
+    </tbody>
+  </table>
+
+  {{if eq $r.SentAt nil}}
+  <form method="POST" action="/receipts/{{$r.ID}}/send" style="display:inline">
+    <button type="submit" class="button is-primary">{{icon "send"}}Отправить</button>
+  </form>
+  {{end}}
+  <a href="/receipts" class="button is-light">К списку</a>
+{{end}}
+
+{{template "card_close"}}
+{{end}}
