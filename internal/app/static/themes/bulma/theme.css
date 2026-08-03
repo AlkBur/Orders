@@ -20,7 +20,6 @@
 .receipt-items-header,
 .receipt-item-row {
   display: grid;
-  grid-template-columns: 2rem minmax(12rem, 2fr) minmax(4rem, 1fr) minmax(7rem, 1fr) minmax(7rem, 1fr) minmax(6rem, 1fr) 2.5rem;
   gap: 0.75rem;
   align-items: center;
 }
@@ -36,21 +35,52 @@
   padding: 0.75rem 0.5rem;
   border-bottom: 1px solid var(--bulma-border);
 }
+.receipt-items--editor .receipt-items-header,
+.receipt-items--editor .receipt-item-row {
+  grid-template-columns: max-content minmax(12rem, 2fr) minmax(4rem, 1fr) minmax(7rem, 1fr) minmax(7rem, 1fr) minmax(6rem, 1fr) minmax(calc(var(--icon-button-size, 2.75rem) * 2 + var(--bulma-column-gap)), max-content);
+}
+.receipt-items--view .receipt-items-header,
+.receipt-items--view .receipt-item-row {
+  grid-template-columns: max-content minmax(12rem, 2fr) minmax(4rem, 1fr) minmax(7rem, 1fr) minmax(7rem, 1fr) minmax(6rem, 1fr);
+}
+.receipt-items--editor .receipt-items-header {
+  text-align: center;
+}
 .receipt-item-product,
 .receipt-item-field {
   min-width: 0;
 }
 .receipt-item-product .button {
-  width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: inline-block;
+  max-width: 100%;
+  height: auto;
+  padding: 0;
+  vertical-align: top;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  text-align: left;
+  color: var(--bulma-text);
+  text-decoration: none;
 }
 .receipt-item-product > span {
   display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+@media (hover: hover) {
+  .receipt-item-product .button:hover {
+    color: var(--bulma-link);
+  }
+  .receipt-items--editor .receipt-item-number,
+  .receipt-items--editor .receipt-item-unit {
+    cursor: pointer;
+  }
+  .receipt-items--editor .receipt-item-number:hover,
+  .receipt-items--editor .receipt-item-unit:hover {
+    color: var(--bulma-link);
+  }
 }
 .receipt-item-label {
   display: none;
@@ -59,7 +89,12 @@
   margin-bottom: 0.25rem;
 }
 .receipt-item-actions {
-  text-align: right;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+.receipt-item-actions .icon-button__label {
+  display: none;
 }
 .receipt-items-empty {
   padding: 1rem;
@@ -105,6 +140,56 @@
 .modal {
   z-index: 1100;
 }
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--icon-button-size, 2.75rem);
+  min-height: var(--icon-button-size, 2.75rem);
+  padding: 0;
+  border: 1px solid var(--bulma-border);
+  border-radius: var(--bulma-radius);
+  background: transparent;
+  color: var(--bulma-text);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.icon-button svg {
+  width: var(--icon-size, 1rem);
+  height: var(--icon-size, 1rem);
+}
+.icon-button:disabled,
+.icon-button[aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+@media (hover: hover) {
+  .icon-button:hover {
+    background: var(--bulma-background);
+    color: var(--bulma-text-strong);
+  }
+}
+.receipt-item-delete {
+  color: var(--bulma-danger);
+}
+@media (hover: hover) {
+  .receipt-item-delete:hover {
+    background: var(--bulma-danger-soft);
+    color: var(--bulma-danger-strong);
+  }
+}
+.receipt-confirm-label {
+  color: var(--bulma-text-light);
+  font-size: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+.receipt-confirm-product {
+  font-weight: 600;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
 @media (max-width: 768px) {
   .receipt-editor {
     padding-bottom: 5rem;
@@ -116,7 +201,6 @@
     display: none;
   }
   .receipt-item-row {
-    grid-template-columns: 1fr 1fr;
     gap: 0.75rem;
     margin-bottom: 0.75rem;
     padding: 0.75rem;
@@ -129,18 +213,55 @@
     color: var(--bulma-text-light);
     font-size: 0.75rem;
   }
-  .receipt-item-product {
+  .receipt-items--view .receipt-item-row {
+    grid-template-columns: 1fr 1fr;
+  }
+  .receipt-items--view .receipt-item-product {
     grid-column: 1 / -1;
     grid-row: 1;
   }
-  .receipt-item-number {
+  .receipt-items--view .receipt-item-number {
     grid-column: 1;
     grid-row: 2;
   }
-  .receipt-item-actions {
+  .receipt-items--editor .receipt-item-row {
+    grid-template-columns: max-content 1fr;
+  }
+  .receipt-items--editor .receipt-item-number {
+    grid-column: 1;
+  }
+  .receipt-items--editor .receipt-item-product {
     grid-column: 2;
-    grid-row: 2;
-    text-align: right;
+  }
+  .receipt-items--editor .receipt-item-unit {
+    grid-column: 1;
+  }
+  .receipt-items--editor .receipt-item-qty {
+    grid-column: 2;
+  }
+  .receipt-items--editor .receipt-item-price {
+    grid-column: 1;
+  }
+  .receipt-items--editor .receipt-item-amount {
+    grid-column: 2;
+  }
+  .receipt-items--editor .receipt-item-actions {
+    grid-column: 1 / -1;
+    display: flex;
+    gap: 0.5rem;
+    border-top: 1px solid var(--bulma-border);
+    padding-top: 0.75rem;
+  }
+  .receipt-items--editor .receipt-item-actions .icon-button {
+    flex: 1;
+    min-height: 44px;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .receipt-items--editor .receipt-item-actions .icon-button__label {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .receipt-item-field {
     display: block;
