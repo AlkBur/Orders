@@ -4,5 +4,9 @@
     "secret": "very-long-random-secret",
     "auth": {
         "initial_password": "admin"
+    },
+    "rate_limit": {
+        "login_by_ip": { "requests": 10, "window_sec": 60 },
+        "login_by_account": { "requests": 5, "window_sec": 600 }
     }
 }

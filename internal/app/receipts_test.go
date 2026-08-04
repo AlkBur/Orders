@@ -357,6 +357,93 @@ func TestReceiptSave_ExistingRemoveAllItems(t *testing.T) {
 	}
 }
 
+func TestReceiptCard_ProductNameWrapping(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	orgID, _ := insertOrg(t, db, "Org One", "key_org1")
+	prodStore := products.NewStore(db)
+
+	names := []string{
+		"Монитор LG UltraGear 24GS60F-B",
+		"Гайка M10 DIN 934 оцинкованная",
+		"ОченьОченьОченьОченьОченьОченьДлинноеСлово",
+	}
+	prodIDs := make([]int64, len(names))
+	for i, n := range names {
+		id, _ := insertProduct(t, db, orgID, n, "шт")
+		prodIDs[i] = id
+	}
+
+	app := &App{
+		receipts:      receipts.NewStore(db),
+		organizations: organizations.NewStore(db),
+		products:      prodStore,
+	}
+
+	var b strings.Builder
+	b.WriteString("number=001&organization_id=" + strconv.FormatInt(orgID, 10) +
+		"&user_id=1&customer_id=1&total=300&date=2026-07-29")
+	for i, pid := range prodIDs {
+		b.WriteString("&items[" + strconv.Itoa(i) + "][product_id]=" + strconv.FormatInt(pid, 10))
+		b.WriteString("&items[" + strconv.Itoa(i) + "][quantity]=1")
+		b.WriteString("&items[" + strconv.Itoa(i) + "][price]=100")
+		b.WriteString("&items[" + strconv.Itoa(i) + "][amount]=100")
+	}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPost, "/receipts", strings.NewReader(b.String()))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	app.ReceiptSave(w, r)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("create: expected 303, got %d: %s", w.Code, w.Body.String())
+	}
+	list, err := app.receipts.List(context.Background(), receipts.ListOptions{}, nil)
+	if err != nil || len(list) != 1 {
+		t.Fatalf("create: expected one receipt, got %d: %v", len(list), err)
+	}
+	idStr := strconv.FormatInt(list[0].ID, 10)
+
+	// send so the read-only view (SSR) with lines renders
+	w = httptest.NewRecorder()
+	r = httptest.NewRequest(http.MethodPost, "/receipts/"+idStr+"/send", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", idStr)
+	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+	app.ReceiptSubmit(w, r)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("send: expected 303, got %d: %s", w.Code, w.Body.String())
+	}
+
+	w = httptest.NewRecorder()
+	r = httptest.NewRequest(http.MethodGet, "/receipts/"+idStr, nil)
+	rctx = chi.NewRouteContext()
+	rctx.URLParams.Add("id", idStr)
+	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+	app.ReceiptCard(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("render: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	body := w.Body.String()
+	for _, n := range names {
+		if !strings.Contains(body, n) {
+			t.Fatalf("expected product name %q in rendered card", n)
+		}
+	}
+	for _, cls := range []string{
+		`class="receipt-item-main"`,
+		`class="receipt-item-unit-inline"`,
+		`class="receipt-item-field receipt-item-qty"`,
+		`class="receipt-item-field receipt-item-price"`,
+		`class="receipt-item-field receipt-item-amount"`,
+	} {
+		if !strings.Contains(body, cls) {
+			t.Fatalf("expected %s in rendered card", cls)
+		}
+	}
+	if !strings.Contains(body, "Количество") {
+		t.Fatal("expected full 'Количество' label text preserved in template")
+	}
+}
+
 func insertProduct(t *testing.T, dbt *sql.DB, orgID int64, name, unit string) (int64, string) {
 	t.Helper()
 	uuid := "uuid-" + name

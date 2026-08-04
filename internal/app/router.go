@@ -12,12 +12,15 @@ func (a *App) NewRouter() *chi.Mux {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
+	// Доверенные прокси: локальный Caddy. ClientIPFromXFF обязателен до
+	// rate limiter'а — он задаёт доверенный IP клиента в контексте.
+	r.Use(middleware.ClientIPFromXFF("127.0.0.1/8", "::1/128"))
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(SessionMiddleware(a.sessions))
 
 	r.Get("/login", a.LoginPage)
-	r.Post("/login", a.Login)
+	r.With(a.loginRequestGuard(), a.loginRateLimiter()).Post("/login", a.Login)
 
 	r.Handle(
 		"/static/*",

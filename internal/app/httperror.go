@@ -3,6 +3,8 @@ package app
 import (
 	"encoding/json"
 	"net/http"
+
+	"Orders/internal/ui"
 )
 
 // WriteValidationResponse serializes ValidationResponse using the transport
@@ -34,6 +36,26 @@ func (a *App) Unauthorized(w http.ResponseWriter) {
 
 func (a *App) Forbidden(w http.ResponseWriter) {
 	http.Error(w, "Forbidden", http.StatusForbidden)
+}
+
+// RenderInfrastructureError — единственная точка доставки инфраструктурных
+// ошибок (некорректный запрос, превышение лимита). Guard'ы и RateLimiter
+// не знают про HTML, HTMX и JSON.
+// Для Fragment-запроса отдаёт JSON InfrastructureResponse с реальным
+// HTTP-статусом; для обычного запроса перерисовывает форму входа с тем же
+// статусом.
+func (a *App) RenderInfrastructureError(w http.ResponseWriter, r *http.Request, status int, title string, msgs []string) {
+	NoCache(w)
+	if ResponseModeFromRequest(r) == Fragment {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		_ = json.NewEncoder(w).Encode(NewInfrastructureResponse(status, title, msgs))
+		return
+	}
+	a.RenderPageStatus(w, r, ResponseModeFromRequest(r), status, a.loginPageData("", &ui.AlertData{
+		Type:     ui.AlertError,
+		Messages: msgs,
+	}))
 }
 
 func NoCache(w http.ResponseWriter) {

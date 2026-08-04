@@ -2,7 +2,7 @@
 <div class="auth-card" id="login-card">
   {{template "card_open" "Вход"}}
     {{if .Alert}}{{template "alert" .Alert}}{{end}}
-    <form method="post" action="/login" hx-post="/login" hx-target="#login-card" hx-swap="outerHTML">
+    <form method="post" action="/login" hx-post="/login" hx-target="#login-card" hx-swap="outerHTML" data-response-errors>
       {{range .Fields}}{{template "form_field" .}}{{end}}
       <div class="buttons mt-2">
         <button type="submit" class="button is-primary is-fullwidth">Войти</button>

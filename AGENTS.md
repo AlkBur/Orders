@@ -122,6 +122,11 @@ Keep custom CSS small.
 
 Avoid overriding Pico unless necessary.
 
+Desktop and Mobile are two independent presentations of one data model. Matching
+the DOM structure is not a goal; the priority is usability on each device type.
+The mobile version is not required to mirror the desktop structure and is designed
+as its own interface for small screens.
+
 ---
 
 # JavaScript
