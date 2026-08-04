@@ -46,6 +46,14 @@
 .receipt-items--editor .receipt-items-header {
   text-align: center;
 }
+.receipt-item-main {
+  grid-column: 1 / 4;
+  display: grid;
+  grid-template-columns: max-content minmax(12rem, 2fr) minmax(4rem, 1fr);
+  gap: 0.75rem;
+  align-items: center;
+  min-width: 0;
+}
 .receipt-item-product,
 .receipt-item-field {
   min-width: 0;
@@ -74,11 +82,11 @@
     color: var(--bulma-link);
   }
   .receipt-items--editor .receipt-item-number,
-  .receipt-items--editor .receipt-item-unit {
+  .receipt-items--editor .receipt-item-unit-inline {
     cursor: pointer;
   }
   .receipt-items--editor .receipt-item-number:hover,
-  .receipt-items--editor .receipt-item-unit:hover {
+  .receipt-items--editor .receipt-item-unit-inline:hover {
     color: var(--bulma-link);
   }
 }
@@ -213,47 +221,63 @@
     color: var(--bulma-text-light);
     font-size: 0.75rem;
   }
+  .receipt-items--editor .receipt-item-row,
   .receipt-items--view .receipt-item-row {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
-  .receipt-items--view .receipt-item-product {
+  .receipt-item-main {
     grid-column: 1 / -1;
     grid-row: 1;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 0.25rem;
+    min-width: 0;
   }
-  .receipt-items--view .receipt-item-number {
+  .receipt-item-main .receipt-item-number::after {
+    content: ".";
+  }
+  .receipt-item-unit-inline {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+  .receipt-item-unit-inline::before {
+    content: "(";
+  }
+  .receipt-item-unit-inline::after {
+    content: ")";
+  }
+  .receipt-item-qty {
     grid-column: 1;
+  }
+  .receipt-item-price {
+    grid-column: 2;
+  }
+  .receipt-item-amount {
+    grid-column: 3;
+  }
+  .receipt-item-qty,
+  .receipt-item-price,
+  .receipt-item-amount {
     grid-row: 2;
   }
-  .receipt-items--editor .receipt-item-row {
-    grid-template-columns: max-content 1fr;
+  .receipt-item-qty .receipt-item-label {
+    font-size: 0;
   }
-  .receipt-items--editor .receipt-item-number {
-    grid-column: 1;
-  }
-  .receipt-items--editor .receipt-item-product {
-    grid-column: 2;
-  }
-  .receipt-items--editor .receipt-item-unit {
-    grid-column: 1;
-  }
-  .receipt-items--editor .receipt-item-qty {
-    grid-column: 2;
-  }
-  .receipt-items--editor .receipt-item-price {
-    grid-column: 1;
-  }
-  .receipt-items--editor .receipt-item-amount {
-    grid-column: 2;
+  .receipt-item-qty .receipt-item-label::before {
+    content: "Кол-во";
+    font-size: 0.75rem;
   }
   .receipt-items--editor .receipt-item-actions {
     grid-column: 1 / -1;
+    grid-row: 3;
     display: flex;
     gap: 0.5rem;
     border-top: 1px solid var(--bulma-border);
     padding-top: 0.75rem;
   }
   .receipt-items--editor .receipt-item-actions .icon-button {
-    flex: 1;
+    flex: 1 1 0;
     min-height: 44px;
     min-width: 0;
     overflow: hidden;
@@ -268,9 +292,6 @@
   }
   .receipt-item-label {
     display: block;
-  }
-  .receipt-item-amount {
-    align-self: end;
   }
   .line-modal-top {
     align-items: flex-start;

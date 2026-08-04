@@ -421,15 +421,14 @@
   </div>
   <template x-for="(item, i) in items" :key="i">
     <div class="receipt-item-row" x-show="matchesLine(item)">
-      <span class="receipt-item-number" @click="openLineModal(i)" x-text="i + 1"></span>
-      <div class="receipt-item-product">
-        <input type="hidden" :name="'items[' + i + '][product_id]'" x-model="item.product_id">
-        <button type="button" class="button is-ghost has-text-left" @click="openLineModal(i)"
-          x-text="item.product_name"></button>
-      </div>
-      <div class="receipt-item-field receipt-item-unit" @click="openLineModal(i)">
-        <span class="receipt-item-label">Е. изм</span>
-        <span x-text="item.unit"></span>
+      <div class="receipt-item-main">
+        <span class="receipt-item-number" @click="openLineModal(i)" x-text="i + 1"></span>
+        <div class="receipt-item-product">
+          <input type="hidden" :name="'items[' + i + '][product_id]'" x-model="item.product_id">
+          <button type="button" class="button is-ghost has-text-left" @click="openLineModal(i)"
+            x-text="item.product_name"></button>
+        </div>
+        <span class="receipt-item-unit-inline" @click="openLineModal(i)" x-text="item.unit"></span>
       </div>
       <div class="receipt-item-field receipt-item-qty">
         <label class="receipt-item-label" :for="'item_quantity_' + i">Количество</label>
@@ -466,26 +465,25 @@
       изм</span><span>Количество</span><span>Цена</span><span>Сумма</span>
   </div>
   {{range .Items}}
-  <div class="receipt-item-row">
-    <span class="receipt-item-number">{{.LineNum}}</span>
-    <div class="receipt-item-product"><span>{{.ProductName}}</span></div>
-    <div class="receipt-item-field">
-      <span class="receipt-item-label">Е. изм</span>
-      <span>{{.Unit}}</span>
+    <div class="receipt-item-row">
+      <div class="receipt-item-main">
+        <span class="receipt-item-number">{{.LineNum}}</span>
+        <div class="receipt-item-product"><span>{{.ProductName}}</span></div>
+        <span class="receipt-item-unit-inline">{{.Unit}}</span>
+      </div>
+      <div class="receipt-item-field receipt-item-qty">
+        <span class="receipt-item-label">Количество</span>
+        <span>{{printf "%.2f" .Quantity}}</span>
+      </div>
+      <div class="receipt-item-field receipt-item-price">
+        <span class="receipt-item-label">Цена</span>
+        <span>{{printf "%.2f" .Price}}</span>
+      </div>
+      <div class="receipt-item-field receipt-item-amount">
+        <span class="receipt-item-label">Сумма</span>
+        <span>{{printf "%.2f" .Amount}}</span>
+      </div>
     </div>
-    <div class="receipt-item-field">
-      <span class="receipt-item-label">Количество</span>
-      <span>{{printf "%.2f" .Quantity}}</span>
-    </div>
-    <div class="receipt-item-field">
-      <span class="receipt-item-label">Цена</span>
-      <span>{{printf "%.2f" .Price}}</span>
-    </div>
-    <div class="receipt-item-field receipt-item-amount">
-      <span class="receipt-item-label">Сумма</span>
-      <span>{{printf "%.2f" .Amount}}</span>
-    </div>
-  </div>
   {{else}}
   <div class="receipt-items-empty">Нет позиций</div>
   {{end}}

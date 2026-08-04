@@ -540,6 +540,11 @@ app.New()
 ```
 Request
     │
+    ├── RequestID
+    ├── RealIP
+    ├── ClientIPFromXFF(trusted proxies)   ← доверенный IP клиента в context
+    ├── Logger
+    ├── Recoverer
     ├── SessionMiddleware (cookie → session)
     │
     ├── RequireAuth (session → identity.GetByID → context)
@@ -548,6 +553,32 @@ Request
     │
     └── Handler (context → Identity.Login, .IsAdmin, .NeedsPasswordSetup)
 ```
+
+### Login Request Chain
+
+`POST /login` дополнительно обёрнут в два слоя (порядок важен):
+
+```
+guard → rate limiter → Login
+```
+
+1. **Request Guard** — защита от переполнения формы: ограничивает размер тела
+   (413), число полей и длину значений (400). Работает до RateLimiter, поэтому
+   переполненные запросы отклоняются раньше счётчика попыток.
+2. **Rate Limiter** — защита от перебора паролей. Два независимых лимита:
+   по IP и по аккаунту (нормализованный логин). HTTP 429.
+
+Guard и RateLimiter возвращают только инфраструктурные ошибки и не знают про
+HTML, HTMX и JSON — они вызывают `RenderInfrastructureError`.
+
+### Trusted Proxies
+
+`ClientIPFromXFF("127.0.0.1/8", "::1/128")` допустимо только за локальным
+reverse proxy (Caddy), который на каждом запросе перезаписывает
+`X-Forwarded-For`. Rate Limiter читает IP из контекста (`GetClientIP`) с
+fallback на `RemoteAddr`. При изменении схемы развёртывания (другой прокси,
+несколько хопов, прямое подключение клиентов) доверенные прокси необходимо
+пересмотреть.
 
 ## Data
 
@@ -658,6 +689,46 @@ WriteValidationResponse()   (транспорт, сегодня — JSON)
 диспетчер на уровне App (например, `RenderReceiptValidationError`), запись
 в HTTP — `WriteValidationResponse`. Способ доставки (JSON сегодня, что-то
 другое завтра) — внутренняя деталь платформы.
+
+---
+
+# 16.2. InfrastructureError
+
+Инфраструктурные ответы — вторая семья структурированных ответов платформы
+(после `ValidationError`). Отличаются от ошибок валидации тем, что описывают
+не пользовательский ввод, а отклонение запроса до его обработки: некорректная
+форма (400), слишком большое тело (413), превышение лимита (429).
+
+```
+RenderInfrastructureError()        ← единая точка доставки
+    ├── Fragment → JSON InfrastructureResponse (реальный HTTP-статус)
+    └── FullPage → RenderPageStatus (форма + alert, статус)
+```
+
+Расположение:
+
+- `ResponseKind`, `ResponseMessage`, `InfrastructureResponse` — в
+  `internal/app/infrastructure_error.go`;
+- `RenderInfrastructureError` — единый диспетчер в `internal/app/httperror.go`.
+
+Правила:
+
+1. **`ResponseMessage` — единственное место хранения общих пользовательских
+   сообщений структурированных ответов.** Поля `Title` и `Errors` не
+   копируются между моделями; конкретные ответы (`ValidationResponse`,
+   `InfrastructureResponse`) получают их через композицию (`ResponseMessage`).
+2. **`InfrastructureResponse` несёт свой `kind` (типизированный
+   `ResponseKind`) и реальный HTTP-статус в payload** — для клиентов,
+   обрабатывающих тело независимо от HTTP. Ошибки валидации статус в payload
+   не выносят (всегда 200 + форма), поэтому использование общего контракта
+   (`ResponseMessage` и т.п.) оправдано, а общий transport-конверт вводится
+   только когда им пользуются ≥2 независимых модуля.
+3. **Guard и RateLimiter не знают про HTML, HTMX и JSON.** Они возвращают
+   ошибку через `RenderInfrastructureError`; выбор представления — внутренняя
+   деталь платформы.
+4. **Защита входа** (`internal/app/request_guard.go`, `internal/app/ratelimit.go`):
+   лимит по IP и по аккаунту в секундах/количестве попыток приходит из
+   `config.json` (`rate_limit`), дефолты применяются при отсутствии секции.
 
 ---
 
