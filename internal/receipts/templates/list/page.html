@@ -1,4 +1,55 @@
 {{define "page_content"}}
 {{if .Alert}}{{template "alert" .Alert}}{{end}}
-{{template "list_view" .List}}
+<div class="level mb-3">
+  {{if .Toolbar}}<div class="level-left"><div class="level-item">{{template "toolbar" .Toolbar}}</div></div>{{end}}
+  {{if .Search}}<div class="level-right"><div class="level-item">{{template "search" .Search}}</div></div>{{end}}
+</div>
+{{template "receipts_list" .}}
+{{template "receipts_files_host" .}}
+{{end}}
+
+{{define "page_scripts"}}
+<script src="/static/js/receipts.js"></script>
+{{end}}
+
+{{define "receipts_list"}}
+<section id="list" class="receipts-list">
+  <div class="receipts-row is-header">
+    <div class="receipts-cell">Номер</div>
+    <div class="receipts-cell">Дата</div>
+    <div class="receipts-cell">Организация</div>
+    <div class="receipts-cell">Клиент</div>
+    <div class="receipts-cell">Сумма</div>
+    <div class="receipts-cell">Статус</div>
+    <div class="receipts-cell is-actions"></div>
+  </div>
+  {{range .Rows}}
+  <div class="receipts-row">
+    <div class="receipts-cell">{{.Number}}</div>
+    <div class="receipts-cell">{{.Date}}</div>
+    <div class="receipts-cell">{{.Organization}}</div>
+    <div class="receipts-cell">{{.Customer}}</div>
+    <div class="receipts-cell">{{.Total}}</div>
+    <div class="receipts-cell">{{.Status}}</div>
+    <div class="receipts-cell is-actions">
+      <div class="receipts-actions">
+        <a class="button is-primary is-small" href="{{.FilesURL}}" data-dialog-url="{{.FilesURL}}" title="Файлы">{{icon "paperclip"}}</a>
+        <a class="button is-info is-small" href="{{.CopyURL}}" title="Копировать">{{icon "file-plus"}}</a>
+        <a class="button is-success is-small" href="{{.SendURL}}" {{if not .CanSend}}aria-disabled="true"{{end}} title="{{if .CanSend}}Отправить{{else}}Документ уже отправлен{{end}}">{{icon "send"}}</a>
+        <a class="button is-link is-small" href="{{.ViewURL}}" title="Просмотр">{{icon "file-search"}}</a>
+        <a class="button is-warning is-small" href="{{.EditURL}}" {{if not .CanEdit}}aria-disabled="true"{{end}} title="{{if .CanEdit}}Редактировать{{else}}Документ уже отправлен{{end}}">{{icon "file-pen"}}</a>
+      </div>
+    </div>
+  </div>
+  {{end}}
+  {{if eq (len .Rows) 0}}
+  <div class="receipts-row is-empty">
+    <div class="receipts-cell">Нет данных</div>
+  </div>
+  {{end}}
+</section>
+{{end}}
+
+{{define "receipts_files_host"}}
+<div id="receipts-modal"></div>
 {{end}}

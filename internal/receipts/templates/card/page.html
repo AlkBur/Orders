@@ -1,7 +1,14 @@
 {{define "page_content"}}
 {{template "card_open_closable" .Card}}
 
-{{if or (not .Receipt.ID) (eq .Receipt.SentAt nil)}}
+{{if .CopySource}}
+<div class="receipt-copy-banner">
+  <span class="icon">{{icon "file-plus"}}</span>
+  <span>Создан на основании документа №{{.CopySource}}</span>
+</div>
+{{end}}
+
+{{if .CanEdit}}
 <div class="receipt-editor" x-data="{
   values: {
     organization_id: {{.OrganizationID}},
@@ -402,7 +409,7 @@
 <h2>Позиции</h2>
 {{template "lines_view" .}}
 
-{{if eq $r.SentAt nil}}
+{{if .CanSend}}
 <form method="POST" action="/receipts/{{$r.ID}}/send" style="display:inline">
   <button type="submit" class="button is-primary"><span class="icon">{{icon "send"}}</span><span>Отправить в
       1С</span></button>

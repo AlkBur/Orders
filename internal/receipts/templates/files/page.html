@@ -1,0 +1,13 @@
+{{define "page_content"}}
+<div class="card">
+  <header class="card-header">
+    <p id="receipts-files-title" class="card-header-title">Файлы чека № {{.Receipt.Number}}</p>
+    <a class="card-header-icon" href="{{.BackURL}}" aria-label="К списку чеков">
+      <span class="icon">{{icon "close"}}</span>
+    </a>
+  </header>
+  <div class="card-content">
+    {{template "receipts_files_body" .}}
+  </div>
+</div>
+{{end}}

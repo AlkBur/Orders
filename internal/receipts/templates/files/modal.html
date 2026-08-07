@@ -1,0 +1,20 @@
+{{define "receipts_files_modal"}}
+<div class="modal" id="receipts-modal" role="dialog" aria-modal="true" aria-labelledby="receipts-files-title">
+  <div class="modal-background receipts-modal-background" data-modal-close></div>
+  <div class="modal-card">
+    <header class="modal-card-head">
+      <p id="receipts-files-title" class="modal-card-title">Файлы чека № {{.Receipt.Number}}</p>
+      <button type="button" class="delete" data-modal-close aria-label="Закрыть"></button>
+    </header>
+    <section class="modal-card-body">
+      {{template "receipts_files_body" .}}
+    </section>
+    <footer class="modal-card-foot is-justify-content-flex-end">
+      {{if .CanUpload}}
+      <button type="button" class="button is-primary">Загрузить</button>
+      {{end}}
+      <button type="button" class="button" data-modal-close>Закрыть</button>
+    </footer>
+  </div>
+</div>
+{{end}}

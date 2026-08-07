@@ -1,0 +1,29 @@
+{{define "receipts_files_body"}}
+<dl class="receipts-file-summary">
+  <div>
+    <dt>Дата</dt>
+    <dd>{{.Receipt.Date}}</dd>
+  </div>
+  <div>
+    <dt>Организация</dt>
+    <dd>{{.Receipt.Organization}}</dd>
+  </div>
+  <div>
+    <dt>Сумма</dt>
+    <dd>{{.Receipt.Total}}</dd>
+  </div>
+</dl>
+
+{{if .Files}}
+<ul class="receipts-file-list">
+  {{range .Files}}
+  <li class="receipts-file-item{{if .Blank}} is-blank{{end}}">
+    {{if .URL}}<a href="{{.URL}}">{{icon .Icon}}<span>{{.Name}}</span></a>
+    {{else}}<span>{{icon .Icon}}<span>{{.Name}}</span></span>{{end}}
+  </li>
+  {{end}}
+</ul>
+{{else}}
+<p class="receipts-file-empty">Файлов пока нет</p>
+{{end}}
+{{end}}
