@@ -56,6 +56,7 @@ type ReceiptCopyPage struct {
 
 type ReceiptCardPage struct {
 	Header         ui.HeaderData
+	Alert          *ui.AlertData
 	CanEdit        bool
 	CanSend        bool
 	Title          string
@@ -73,6 +74,17 @@ type ReceiptCardPage struct {
 	ErrorsJSON     string
 	ItemsJSON      string
 	CopySource     string
+}
+
+// ReceiptSendConfirmPage — экран подтверждения отправки документа в 1С
+// (mode=send). Расширяет карточку документа: добавляет флаг готовности
+// действия и точку возврата после отмены. Сама отправка происходит в POST
+// /receipts/{id}/send, эта страница только показывает документ и просит
+// подтвердить действие.
+type ReceiptSendConfirmPage struct {
+	ReceiptCardPage
+	CanConfirmSend bool
+	ReturnURL      string
 }
 
 // ReceiptFile — готовый к выводу файл документа.

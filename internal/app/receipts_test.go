@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"Orders/internal/organizations"
 	"Orders/internal/products"
@@ -244,19 +245,21 @@ func TestReceiptSend_HtmxEmptyItems(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
-	var resp ValidationResponse
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("invalid json: %v", err)
+	list, err := app.receipts.List(context.Background(), receipts.ListOptions{}, nil)
+	if err != nil || len(list) != 1 {
+		t.Fatalf("expected one saved receipt, got %d: %v", len(list), err)
 	}
-	if !slices.Contains(resp.Errors, "Добавьте хотя бы одну позицию") {
-		t.Errorf("expected 'Добавьте хотя бы одну позицию' in errors, got %#v", resp.Errors)
+	redirect := w.Header().Get("HX-Redirect")
+	want := list[0].URL() + "?mode=send&from=edit"
+	if redirect != want {
+		t.Errorf("expected HX-Redirect %q, got %q", want, redirect)
 	}
-	if strings.Contains(w.Body.String(), "fields") {
-		t.Errorf("expected no fields key for generic error, got %s", w.Body.String())
+	if doc, err := app.receipts.GetByID(context.Background(), list[0].ID); err == nil && doc.Receipt.SentAt != nil {
+		t.Error("expected SentAt to stay nil after editor send")
 	}
 }
 
-func TestReceiptSend_ValidationFullPageEmptyItems(t *testing.T) {
+func TestReceiptSend_FullPageEmptyItemsRedirectsToConfirm(t *testing.T) {
 	db := testutil.NewTestDB(t, NewSchema())
 	orgID, _ := insertOrg(t, db, "Org One", "key_org1")
 	app := &App{
@@ -270,11 +273,16 @@ func TestReceiptSend_ValidationFullPageEmptyItems(t *testing.T) {
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	app.ReceiptSave(w, r)
 
-	if w.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("expected 422, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d: %s", w.Code, w.Body.String())
 	}
-	if !strings.Contains(w.Body.String(), "Добавьте хотя бы одну позицию") {
-		t.Fatal("expected inline 'Добавьте хотя бы одну позицию' on full page")
+	list, err := app.receipts.List(context.Background(), receipts.ListOptions{}, nil)
+	if err != nil || len(list) != 1 {
+		t.Fatalf("expected one saved receipt, got %d: %v", len(list), err)
+	}
+	want := list[0].URL() + "?mode=send&from=edit"
+	if got := w.Header().Get("Location"); got != want {
+		t.Errorf("expected Location %q, got %q", want, got)
 	}
 }
 
@@ -465,6 +473,157 @@ func TestReceiptsListPage_BlankPageRegression(t *testing.T) {
 	}
 	if !strings.Contains(body, "/static/favicon.ico") {
 		t.Fatalf("expected favicon link in rendered layout")
+	}
+}
+
+func TestReceiptReturnURL(t *testing.T) {
+	doc := &receipts.Document{
+		Receipt: &receipts.Receipt{ID: 42},
+	}
+	cases := []struct {
+		from string
+		want string
+	}{
+		{receiptFromEdit, "/receipts/42"},
+		{"list", RouteReceipts},
+		{"", RouteReceipts},
+		{"render", RouteReceipts},
+	}
+	for _, c := range cases {
+		if got := receiptReturnURL(doc, c.from); got != c.want {
+			t.Errorf("receiptReturnURL(from=%q) = %q, want %q", c.from, got, c.want)
+		}
+	}
+}
+
+// setupSendableReceipt создаёт App и возвращает unsent документ в списке,
+// готовый к отправке. App включает receipts, organizations и products.
+func setupSendableReceipt(t *testing.T) (*App, *receipts.Document) {
+	t.Helper()
+	db := testutil.NewTestDB(t, NewSchema())
+	orgID, _ := insertOrg(t, db, "Org", "key")
+	prodStore := products.NewStore(db)
+	app := &App{
+		receipts:      receipts.NewStore(db),
+		organizations: organizations.NewStore(db),
+		products:      prodStore,
+	}
+	prodID, _ := insertProduct(t, db, orgID, "Send Product", "pcs")
+	body := "number=009&organization_id=" + strconv.FormatInt(orgID, 10) +
+		"&user_id=1&customer_id=1&total=100&date=2026-07-29" +
+		"&items[0][product_id]=" + strconv.FormatInt(prodID, 10) +
+		"&items[0][unit]=pcs&items[0][quantity]=1&items[0][price]=100&items[0][amount]=100"
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPost, "/receipts", strings.NewReader(body))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	app.ReceiptSave(w, r)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("setup: expected 303, got %d: %s", w.Code, w.Body.String())
+	}
+	list, err := app.receipts.List(context.Background(), receipts.ListOptions{}, nil)
+	if err != nil || len(list) != 1 {
+		t.Fatalf("setup: expected one receipt, got %d: %v", len(list), err)
+	}
+	doc, err := app.receipts.GetByID(context.Background(), list[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return app, doc
+}
+
+func TestReceiptSendConfirmPage_FromEditCancel(t *testing.T) {
+	app, doc := setupSendableReceipt(t)
+
+	idStr := strconv.FormatInt(doc.Receipt.ID, 10)
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/receipts/"+idStr+"?mode=send&from=edit", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", idStr)
+	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+	app.ReceiptCard(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, `data-confirm="Отправить документ в 1С?"`) {
+		t.Fatalf("expected send confirm form with data-confirm, got %s", body)
+	}
+	if !strings.Contains(body, `href="/receipts/`+idStr+`"`) {
+		t.Fatalf("expected cancel href to editor (from=edit), got %s", body)
+	}
+	if !strings.Contains(body, "Отмена") {
+		t.Fatalf("expected cancel button, got %s", body)
+	}
+}
+
+func TestReceiptSendConfirmPage_FromListCancel(t *testing.T) {
+	app, doc := setupSendableReceipt(t)
+
+	idStr := strconv.FormatInt(doc.Receipt.ID, 10)
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/receipts/"+idStr+"?mode=send&from=list", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", idStr)
+	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+	app.ReceiptCard(w, r)
+
+	body := w.Body.String()
+	if !strings.Contains(body, `href="/receipts"`) {
+		t.Fatalf("expected cancel href to list for from=list, got %s", body)
+	}
+}
+
+func TestReceiptSendConfirmPage_NoButtonsAfterSend(t *testing.T) {
+	app, doc := setupSendableReceipt(t)
+
+	// Отправим документ напрямую в хранилище.
+	now := time.Now()
+	doc.Receipt.SentAt = &now
+	if err := app.receipts.Save(context.Background(), doc); err != nil {
+		t.Fatal(err)
+	}
+
+	idStr := strconv.FormatInt(doc.Receipt.ID, 10)
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/receipts/"+idStr+"?mode=send", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", idStr)
+	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+	app.ReceiptCard(w, r)
+
+	body := w.Body.String()
+	if strings.Contains(body, "Отправить документ в 1С?") {
+		t.Errorf("expected no confirm button for already sent document, got %s", body)
+	}
+	if strings.Contains(body, "Отмена") {
+		t.Errorf("expected no cancel button for already sent document, got %s", body)
+	}
+}
+
+func TestReceiptSubmit_SuccessRedirectsToFlash(t *testing.T) {
+	app, doc := setupSendableReceipt(t)
+
+	idStr := strconv.FormatInt(doc.Receipt.ID, 10)
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPost, "/receipts/"+idStr+"/send", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", idStr)
+	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+	app.ReceiptSubmit(w, r)
+
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d: %s", w.Code, w.Body.String())
+	}
+	if loc := w.Header().Get("Location"); loc != RouteReceipts {
+		t.Fatalf("expected redirect to %s, got %s", RouteReceipts, loc)
+	}
+	got, err := app.receipts.GetByID(context.Background(), doc.Receipt.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Receipt.SentAt == nil {
+		t.Fatal("expected SentAt to be set after successful send")
 	}
 }
 
