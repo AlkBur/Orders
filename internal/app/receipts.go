@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"io/fs"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	"Orders/internal/organizations"
 	"Orders/internal/products"
 	"Orders/internal/receipts"
+	"Orders/internal/sessions"
 	"Orders/internal/ui"
 
 	"github.com/go-chi/chi/v5"
@@ -25,6 +27,8 @@ import (
 const (
 	lookupCustomer = "customer"
 	lookupProduct  = "product"
+
+	receiptFromEdit = "edit"
 )
 
 type receiptEditorItem struct {
@@ -108,6 +112,55 @@ func receiptIDFromURL(r *http.Request) int64 {
 	return id
 }
 
+// receiptReturnURL определяет, куда вернуть пользователя после отмены
+// подтверждения отправки. Источник передаётся через параметр from;
+// всё, кроме «edit», означает возврат в список документов.
+func receiptReturnURL(doc *receipts.Document, from string) string {
+	if from == receiptFromEdit {
+		return doc.Receipt.URL()
+	}
+	return RouteReceipts
+}
+
+// renderReceiptSendConfirmPage отображает экран подтверждения отправки
+// (mode=send): читает режим из файловой системы card и рендерит страницу.
+// alert может быть nil.
+func (a *App) renderReceiptSendConfirmPage(w http.ResponseWriter, r *http.Request, doc *receipts.Document, from string, alert *ui.AlertData) {
+	returnURL := receiptReturnURL(doc, from)
+	page := buildReceiptSendConfirmPage(pageHeader(r, "Товарные чеки"), doc, returnURL, alert)
+
+	pageFS, err := fs.Sub(receipts.Templates(), "card")
+	if err != nil {
+		a.InternalError(w, r, err)
+		return
+	}
+	if err := ui.RenderPage(w, TemplateFS(), pageFS, page); err != nil {
+		a.InternalError(w, r, err)
+	}
+}
+
+// buildReceiptSendConfirmPage — единственный путь построения экрана
+// подтверждения отправки. Используется и GET (mode=send), и POST /send
+// при ошибке. Alert может быть nil — ошибки нет.
+func buildReceiptSendConfirmPage(header ui.HeaderData, doc *receipts.Document, returnURL string, alert *ui.AlertData) pages.ReceiptSendConfirmPage {
+	title := "Товарный чек №" + doc.Receipt.Number
+	confirmable := doc.Receipt.ID > 0 && doc.Receipt.SentAt == nil
+	return pages.ReceiptSendConfirmPage{
+		ReceiptCardPage: pages.ReceiptCardPage{
+			Header:     header,
+			Alert:      alert,
+			CanSend:    confirmable,
+			Title:      title,
+			FormAction: doc.Receipt.URL(),
+			Card:       ui.CardData{Title: title, CloseURL: returnURL},
+			Receipt:    doc.Receipt,
+			Items:      doc.Items,
+		},
+		CanConfirmSend: confirmable,
+		ReturnURL:      returnURL,
+	}
+}
+
 func (a *App) ReceiptsPage(w http.ResponseWriter, r *http.Request) {
 	NoCache(w)
 
@@ -169,6 +222,13 @@ func (a *App) ReceiptsPage(w http.ResponseWriter, r *http.Request) {
 		Search: &ui.SearchData{URL: RouteReceipts, Placeholder: "Поиск чеков...", Query: query, Mode: ui.SearchLive},
 		Rows:   rows,
 		NewURL: "/receipts/new",
+	}
+
+	if flash, err := a.consumeFlash(r); err != nil {
+		a.InternalError(w, r, err)
+		return
+	} else if flash != nil {
+		page.Alert = FlashToAlert(*flash)
 	}
 
 	pageFS, err := fs.Sub(receipts.Templates(), "list")
@@ -259,6 +319,11 @@ func (a *App) ReceiptCard(w http.ResponseWriter, r *http.Request) {
 	formAction := RouteReceipts
 	if doc.Receipt.ID > 0 {
 		formAction = "/receipts/" + strconv.FormatInt(doc.Receipt.ID, 10)
+	}
+
+	if isSend {
+		a.renderReceiptSendConfirmPage(w, r, doc, r.URL.Query().Get("from"), nil)
+		return
 	}
 
 	var pickerCustomers []*customers.Customer
@@ -623,10 +688,6 @@ func (a *App) ReceiptSave(w http.ResponseWriter, r *http.Request) {
 		rec.UUID = existing.Receipt.UUID
 		rec.ExchangeID = existing.Receipt.ExchangeID
 	}
-	if sendTo1C {
-		now := time.Now()
-		rec.SentAt = &now
-	}
 
 	if id == 0 {
 		if orgID == 0 || customerID == 0 {
@@ -649,15 +710,20 @@ func (a *App) ReceiptSave(w http.ResponseWriter, r *http.Request) {
 		rec.ExchangeID = uuid
 	}
 
-	if sendTo1C && len(items) == 0 {
-		ve := NewValidationError("Ошибка документа").Add("Добавьте хотя бы одну позицию")
-		a.RenderReceiptValidationError(w, r, ve, items)
-		return
-	}
-
 	doc := &receipts.Document{Receipt: rec, Items: items}
 	if err := a.receipts.Save(r.Context(), doc); err != nil {
 		a.InternalError(w, r, err)
+		return
+	}
+
+	if sendTo1C {
+		sendURL := doc.Receipt.URL() + "?mode=send&from=" + receiptFromEdit
+		if ResponseModeFromRequest(r) == Fragment {
+			w.Header().Set("HX-Redirect", sendURL)
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		http.Redirect(w, r, sendURL, http.StatusSeeOther)
 		return
 	}
 
@@ -818,6 +884,14 @@ func (a *App) ReceiptSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := sendReceiptTo1C(r.Context(), doc); err != nil {
+		// Остаться на экране подтверждения: SentAt не меняется, кнопки
+		// отправки и отмены остаются доступны.
+		alert := FlashToAlert(sessions.Flash{Type: sessions.FlashError, Message: err.Error()})
+		a.renderReceiptSendConfirmPage(w, r, doc, r.URL.Query().Get("from"), alert)
+		return
+	}
+
 	now := time.Now()
 	doc.Receipt.SentAt = &now
 	doc.Receipt.UpdatedAt = now
@@ -827,7 +901,18 @@ func (a *App) ReceiptSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := a.SetFlash(r, sessions.FlashSuccess, "Документ успешно отправлен в 1С."); err != nil {
+		a.InternalError(w, r, err)
+		return
+	}
+
 	http.Redirect(w, r, RouteReceipts, http.StatusSeeOther)
+}
+
+// sendReceiptTo1C выполняет отправку документа в 1С. Сейчас — заглушка,
+// всегда успешна. SentAt устанавливается только после успешной отправки.
+func sendReceiptTo1C(ctx context.Context, doc *receipts.Document) error {
+	return nil
 }
 
 func parseInt64(s string) int64 {

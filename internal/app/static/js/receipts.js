@@ -52,4 +52,11 @@
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') closeDialog();
   });
+
+  document.addEventListener('submit', function (e) {
+    var form = e.target.closest('form[data-confirm]');
+    if (!form) return;
+    var message = form.getAttribute('data-confirm');
+    if (!window.confirm(message)) e.preventDefault();
+  });
 })();

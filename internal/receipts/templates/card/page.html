@@ -1,6 +1,10 @@
 {{define "page_content"}}
 {{template "card_open_closable" .Card}}
 
+{{if .Alert}}
+{{template "alert" .Alert}}
+{{end}}
+
 {{if .CopySource}}
 <div class="receipt-copy-banner">
   <span class="icon">{{icon "file-plus"}}</span>
@@ -409,11 +413,12 @@
 <h2>Позиции</h2>
 {{template "lines_view" .}}
 
-{{if .CanSend}}
-<form method="POST" action="/receipts/{{$r.ID}}/send" style="display:inline">
+{{if .CanConfirmSend}}
+<form method="POST" action="/receipts/{{$r.ID}}/send" style="display:inline" data-confirm="Отправить документ в 1С?">
   <button type="submit" class="button is-primary"><span class="icon">{{icon "send"}}</span><span>Отправить в
       1С</span></button>
 </form>
+<a class="button" href="{{.ReturnURL}}"><span>Отмена</span></a>
 {{end}}
 {{end}}
 
