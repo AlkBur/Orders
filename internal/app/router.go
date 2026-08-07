@@ -15,7 +15,7 @@ func (a *App) NewRouter() *chi.Mux {
 	// Доверенные прокси: локальный Caddy. ClientIPFromXFF обязателен до
 	// rate limiter'а — он задаёт доверенный IP клиента в контексте.
 	r.Use(middleware.ClientIPFromXFF("127.0.0.1/8", "::1/128"))
-	r.Use(middleware.Logger)
+	r.Use(RequestLogger(a.log))
 	r.Use(middleware.Recoverer)
 	r.Use(SessionMiddleware(a.sessions))
 
@@ -68,6 +68,8 @@ func (a *App) NewRouter() *chi.Mux {
 			r.Post(RouteReceipts, a.ReceiptSave)
 			r.Get("/receipts/{id}", a.ReceiptCard)
 			r.Post("/receipts/{id}", a.ReceiptSave)
+			r.Get("/receipts/{id}/copy", a.ReceiptCopyPage)
+			r.Get("/receipts/{id}/files", a.ReceiptFiles)
 			r.Post("/receipts/{id}/send", a.ReceiptSubmit)
 			r.Post("/receipts/{id}/delete", a.ReceiptDelete)
 

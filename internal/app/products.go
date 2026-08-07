@@ -63,7 +63,7 @@ func (a *App) ProductsPage(w http.ResponseWriter, r *http.Request) {
 
 	list, err := a.products.List(r.Context(), oid, products.ListOptions{Query: query}, visibleFields)
 	if err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 
@@ -84,7 +84,7 @@ func (a *App) ProductsPage(w http.ResponseWriter, r *http.Request) {
 		for _, f := range fields {
 			value, err := item.DisplayValue(f.GoName)
 			if err != nil {
-				a.InternalError(w, err)
+				a.InternalError(w, r, err)
 				return
 			}
 			cells = append(cells, value)
@@ -106,7 +106,7 @@ func (a *App) ProductsPage(w http.ResponseWriter, r *http.Request) {
 
 	pageFS, err := fs.Sub(products.Templates(), "list")
 	if err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 
@@ -175,7 +175,7 @@ func (a *App) ProductCard(w http.ResponseWriter, r *http.Request) {
 		var err error
 		product, err = a.products.GetByID(r.Context(), id)
 		if err != nil {
-			a.InternalError(w, err)
+			a.InternalError(w, r, err)
 			return
 		}
 	}
@@ -187,7 +187,7 @@ func (a *App) ProductCard(w http.ResponseWriter, r *http.Request) {
 
 	pageFS, err := fs.Sub(products.Templates(), "card")
 	if err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 
@@ -210,7 +210,7 @@ func (a *App) ProductCard(w http.ResponseWriter, r *http.Request) {
 	if product.ID == 0 && oid == 0 {
 		orgs, err := a.organizations.List(r.Context(), organizations.ListOptions{}, nil)
 		if err != nil {
-			a.InternalError(w, err)
+			a.InternalError(w, r, err)
 			return
 		}
 		options := make([]ui.SelectOption, 0, len(orgs))
@@ -249,7 +249,7 @@ func (a *App) ProductCard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := ui.RenderPage(w, TemplateFS(), pageFS, data); err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 	}
 }
 
@@ -274,7 +274,7 @@ func (a *App) ProductSave(w http.ResponseWriter, r *http.Request) {
 	if id == 0 && product.UUID == "" {
 		uuid, err := common.GenerateUUID()
 		if err != nil {
-			a.InternalError(w, err)
+			a.InternalError(w, r, err)
 			return
 		}
 		product.UUID = uuid
@@ -284,7 +284,7 @@ func (a *App) ProductSave(w http.ResponseWriter, r *http.Request) {
 		orgUUID := r.FormValue("organization_id")
 		org, err := a.organizations.GetByUUID(r.Context(), orgUUID)
 		if err != nil {
-			a.InternalError(w, err)
+			a.InternalError(w, r, err)
 			return
 		}
 		product.OrganizationID = org.ID
@@ -295,7 +295,7 @@ func (a *App) ProductSave(w http.ResponseWriter, r *http.Request) {
 			http.NotFound(w, r)
 			return
 		}
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 
@@ -309,7 +309,7 @@ func (a *App) ProductDelete(w http.ResponseWriter, r *http.Request) {
 	id := productIDFromURL(r)
 
 	if err := a.products.DeleteByID(r.Context(), id); err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 
@@ -373,7 +373,7 @@ func (a *App) HandlePutProducts(w http.ResponseWriter, r *http.Request) {
 
 	result, err := a.products.Synchronize(r.Context(), org.ID, models)
 	if err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 

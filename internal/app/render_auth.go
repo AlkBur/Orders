@@ -12,7 +12,7 @@ import (
 func (a *App) RenderAuth(w http.ResponseWriter, r *http.Request, mode ResponseMode, pageDir string, data any) {
 	pageFS, err := fs.Sub(TemplateFS(), "pages/"+pageDir)
 	if err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 	name := "auth"
@@ -20,7 +20,7 @@ func (a *App) RenderAuth(w http.ResponseWriter, r *http.Request, mode ResponseMo
 		name = "page_content"
 	}
 	if err := ui.Render(w, TemplateFS(), pageFS, name, data); err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 	}
 }
 

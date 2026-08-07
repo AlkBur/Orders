@@ -118,7 +118,7 @@ func (a *App) ReceiptsPage(w http.ResponseWriter, r *http.Request) {
 
 	list, err := a.receipts.List(r.Context(), receipts.ListOptions{Query: query}, visibleFields)
 	if err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 
@@ -126,12 +126,12 @@ func (a *App) ReceiptsPage(w http.ResponseWriter, r *http.Request) {
 	for _, rec := range list {
 		total, err := rec.DisplayValue("Total")
 		if err != nil {
-			a.InternalError(w, err)
+			a.InternalError(w, r, err)
 			return
 		}
 		status, err := rec.DisplayValue("Status")
 		if err != nil {
-			a.InternalError(w, err)
+			a.InternalError(w, r, err)
 			return
 		}
 
@@ -173,18 +173,18 @@ func (a *App) ReceiptsPage(w http.ResponseWriter, r *http.Request) {
 
 	pageFS, err := fs.Sub(receipts.Templates(), "list")
 	if err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 
 	if ResponseModeFromRequest(r) == Fragment {
 		if err := ui.Render(w, TemplateFS(), pageFS, "receipts_list", page); err != nil {
-			a.InternalError(w, err)
+			a.InternalError(w, r, err)
 		}
 		return
 	}
 	if err := ui.RenderPage(w, TemplateFS(), pageFS, page); err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 	}
 }
 
@@ -241,7 +241,7 @@ func (a *App) ReceiptCard(w http.ResponseWriter, r *http.Request) {
 				http.NotFound(w, r)
 				return
 			}
-			a.InternalError(w, err)
+			a.InternalError(w, r, err)
 			return
 		}
 	}
@@ -269,7 +269,7 @@ func (a *App) ReceiptCard(w http.ResponseWriter, r *http.Request) {
 		if a.organizations != nil {
 			orgs, err := a.organizations.List(r.Context(), organizations.ListOptions{}, nil)
 			if err != nil {
-				a.InternalError(w, err)
+				a.InternalError(w, r, err)
 				return
 			}
 			organizationOptions = make([]pages.ReceiptOrganizationOption, 0, len(orgs))
@@ -281,7 +281,7 @@ func (a *App) ReceiptCard(w http.ResponseWriter, r *http.Request) {
 			var err error
 			pickerCustomers, err = a.customers.List(r.Context(), 0, customers.ListOptions{}, nil)
 			if err != nil {
-				a.InternalError(w, err)
+				a.InternalError(w, r, err)
 				return
 			}
 		}
@@ -289,7 +289,7 @@ func (a *App) ReceiptCard(w http.ResponseWriter, r *http.Request) {
 			var err error
 			pickerProducts, err = a.products.List(r.Context(), 0, products.ListOptions{}, nil)
 			if err != nil {
-				a.InternalError(w, err)
+				a.InternalError(w, r, err)
 				return
 			}
 		}
@@ -297,7 +297,7 @@ func (a *App) ReceiptCard(w http.ResponseWriter, r *http.Request) {
 
 	itemsJSON, customersJSON, productsJSON, err := receiptEditorJSON(doc.Items, pickerCustomers, pickerProducts)
 	if err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 
@@ -323,11 +323,11 @@ func (a *App) ReceiptCard(w http.ResponseWriter, r *http.Request) {
 
 	pageFS, err := fs.Sub(receipts.Templates(), "card")
 	if err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 	if err := ui.RenderPage(w, TemplateFS(), pageFS, page); err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 	}
 }
 
@@ -350,7 +350,7 @@ func (a *App) ReceiptCopyPage(w http.ResponseWriter, r *http.Request) {
 			http.NotFound(w, r)
 			return
 		}
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 
@@ -387,7 +387,7 @@ func (a *App) renderReceiptEditorPage(w http.ResponseWriter, r *http.Request, do
 	if a.organizations != nil {
 		orgs, err := a.organizations.List(ctx, organizations.ListOptions{}, nil)
 		if err != nil {
-			a.InternalError(w, err)
+			a.InternalError(w, r, err)
 			return
 		}
 		organizationOptions = make([]pages.ReceiptOrganizationOption, 0, len(orgs))
@@ -401,7 +401,7 @@ func (a *App) renderReceiptEditorPage(w http.ResponseWriter, r *http.Request, do
 		var err error
 		pickerCustomers, err = a.customers.List(ctx, 0, customers.ListOptions{}, nil)
 		if err != nil {
-			a.InternalError(w, err)
+			a.InternalError(w, r, err)
 			return
 		}
 	}
@@ -411,14 +411,14 @@ func (a *App) renderReceiptEditorPage(w http.ResponseWriter, r *http.Request, do
 		var err error
 		pickerProducts, err = a.products.List(ctx, 0, products.ListOptions{}, nil)
 		if err != nil {
-			a.InternalError(w, err)
+			a.InternalError(w, r, err)
 			return
 		}
 	}
 
 	itemsJSON, customersJSON, productsJSON, err := receiptEditorJSON(doc.Items, pickerCustomers, pickerProducts)
 	if err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 
@@ -448,11 +448,11 @@ func (a *App) renderReceiptEditorPage(w http.ResponseWriter, r *http.Request, do
 
 	pageFS, err := fs.Sub(receipts.Templates(), "card")
 	if err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 	if err := ui.RenderPage(w, TemplateFS(), pageFS, card); err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 	}
 }
 
@@ -474,7 +474,7 @@ func (a *App) ReceiptFiles(w http.ResponseWriter, r *http.Request) {
 			http.NotFound(w, r)
 			return
 		}
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 
@@ -498,18 +498,18 @@ func (a *App) ReceiptFiles(w http.ResponseWriter, r *http.Request) {
 
 	filesFS, err := fs.Sub(receipts.Templates(), "files")
 	if err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 
 	if ResponseModeFromRequest(r) == Fragment {
 		if err := ui.Render(w, TemplateFS(), filesFS, "receipts_files_modal", filesPage); err != nil {
-			a.InternalError(w, err)
+			a.InternalError(w, r, err)
 		}
 		return
 	}
 	if err := ui.RenderPage(w, TemplateFS(), filesFS, filesPage); err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 	}
 }
 
@@ -530,7 +530,7 @@ func (a *App) ReceiptSave(w http.ResponseWriter, r *http.Request) {
 				http.NotFound(w, r)
 				return
 			}
-			a.InternalError(w, err)
+			a.InternalError(w, r, err)
 			return
 		}
 		if existing.Receipt.SentAt != nil {
@@ -643,7 +643,7 @@ func (a *App) ReceiptSave(w http.ResponseWriter, r *http.Request) {
 
 		uuid, err := common.GenerateUUID()
 		if err != nil {
-			a.InternalError(w, err)
+			a.InternalError(w, r, err)
 			return
 		}
 		rec.ExchangeID = uuid
@@ -657,7 +657,7 @@ func (a *App) ReceiptSave(w http.ResponseWriter, r *http.Request) {
 
 	doc := &receipts.Document{Receipt: rec, Items: items}
 	if err := a.receipts.Save(r.Context(), doc); err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 
@@ -712,7 +712,7 @@ func (a *App) renderReceiptForm(w http.ResponseWriter, r *http.Request, ve *Vali
 	}
 	itemsJSON, customersJSON, productsJSON, err := receiptEditorJSON(items, pickerCustomers, pickerProducts)
 	if err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 
@@ -754,12 +754,12 @@ func (a *App) renderReceiptForm(w http.ResponseWriter, r *http.Request, ve *Vali
 	}
 	pageFS, err := fs.Sub(receipts.Templates(), "card")
 	if err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusUnprocessableEntity)
 	if err := ui.RenderPage(w, TemplateFS(), pageFS, page); err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 	}
 }
 
@@ -777,7 +777,7 @@ func (a *App) ReceiptDelete(w http.ResponseWriter, r *http.Request) {
 			http.NotFound(w, r)
 			return
 		}
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 	if existing.Receipt.SentAt != nil {
@@ -786,7 +786,7 @@ func (a *App) ReceiptDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := a.receipts.DeleteByID(r.Context(), id); err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 
@@ -809,7 +809,7 @@ func (a *App) ReceiptSubmit(w http.ResponseWriter, r *http.Request) {
 			http.NotFound(w, r)
 			return
 		}
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 
@@ -823,7 +823,7 @@ func (a *App) ReceiptSubmit(w http.ResponseWriter, r *http.Request) {
 	doc.Receipt.UpdatedAt = now
 
 	if err := a.receipts.Save(r.Context(), doc); err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 

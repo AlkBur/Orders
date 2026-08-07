@@ -58,17 +58,17 @@ func (a *App) SetPasswordSubmit(w http.ResponseWriter, r *http.Request) {
 
 	user, err := a.users.GetByID(r.Context(), identity.ID)
 	if err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 
 	if err := user.SetPassword(password); err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 
 	if err := a.users.Update(user); err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 
