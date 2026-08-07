@@ -23,6 +23,7 @@
   </main>
   </div>
   {{if $fab}}{{template "fab" $fab}}{{end}}
+  {{block "page_scripts" .}}{{end}}
 </body>
 </html>
 {{end}}
