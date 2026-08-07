@@ -5,6 +5,8 @@ import (
 	"net/http"
 
 	"Orders/internal/ui"
+
+	"github.com/go-chi/chi/v5/middleware"
 )
 
 // WriteValidationResponse serializes ValidationResponse using the transport
@@ -16,8 +18,15 @@ func WriteValidationResponse(w http.ResponseWriter, r *http.Request, vr Validati
 	_ = json.NewEncoder(w).Encode(vr)
 }
 
-func (a *App) InternalError(w http.ResponseWriter, err error) {
-	// TODO: log error
+func (a *App) InternalError(w http.ResponseWriter, r *http.Request, err error) {
+	// Only applicable before writing to the response writer; after a partial
+	// write the status is already committed, but the error is still logged.
+	a.log.Error().
+		Err(err).
+		Str("request_id", middleware.GetReqID(r.Context())).
+		Str("method", r.Method).
+		Str("path", r.URL.Path).
+		Msg("internal error")
 
 	http.Error(
 		w,

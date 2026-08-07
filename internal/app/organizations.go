@@ -39,7 +39,7 @@ func (a *App) OrganizationsPage(w http.ResponseWriter, r *http.Request) {
 
 	orgs, err := a.organizations.List(r.Context(), organizations.ListOptions{Query: query}, visibleFields)
 	if err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 
@@ -57,13 +57,13 @@ func (a *App) OrganizationsPage(w http.ResponseWriter, r *http.Request) {
 
 	pageFS, err := fs.Sub(organizations.Templates(), "list")
 	if err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 
 	flash, err := a.consumeFlash(r)
 	if err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 
@@ -125,14 +125,14 @@ func (a *App) OrganizationCard(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err != nil {
-			a.InternalError(w, err)
+			a.InternalError(w, r, err)
 			return
 		}
 	}
 
 	pageFS, err := fs.Sub(organizations.Templates(), "card")
 	if err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 
@@ -155,7 +155,7 @@ func (a *App) OrganizationCard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := ui.RenderPage(w, TemplateFS(), pageFS, data); err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 	}
 }
 
@@ -177,7 +177,7 @@ func (a *App) OrganizationSave(w http.ResponseWriter, r *http.Request) {
 	if id == 0 && org.UUID == "" {
 		uuid, err := common.GenerateUUID()
 		if err != nil {
-			a.InternalError(w, err)
+			a.InternalError(w, r, err)
 			return
 		}
 		org.UUID = uuid
@@ -188,7 +188,7 @@ func (a *App) OrganizationSave(w http.ResponseWriter, r *http.Request) {
 			http.NotFound(w, r)
 			return
 		}
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 
@@ -199,7 +199,7 @@ func (a *App) OrganizationSave(w http.ResponseWriter, r *http.Request) {
 	a.orgKeysMu.Unlock()
 
 	if err := a.SetFlash(r, sessions.FlashSuccess, "Организация сохранена."); err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 

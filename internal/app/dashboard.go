@@ -35,33 +35,33 @@ func (a *App) DashboardPage(w http.ResponseWriter, r *http.Request) {
 
 	docCount, err := a.receipts.Count(r.Context())
 	if err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 	orgCount, err := a.organizations.Count(r.Context())
 	if err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 	customerCount, err := a.customers.Count(r.Context())
 	if err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 	productCount, err := a.products.Count(r.Context())
 	if err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 	userCount, err := a.users.Count(r.Context())
 	if err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 
 	pageFS, err := fs.Sub(TemplateFS(), "pages/dashboard")
 	if err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 
@@ -85,6 +85,6 @@ func (a *App) DashboardPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := ui.RenderPage(w, TemplateFS(), pageFS, data); err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 	}
 }

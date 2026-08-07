@@ -15,10 +15,12 @@ import (
 	"Orders/internal/users"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/rs/zerolog"
 )
 
 type App struct {
 	config *Config
+	log    zerolog.Logger
 
 	db            *sql.DB
 	users         *users.Store
@@ -76,6 +78,7 @@ func New(configPath string) (*App, error) {
 
 	app := &App{
 		config:        config,
+		log:           NewLogger(false),
 		db:            db,
 		users:         usersStore,
 		identity:      identity,

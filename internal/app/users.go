@@ -27,7 +27,7 @@ func (a *App) UsersPage(w http.ResponseWriter, r *http.Request) {
 
 	list, err := a.users.List(r.Context(), users.ListOptions{Query: query}, visibleFields)
 	if err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 
@@ -44,7 +44,7 @@ func (a *App) UsersPage(w http.ResponseWriter, r *http.Request) {
 		for _, f := range fields {
 			value, err := item.DisplayValue(f.GoName)
 			if err != nil {
-				a.InternalError(w, err)
+				a.InternalError(w, r, err)
 				return
 			}
 			cells = append(cells, value)
@@ -57,7 +57,7 @@ func (a *App) UsersPage(w http.ResponseWriter, r *http.Request) {
 
 	pageFS, err := fs.Sub(users.Templates(), "list")
 	if err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 
@@ -112,7 +112,7 @@ func (a *App) UserCard(w http.ResponseWriter, r *http.Request) {
 				http.NotFound(w, r)
 				return
 			}
-			a.InternalError(w, err)
+			a.InternalError(w, r, err)
 			return
 		}
 	}
@@ -124,7 +124,7 @@ func (a *App) UserCard(w http.ResponseWriter, r *http.Request) {
 
 	pageFS, err := fs.Sub(users.Templates(), "card")
 	if err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 
@@ -155,7 +155,7 @@ func (a *App) UserCard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := ui.RenderPage(w, TemplateFS(), pageFS, data); err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 	}
 }
 
@@ -190,14 +190,14 @@ func (a *App) UserSave(w http.ResponseWriter, r *http.Request) {
 	if id == 0 && user.UUID == "" {
 		uuid, err := common.GenerateUUID()
 		if err != nil {
-			a.InternalError(w, err)
+			a.InternalError(w, r, err)
 			return
 		}
 		user.UUID = uuid
 	}
 
 	if err := a.users.Save(r.Context(), user); err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 
@@ -219,7 +219,7 @@ func (a *App) UserDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := a.users.DeleteByID(r.Context(), id); err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 

@@ -61,7 +61,7 @@ func (a *App) CustomersPage(w http.ResponseWriter, r *http.Request) {
 
 	list, err := a.customers.List(r.Context(), oid, customers.ListOptions{Query: query}, visibleFields)
 	if err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 
@@ -82,7 +82,7 @@ func (a *App) CustomersPage(w http.ResponseWriter, r *http.Request) {
 		for _, f := range fields {
 			value, err := item.DisplayValue(f.GoName)
 			if err != nil {
-				a.InternalError(w, err)
+				a.InternalError(w, r, err)
 				return
 			}
 			cells = append(cells, value)
@@ -104,13 +104,13 @@ func (a *App) CustomersPage(w http.ResponseWriter, r *http.Request) {
 
 	pageFS, err := fs.Sub(customers.Templates(), "list")
 	if err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 
 	flash, err := a.consumeFlash(r)
 	if err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 
@@ -207,7 +207,7 @@ func (a *App) CustomerCard(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err != nil {
-			a.InternalError(w, err)
+			a.InternalError(w, r, err)
 			return
 		}
 	}
@@ -221,7 +221,7 @@ func (a *App) CustomerCard(w http.ResponseWriter, r *http.Request) {
 	if customer.ID == 0 && oid == 0 {
 		orgs, err := a.organizations.List(r.Context(), organizations.ListOptions{}, nil)
 		if err != nil {
-			a.InternalError(w, err)
+			a.InternalError(w, r, err)
 			return
 		}
 		options := make([]ui.SelectOption, 0, len(orgs))
@@ -245,7 +245,7 @@ func (a *App) CustomerCard(w http.ResponseWriter, r *http.Request) {
 
 	pageFS, err := fs.Sub(customers.Templates(), "card")
 	if err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 
@@ -269,7 +269,7 @@ func (a *App) CustomerCard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := ui.RenderPage(w, TemplateFS(), pageFS, data); err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 	}
 }
 
@@ -293,7 +293,7 @@ func (a *App) CustomerSave(w http.ResponseWriter, r *http.Request) {
 	if id == 0 && customer.UUID == "" {
 		uuid, err := common.GenerateUUID()
 		if err != nil {
-			a.InternalError(w, err)
+			a.InternalError(w, r, err)
 			return
 		}
 		customer.UUID = uuid
@@ -303,7 +303,7 @@ func (a *App) CustomerSave(w http.ResponseWriter, r *http.Request) {
 		orgUUID := r.FormValue("organization_id")
 		org, err := a.organizations.GetByUUID(r.Context(), orgUUID)
 		if err != nil {
-			a.InternalError(w, err)
+			a.InternalError(w, r, err)
 			return
 		}
 		customer.OrganizationID = org.ID
@@ -314,12 +314,12 @@ func (a *App) CustomerSave(w http.ResponseWriter, r *http.Request) {
 			http.NotFound(w, r)
 			return
 		}
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 
 	if err := a.SetFlash(r, sessions.FlashSuccess, "Контрагент сохранён."); err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 
@@ -382,7 +382,7 @@ func (a *App) HandlePutCustomers(w http.ResponseWriter, r *http.Request) {
 
 	result, err := a.customers.Synchronize(r.Context(), org.ID, models)
 	if err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 

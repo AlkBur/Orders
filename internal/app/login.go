@@ -81,7 +81,7 @@ func (a *App) Login(w http.ResponseWriter, r *http.Request) {
 
 	session, err := a.sessions.Create(identity.ID, r.UserAgent())
 	if err != nil {
-		a.InternalError(w, err)
+		a.InternalError(w, r, err)
 		return
 	}
 	SetSessionCookie(w, session.ID)
