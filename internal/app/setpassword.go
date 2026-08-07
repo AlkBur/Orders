@@ -12,7 +12,7 @@ func (a *App) SetPasswordPage(w http.ResponseWriter, r *http.Request) {
 
 	user := CurrentUser(r)
 	if user.ID == 0 || !user.NeedsPasswordSetup() {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+		http.Redirect(w, r, RouteHome, http.StatusSeeOther)
 		return
 	}
 
@@ -24,7 +24,7 @@ func (a *App) SetPasswordSubmit(w http.ResponseWriter, r *http.Request) {
 
 	identity := CurrentUser(r)
 	if identity.ID == 0 || !identity.NeedsPasswordSetup() {
-		a.Redirect(w, r, mode, "/")
+		a.Redirect(w, r, mode, RouteHome)
 		return
 	}
 
@@ -79,7 +79,7 @@ func (a *App) SetPasswordSubmit(w http.ResponseWriter, r *http.Request) {
 	}
 	DeleteSessionCookie(w)
 
-	a.Redirect(w, r, mode, "/")
+	a.Redirect(w, r, mode, RouteHome)
 }
 
 func (a *App) setPasswordPageData(login string, alert *ui.AlertData) pages.SetPasswordPage {

@@ -10,8 +10,8 @@ import "Orders/internal/users"
 //
 // Приоритет:
 //  1. смена пароля (всегда, независимо от роли);
-//  2. админ — рабочий стол;
-//  3. пользователь — документы.
+//  2. админ — рабочий стол (/dashboard);
+//  3. пользователь — документы (/receipts).
 func LandingURL(u users.Identity) string {
 	if u.NeedsPasswordSetup() {
 		return RouteSetPassword

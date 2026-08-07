@@ -9,5 +9,5 @@ func (a *App) Logout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	DeleteSessionCookie(w)
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	http.Redirect(w, r, RouteHome, http.StatusSeeOther)
 }

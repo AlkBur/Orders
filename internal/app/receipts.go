@@ -162,7 +162,7 @@ func (a *App) ReceiptsPage(w http.ResponseWriter, r *http.Request) {
 					{Style: ui.ButtonPrimary, Text: "Добавить", URL: "/receipts/new", Icon: "plus"},
 				},
 			},
-			Search: &ui.SearchData{URL: "/receipts", Placeholder: "Поиск чеков...", Query: query, Mode: ui.SearchLive},
+			Search: &ui.SearchData{URL: RouteReceipts, Placeholder: "Поиск чеков...", Query: query, Mode: ui.SearchLive},
 			List: ui.ListData{
 				Columns:    columns,
 				Rows:       rows,
@@ -231,7 +231,7 @@ func (a *App) ReceiptCard(w http.ResponseWriter, r *http.Request) {
 
 	title := "Товарный чек №" + doc.Receipt.Number
 	editable := doc.Receipt.ID == 0 || doc.Receipt.SentAt == nil
-	formAction := "/receipts"
+	formAction := RouteReceipts
 	if doc.Receipt.ID > 0 {
 		formAction = "/receipts/" + strconv.FormatInt(doc.Receipt.ID, 10)
 	}
@@ -280,7 +280,7 @@ func (a *App) ReceiptCard(w http.ResponseWriter, r *http.Request) {
 		Header:         pageHeader(r, "Товарные чеки"),
 		Title:          title,
 		FormAction:     formAction,
-		Card:           ui.CardData{Title: title, CloseURL: "/receipts"},
+		Card:           ui.CardData{Title: title, CloseURL: RouteReceipts},
 		Receipt:        doc.Receipt,
 		Items:          doc.Items,
 		CustomerID:     doc.Receipt.CustomerID,
@@ -453,11 +453,11 @@ func (a *App) ReceiptSave(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if ResponseModeFromRequest(r) == Fragment {
-		w.Header().Set("HX-Redirect", "/receipts")
+		w.Header().Set("HX-Redirect", RouteReceipts)
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-	http.Redirect(w, r, "/receipts", http.StatusSeeOther)
+	http.Redirect(w, r, RouteReceipts, http.StatusSeeOther)
 }
 
 // RenderReceiptValidationError доставляет ошибки валидации чека в зависимости
@@ -522,8 +522,8 @@ func (a *App) renderReceiptForm(w http.ResponseWriter, r *http.Request, ve *Vali
 	page := pages.ReceiptCardPage{
 		Header:         pageHeader(r, "Товарные чеки"),
 		Title:          "Новый товарный чек",
-		FormAction:     "/receipts",
-		Card:           ui.CardData{Title: "Новый товарный чек", CloseURL: "/receipts"},
+		FormAction:     RouteReceipts,
+		Card:           ui.CardData{Title: "Новый товарный чек", CloseURL: RouteReceipts},
 		Receipt:        receipt,
 		Errors:         ve.ErrorsMap(),
 		OrganizationID: organizationID,
@@ -580,7 +580,7 @@ func (a *App) ReceiptDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, "/receipts", http.StatusSeeOther)
+	http.Redirect(w, r, RouteReceipts, http.StatusSeeOther)
 }
 
 func (a *App) ReceiptSubmit(w http.ResponseWriter, r *http.Request) {
@@ -617,7 +617,7 @@ func (a *App) ReceiptSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, "/receipts", http.StatusSeeOther)
+	http.Redirect(w, r, RouteReceipts, http.StatusSeeOther)
 }
 
 func parseInt64(s string) int64 {
