@@ -444,6 +444,30 @@ func TestReceiptCard_ProductNameWrapping(t *testing.T) {
 	}
 }
 
+func TestReceiptsListPage_BlankPageRegression(t *testing.T) {
+	app := &App{
+		receipts: receipts.NewStore(testutil.NewTestDB(t, NewSchema())),
+	}
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/receipts", nil)
+	app.ReceiptsPage(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	body := w.Body.String()
+	if body == "" {
+		t.Fatal("expected non-empty body")
+	}
+	if !strings.Contains(body, "Товарные чеки") {
+		t.Fatalf("expected list title in body")
+	}
+	if !strings.Contains(body, "/static/favicon.ico") {
+		t.Fatalf("expected favicon link in rendered layout")
+	}
+}
+
 func insertProduct(t *testing.T, dbt *sql.DB, orgID int64, name, unit string) (int64, string) {
 	t.Helper()
 	uuid := "uuid-" + name

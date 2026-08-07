@@ -10,8 +10,54 @@ type ReceiptOrganizationOption struct {
 	Name string
 }
 
+// ReceiptListRow — готовая к выводу строка списка чеков.
+// Верхняя часть описывает отображаемые данные документа,
+// нижняя — доступные действия (URL и флаги готовности шаблона).
+// Шаблон только выводит эти значения и не строит URL.
+type ReceiptListRow struct {
+	Number       string
+	Date         string
+	Organization string
+	Customer     string
+	Total        string
+	Status       string
+
+	CanEdit bool
+	CanSend bool
+
+	FilesURL string
+	CopyURL  string
+	SendURL  string
+	ViewURL  string
+	EditURL  string
+}
+
+// ReceiptsListPage — модель специализированного списка чеков.
+type ReceiptsListPage struct {
+	Page
+	Header  ui.HeaderData
+	Alert   *ui.AlertData
+	Toolbar *ui.ToolbarData
+	Search  *ui.SearchData
+	Rows    []ReceiptListRow
+	NewURL  string
+}
+
+func (p ReceiptsListPage) FAB() *ui.FAB {
+	if p.NewURL == "" {
+		return nil
+	}
+	return &ui.FAB{Icon: "plus", URL: p.NewURL, Text: "Добавить"}
+}
+
+type ReceiptCopyPage struct {
+	ReceiptCardPage
+}
+
 type ReceiptCardPage struct {
 	Header         ui.HeaderData
+	CanEdit        bool
+	CanSend        bool
 	Title          string
 	FormAction     string
 	Card           ui.CardData
@@ -26,4 +72,32 @@ type ReceiptCardPage struct {
 	Errors         map[string]string
 	ErrorsJSON     string
 	ItemsJSON      string
+	CopySource     string
+}
+
+// ReceiptFile — готовый к выводу файл документа.
+type ReceiptFile struct {
+	Name  string
+	URL   string
+	Icon  string
+	Blank bool
+}
+
+// ReceiptFilesPage — модель окна «Файлы» чека.
+// Применяется к чекам; полная страница получает заголовок из Page.Title.
+type ReceiptFilesPage struct {
+	Page
+	Header    ui.HeaderData
+	Receipt   ReceiptHeader
+	Files     []ReceiptFile
+	CanUpload bool
+	BackURL   string
+}
+
+// ReceiptHeader — сводка документа в окне «Файлы».
+type ReceiptHeader struct {
+	Number       string
+	Date         string
+	Organization string
+	Total        string
 }

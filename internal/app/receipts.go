@@ -16,7 +16,6 @@ import (
 	"Orders/internal/products"
 	"Orders/internal/receipts"
 	"Orders/internal/ui"
-	"Orders/internal/ui/display"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -123,28 +122,53 @@ func (a *App) ReceiptsPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var columns []ui.ListColumn
-	for _, f := range fields {
-		columns = append(columns, ui.ListColumn{Label: f.Label})
+	rows := make([]pages.ReceiptListRow, 0, len(list))
+	for _, rec := range list {
+		total, err := rec.DisplayValue("Total")
+		if err != nil {
+			a.InternalError(w, err)
+			return
+		}
+		status, err := rec.DisplayValue("Status")
+		if err != nil {
+			a.InternalError(w, err)
+			return
+		}
+
+		sent := rec.SentAt != nil
+		base := rec.URL()
+		idStr := strconv.FormatInt(rec.ID, 10)
+
+		rows = append(rows, pages.ReceiptListRow{
+			Number:       rec.Number,
+			Date:         rec.Date.Format("2006-01-02"),
+			Organization: rec.OrganizationName,
+			Customer:     rec.CustomerName,
+			Total:        total,
+			Status:       status,
+
+			CanEdit: !sent,
+			CanSend: !sent,
+
+			FilesURL: "/receipts/" + idStr + "/files",
+			CopyURL:  "/receipts/" + idStr + "/copy",
+			SendURL:  base + "?mode=send",
+			ViewURL:  base + "?mode=view",
+			EditURL:  base,
+		})
 	}
 
-	var rows []ui.ListRow
-	for _, rec := range list {
-		var item display.Values = *rec
-
-		var cells []string
-		for _, f := range fields {
-			value, err := item.DisplayValue(f.GoName)
-			if err != nil {
-				a.InternalError(w, err)
-				return
-			}
-			cells = append(cells, value)
-		}
-		rows = append(rows, ui.ListRow{
-			Cells: cells,
-			URL:   rec.URL(),
-		})
+	page := pages.ReceiptsListPage{
+		Page:    pages.Page{Title: "Товарные чеки"},
+		Header:  pageHeader(r, "Товарные чеки"),
+		Toolbar: &ui.ToolbarData{
+			Buttons: []ui.Button{
+				{Style: ui.ButtonPrimary, Text: "Добавить", URL: "/receipts/new", Icon: "plus"},
+			},
+		},
+		Search: &ui.SearchData{URL: RouteReceipts, Placeholder: "Поиск чеков...", Query: query, Mode: ui.SearchLive},
+		Rows:   rows,
+		NewURL: "/receipts/new",
 	}
 
 	pageFS, err := fs.Sub(receipts.Templates(), "list")
@@ -153,31 +177,24 @@ func (a *App) ReceiptsPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	page := pages.ListViewPage{
-		Title:  "Товарные чеки",
-		Header: pageHeader(r, "Товарные чеки"),
-		List: ui.ListView{
-			Toolbar: &ui.ToolbarData{
-				Buttons: []ui.Button{
-					{Style: ui.ButtonPrimary, Text: "Добавить", URL: "/receipts/new", Icon: "plus"},
-				},
-			},
-			Search: &ui.SearchData{URL: RouteReceipts, Placeholder: "Поиск чеков...", Query: query, Mode: ui.SearchLive},
-			List: ui.ListData{
-				Columns:    columns,
-				Rows:       rows,
-				RenderMode: ui.RenderComfortable,
-				Preset:     ui.ListWide,
-			},
-		},
-		NewURL: "/receipts/new",
+	if ResponseModeFromRequest(r) == Fragment {
+		if err := ui.Render(w, TemplateFS(), pageFS, "receipts_list", page); err != nil {
+			a.InternalError(w, err)
+		}
+		return
 	}
-
-	a.renderListView(w, r, TemplateFS(), pageFS, page)
+	if err := ui.RenderPage(w, TemplateFS(), pageFS, page); err != nil {
+		a.InternalError(w, err)
+	}
 }
 
 func (a *App) ReceiptCard(w http.ResponseWriter, r *http.Request) {
 	NoCache(w)
+
+	const (
+		receiptModeView = "view"
+		receiptModeSend = "send"
+	)
 
 	id := receiptIDFromURL(r)
 
@@ -230,7 +247,15 @@ func (a *App) ReceiptCard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	title := "Товарный чек №" + doc.Receipt.Number
-	editable := doc.Receipt.ID == 0 || doc.Receipt.SentAt == nil
+
+	mode := r.URL.Query().Get("mode")
+	isView := mode == receiptModeView
+	isSend := mode == receiptModeSend
+	sent := doc.Receipt.SentAt != nil
+
+	canEdit := doc.Receipt.ID == 0 || (!sent && !isView && !isSend)
+	canSend := isSend && !sent && doc.Receipt.ID > 0
+
 	formAction := RouteReceipts
 	if doc.Receipt.ID > 0 {
 		formAction = "/receipts/" + strconv.FormatInt(doc.Receipt.ID, 10)
@@ -240,7 +265,7 @@ func (a *App) ReceiptCard(w http.ResponseWriter, r *http.Request) {
 	var pickerProducts []*products.Product
 	var organizationOptions []pages.ReceiptOrganizationOption
 
-	if editable {
+	if canEdit {
 		if a.organizations != nil {
 			orgs, err := a.organizations.List(r.Context(), organizations.ListOptions{}, nil)
 			if err != nil {
@@ -278,6 +303,8 @@ func (a *App) ReceiptCard(w http.ResponseWriter, r *http.Request) {
 
 	page := pages.ReceiptCardPage{
 		Header:         pageHeader(r, "Товарные чеки"),
+		CanEdit:        canEdit,
+		CanSend:        canSend,
 		Title:          title,
 		FormAction:     formAction,
 		Card:           ui.CardData{Title: title, CloseURL: RouteReceipts},
@@ -300,6 +327,188 @@ func (a *App) ReceiptCard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := ui.RenderPage(w, TemplateFS(), pageFS, page); err != nil {
+		a.InternalError(w, err)
+	}
+}
+
+// ReceiptCopyPage открывает редактор нового чека «на основании» документа id.
+// Данные исходника переносятся в новый документ (ID=0, без отправки);
+// сохранение создаёт новый чек. Строки копируются без идентификаторов.
+func (a *App) ReceiptCopyPage(w http.ResponseWriter, r *http.Request) {
+	NoCache(w)
+
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	src, err := a.receipts.GetByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, receipts.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		a.InternalError(w, err)
+		return
+	}
+
+	rec := a.receipts.New()
+	rec.Date = time.Now()
+	rec.OrganizationID = src.Receipt.OrganizationID
+	rec.UserID = src.Receipt.UserID
+	rec.CustomerID = src.Receipt.CustomerID
+	rec.CustomerName = src.Receipt.CustomerName
+
+	items := make([]receipts.ReceiptItem, 0, len(src.Items))
+	for _, it := range src.Items {
+		items = append(items, receipts.ReceiptItem{
+			LineNum:     it.LineNum,
+			ProductID:   it.ProductID,
+			ProductName: it.ProductName,
+			Unit:        it.Unit,
+			Quantity:    it.Quantity,
+			Price:       it.Price,
+			Amount:      it.Amount,
+		})
+	}
+
+	a.renderReceiptEditorPage(w, r, &receipts.Document{Receipt: rec, Items: items}, src.Receipt.Number)
+}
+
+// renderReceiptEditorPage отображает редактор чека (карточку) с готовой
+// к правке моделью. sourceNumber при непустом значении показывает баннер
+// «Создан на основании».
+func (a *App) renderReceiptEditorPage(w http.ResponseWriter, r *http.Request, doc *receipts.Document, sourceNumber string) {
+	ctx := r.Context()
+
+	var organizationOptions []pages.ReceiptOrganizationOption
+	if a.organizations != nil {
+		orgs, err := a.organizations.List(ctx, organizations.ListOptions{}, nil)
+		if err != nil {
+			a.InternalError(w, err)
+			return
+		}
+		organizationOptions = make([]pages.ReceiptOrganizationOption, 0, len(orgs))
+		for _, org := range orgs {
+			organizationOptions = append(organizationOptions, pages.ReceiptOrganizationOption{ID: org.ID, Name: org.Name})
+		}
+	}
+
+	var pickerCustomers []*customers.Customer
+	if a.customers != nil {
+		var err error
+		pickerCustomers, err = a.customers.List(ctx, 0, customers.ListOptions{}, nil)
+		if err != nil {
+			a.InternalError(w, err)
+			return
+		}
+	}
+
+	var pickerProducts []*products.Product
+	if a.products != nil {
+		var err error
+		pickerProducts, err = a.products.List(ctx, 0, products.ListOptions{}, nil)
+		if err != nil {
+			a.InternalError(w, err)
+			return
+		}
+	}
+
+	itemsJSON, customersJSON, productsJSON, err := receiptEditorJSON(doc.Items, pickerCustomers, pickerProducts)
+	if err != nil {
+		a.InternalError(w, err)
+		return
+	}
+
+	card := pages.ReceiptCopyPage{
+		ReceiptCardPage: pages.ReceiptCardPage{
+			Header:         pageHeader(r, "Товарные чеки"),
+			CanEdit:        true,
+			Title:          "Новый товарный чек",
+			FormAction:     RouteReceipts,
+			Card:           ui.CardData{Title: "Новый товарный чек", CloseURL: RouteReceipts},
+			Receipt:        doc.Receipt,
+			Items:          doc.Items,
+			CustomerID:     doc.Receipt.CustomerID,
+			CustomerName:   doc.Receipt.CustomerName,
+			OrganizationID: doc.Receipt.OrganizationID,
+			ItemsJSON:      itemsJSON,
+			CustomersJSON:  customersJSON,
+			ProductsJSON:   productsJSON,
+			Orgs:           organizationOptions,
+			Errors:         make(map[string]string),
+			ErrorsJSON:     "{}",
+		},
+	}
+	if sourceNumber != "" {
+		card.CopySource = sourceNumber
+	}
+
+	pageFS, err := fs.Sub(receipts.Templates(), "card")
+	if err != nil {
+		a.InternalError(w, err)
+		return
+	}
+	if err := ui.RenderPage(w, TemplateFS(), pageFS, card); err != nil {
+		a.InternalError(w, err)
+	}
+}
+
+// ReceiptFiles отображает окно «Файлы» чека: полная страница или Фрагмент
+// (shell модального окна) в зависимости от ResponseModeFromRequest.
+func (a *App) ReceiptFiles(w http.ResponseWriter, r *http.Request) {
+	NoCache(w)
+
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	doc, err := a.receipts.GetByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, receipts.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		a.InternalError(w, err)
+		return
+	}
+
+	rec := doc.Receipt
+	header := pages.ReceiptHeader{
+		Number:       rec.Number,
+		Date:         rec.Date.Format("2006-01-02"),
+		Organization: rec.OrganizationName,
+	}
+	if total, err := rec.DisplayValue("Total"); err == nil {
+		header.Total = total
+	}
+
+	filesPage := pages.ReceiptFilesPage{
+		Page:    pages.Page{Title: "Файлы чека №" + rec.Number},
+		Header:  pageHeader(r, "Товарные чеки"),
+		Receipt: header,
+		Files:   nil,
+		BackURL: RouteReceipts,
+	}
+
+	filesFS, err := fs.Sub(receipts.Templates(), "files")
+	if err != nil {
+		a.InternalError(w, err)
+		return
+	}
+
+	if ResponseModeFromRequest(r) == Fragment {
+		if err := ui.Render(w, TemplateFS(), filesFS, "receipts_files_modal", filesPage); err != nil {
+			a.InternalError(w, err)
+		}
+		return
+	}
+	if err := ui.RenderPage(w, TemplateFS(), filesFS, filesPage); err != nil {
 		a.InternalError(w, err)
 	}
 }
@@ -521,6 +730,7 @@ func (a *App) renderReceiptForm(w http.ResponseWriter, r *http.Request, ve *Vali
 
 	page := pages.ReceiptCardPage{
 		Header:         pageHeader(r, "Товарные чеки"),
+		CanEdit:        true,
 		Title:          "Новый товарный чек",
 		FormAction:     RouteReceipts,
 		Card:           ui.CardData{Title: "Новый товарный чек", CloseURL: RouteReceipts},
