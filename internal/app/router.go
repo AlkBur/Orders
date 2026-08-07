@@ -19,8 +19,10 @@ func (a *App) NewRouter() *chi.Mux {
 	r.Use(middleware.Recoverer)
 	r.Use(SessionMiddleware(a.sessions))
 
-	r.Get("/login", a.LoginPage)
-	r.With(a.loginRequestGuard(), a.loginRateLimiter()).Post("/login", a.Login)
+	r.Get(RouteLogin, a.LoginPage)
+	r.With(a.loginRequestGuard(), a.loginRateLimiter()).Post(RouteLogin, a.Login)
+
+	r.Get(RouteHome, a.Home)
 
 	r.Handle(
 		"/static/*",
@@ -63,7 +65,7 @@ func (a *App) NewRouter() *chi.Mux {
 			// Receipts
 			r.Get(RouteReceipts, a.ReceiptsPage)
 			r.Get("/receipts/new", a.ReceiptCard)
-			r.Post("/receipts", a.ReceiptSave)
+			r.Post(RouteReceipts, a.ReceiptSave)
 			r.Get("/receipts/{id}", a.ReceiptCard)
 			r.Post("/receipts/{id}", a.ReceiptSave)
 			r.Post("/receipts/{id}/send", a.ReceiptSubmit)

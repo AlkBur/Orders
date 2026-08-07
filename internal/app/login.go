@@ -17,7 +17,7 @@ func (a *App) LoginPage(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, LandingURL(identity), http.StatusSeeOther)
 			return
 		}
-		http.Redirect(w, r, RouteDashboard, http.StatusSeeOther)
+		http.Redirect(w, r, RouteLogin, http.StatusSeeOther)
 		return
 	}
 

@@ -839,7 +839,7 @@ Legacy-шаблоны `page-card` и отдельные плоские card-ша
 🏠  Организации                        ⋮
 ```
 
-- `app-header-home` — иконка «домой», ведёт на `/` (dashboard).
+- `app-header-home` — иконка «домой», ведёт на `/` — точку входа приложения, которая редиректит на стартовый экран по роли (см. «Application Entry»).
 - `app-header-title` — название раздела, усекается через `ellipsis`.
 - `app_menu` — собственный компонент (не Bulma dropdown, не `<details>`).
   Без JS панель видна (пользователь + пункты). С JS (`html.js`) — toggle
@@ -993,7 +993,7 @@ FAB реализуется данными списка через `FABProvider` 
 
 ### Dashboard
 
-`/` — «Рабочий стол» администратора: `internal/app/dashboard.go` +
+`/dashboard` — «Рабочий стол» администратора: `internal/app/dashboard.go` +
 `pages/dashboard/page.html`.
 
 Dashboard — это **лаунчер приложения**: только навигационные карточки
@@ -1151,17 +1151,35 @@ func LandingURL(u users.Identity) string {
 Приоритет:
 
 1. установка пароля — всегда, независимо от роли (`/set-password`);
-2. админ — рабочий стол (`/`);
+2. админ — рабочий стол (`/dashboard`);
 3. пользователь — документы (`/receipts`).
 
 `LandingURL` намеренно «тупая»: она только выбирает первый экран и не
 содержит ни проверки прав, ни навигационной логики. Маршруты задаются
-константами в `internal/app/routes.go` (`RouteDashboard`, `RouteReceipts`,
-`RouteSetPassword`).
+константами в `internal/app/routes.go` (`RouteHome`, `RouteDashboard`,
+`RouteReceipts`, `RouteSetPassword`).
 
-Рабочий стол (`/`) доступен только администратору — `RequireAdmin`
-в роутере (403 для остальных); обычный пользователь после входа
-попадает на `/receipts`.
+# Application Entry
+
+`/` — точка входа в приложение и больше ничего:
+
+```
+GET /
+    ↓
+нет сессии           → /login
+нет пользователя     → очистить сессию → /login
+нужно сменить пароль → /set-password
+администратор        → /dashboard
+обычный пользователь → /receipts
+```
+
+`Home()` (`internal/app/home.go`) проверяет только сессию и всегда
+делегирует выбор маршрута `LandingURL()`. Он не содержит собственной
+логики выбора первого экрана — вся она живёт в одном месте, в `LandingURL()`.
+
+`/dashboard` доступен только администратору — `RequireAdmin` в роутере
+(403 для остальных); обычный пользователь после входа попадает
+на `/receipts`. `/` не знает о правах — он только перенаправляет.
 
 # Authentication Flow
 
@@ -1170,12 +1188,16 @@ GET /login
     ↓
 RenderAuth (FullPage)
 
+GET /
+    ↓
+Home(): валидация сессии → Redirect (LandingURL: /set-password | /dashboard | /receipts)
+
 POST /login
     ↓
 Серверная валидация
     ↓
 Ошибки → RenderAuth (фрагмент для htmx / полная страница) + Alert
-Успех  → Redirect (LandingURL: /set-password | / | /receipts)
+Успех  → Redirect (LandingURL: /set-password | /dashboard | /receipts)
 
 POST /set-password
     ↓

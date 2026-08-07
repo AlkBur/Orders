@@ -5,7 +5,9 @@ package app
 // Используйте константы вместо строковых литералов при построении
 // ссылок в обработчиках, чтобы пути менялись в одном месте.
 const (
-	RouteDashboard   = "/"
+	RouteLogin       = "/login"
+	RouteHome        = "/"
+	RouteDashboard   = "/dashboard"
 	RouteReceipts    = "/receipts"
 	RouteSetPassword = "/set-password"
 )

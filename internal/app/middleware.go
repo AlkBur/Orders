@@ -61,7 +61,7 @@ func RequireAuth(store *sessions.Store, identity *users.IdentityService, next ht
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		session := CurrentSession(r)
 		if session == nil || session.UserID == nil {
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			http.Redirect(w, r, RouteLogin, http.StatusSeeOther)
 			return
 		}
 
@@ -69,7 +69,7 @@ func RequireAuth(store *sessions.Store, identity *users.IdentityService, next ht
 		if !ok {
 			store.Delete(session.ID)
 			DeleteSessionCookie(w)
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			http.Redirect(w, r, RouteLogin, http.StatusSeeOther)
 			return
 		}
 
