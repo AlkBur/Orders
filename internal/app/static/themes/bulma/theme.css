@@ -122,6 +122,36 @@
   top: 1rem;
   right: 1rem;
 }
+.modal.picker-modal {
+  justify-content: flex-start;
+}
+.modal.picker-modal .modal-card {
+  margin-top: 1.5rem;
+  margin-bottom: 1.5rem;
+  height: calc(100vh - 3rem);
+  max-height: calc(100vh - 3rem);
+}
+.receipt-picker-item {
+  display: flex;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  gap: 0.75rem;
+  box-sizing: border-box;
+}
+.receipt-picker-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+.receipt-picker-unit {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  text-align: right;
+}
 .line-modal-top {
   display: flex;
   align-items: center;
