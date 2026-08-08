@@ -195,7 +195,7 @@ func (a *App) ReceiptsPage(w http.ResponseWriter, r *http.Request) {
 
 		rows = append(rows, pages.ReceiptListRow{
 			Number:       rec.Number,
-			Date:         rec.Date.Format("2006-01-02"),
+			Date:         rec.Date.Format("02.01.2006"),
 			Organization: rec.OrganizationName,
 			Customer:     rec.CustomerName,
 			Total:        total,

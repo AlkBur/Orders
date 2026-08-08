@@ -984,6 +984,9 @@ html.js .app-menu.is-open .app-menu-panel {
   height: 1.9rem;
   padding: 0;
 }
+.receipts-action-label {
+  display: none;
+}
 .receipts-actions [aria-disabled="true"] {
   opacity: 0.55;
   cursor: not-allowed;
@@ -1060,22 +1063,76 @@ html.js .app-menu.is-open .app-menu-panel {
   .receipts-row.is-header {
     display: none;
   }
+
   .receipts-row {
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.35rem 0.75rem;
+    align-items: baseline;
   }
-  .receipts-cell {
-    flex: 1 1 50%;
-  }
-  .receipts-cell:nth-child(1) {
-    flex: 1 1 100%;
-    font-weight: 600;
-  }
+
   .receipts-cell:nth-child(3),
   .receipts-cell:nth-child(4),
-  .receipts-cell:nth-child(6) {
-    display: none;
-  }
   .receipts-cell.is-actions {
-    flex: 1 1 100%;
+    grid-column: 1 / -1;
+  }
+
+  .receipts-cell {
+    overflow: visible;
+    white-space: normal;
+  }
+  .receipts-cell-value {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .receipts-cell::before {
+    display: block;
+    font-size: 0.7rem;
+    color: var(--bulma-text-light);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.1rem;
+  }
+  .receipts-cell:nth-child(1)::before {
+    content: "Номер";
+  }
+  .receipts-cell:nth-child(2)::before {
+    content: "Дата";
+  }
+  .receipts-cell:nth-child(3)::before {
+    content: "Организация";
+  }
+  .receipts-cell:nth-child(4)::before {
+    content: "Контрагент";
+  }
+  .receipts-cell:nth-child(5)::before {
+    content: "Сумма";
+  }
+  .receipts-cell:nth-child(6)::before {
+    content: "Статус";
+  }
+
+  .receipts-actions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    width: 100%;
+    gap: 0.5rem;
+  }
+  .receipts-actions .button {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: max-content;
+    height: auto;
+    padding: 0.4rem 0.75rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+  }
+  .receipts-actions .receipts-action-label {
+    display: inline;
   }
 }
