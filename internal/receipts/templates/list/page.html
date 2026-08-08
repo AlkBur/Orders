@@ -27,17 +27,17 @@
   <div class="receipts-row">
     <div class="receipts-cell">{{.Number}}</div>
     <div class="receipts-cell">{{.Date}}</div>
-    <div class="receipts-cell">{{.Organization}}</div>
-    <div class="receipts-cell">{{.Customer}}</div>
+    <div class="receipts-cell"><span class="receipts-cell-value">{{.Organization}}</span></div>
+    <div class="receipts-cell"><span class="receipts-cell-value">{{.Customer}}</span></div>
     <div class="receipts-cell">{{.Total}}</div>
     <div class="receipts-cell">{{.Status}}</div>
     <div class="receipts-cell is-actions">
       <div class="receipts-actions">
-        <a class="button is-primary is-small" href="{{.FilesURL}}" data-dialog-url="{{.FilesURL}}" title="Файлы">{{icon "paperclip"}}</a>
-        <a class="button is-info is-small" href="{{.CopyURL}}" title="Копировать">{{icon "file-plus"}}</a>
-        <a class="button is-success is-small" href="{{.SendURL}}" {{if not .CanSend}}aria-disabled="true"{{end}} title="{{if .CanSend}}Отправить{{else}}Документ уже отправлен{{end}}">{{icon "send"}}</a>
-        <a class="button is-link is-small" href="{{.ViewURL}}" title="Просмотр">{{icon "file-search"}}</a>
-        <a class="button is-warning is-small" href="{{.EditURL}}" {{if not .CanEdit}}aria-disabled="true"{{end}} title="{{if .CanEdit}}Редактировать{{else}}Документ уже отправлен{{end}}">{{icon "file-pen"}}</a>
+        <a class="button is-primary is-small" href="{{.FilesURL}}" data-dialog-url="{{.FilesURL}}" title="Файлы">{{icon "paperclip"}}<span class="receipts-action-label">Файлы</span></a>
+        <a class="button is-info is-small" href="{{.CopyURL}}" title="Копировать">{{icon "file-plus"}}<span class="receipts-action-label">Копировать</span></a>
+        <a class="button is-success is-small" href="{{.SendURL}}" {{if not .CanSend}}aria-disabled="true"{{end}} title="{{if .CanSend}}Отправить{{else}}Документ уже отправлен{{end}}">{{icon "send"}}<span class="receipts-action-label">Отправить</span></a>
+        <a class="button is-link is-small" href="{{.ViewURL}}" title="Просмотр">{{icon "file-search"}}<span class="receipts-action-label">Просмотр</span></a>
+        <a class="button is-warning is-small" href="{{.EditURL}}" {{if not .CanEdit}}aria-disabled="true"{{end}} title="{{if .CanEdit}}Редактировать{{else}}Документ уже отправлен{{end}}">{{icon "file-pen"}}<span class="receipts-action-label">Изменить</span></a>
       </div>
     </div>
   </div>
