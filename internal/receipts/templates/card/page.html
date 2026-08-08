@@ -59,6 +59,12 @@
   calcNewLine() {
   this.newLine.amount = (Number(this.newLine.quantity) || 0) * (Number(this.newLine.price) || 0);
   },
+  focusZero(el) {
+  if (el.value !== '' && Number(el.value) === 0) el.value = '';
+  },
+  blurZero(el) {
+  if (el.value === '') el.value = '0';
+  },
   calcNewLineFromAmount() {
   const quantity = Number(this.newLine.quantity) || 0;
   if (quantity > 0) {
@@ -289,18 +295,18 @@
         </div>
         <div class="field">
           <label class="label" for="line_quantity">Количество</label>
-          <input class="input" id="line_quantity" type="number" step="0.001" min="0" x-model="newLine.quantity"
-            @input="calcNewLine">
+          <input class="input" id="line_quantity" type="number" step="0.001" min="0" inputmode="decimal"
+            x-model="newLine.quantity" @input="calcNewLine" @click="focusZero($el)" @blur="blurZero($el)">
         </div>
         <div class="field">
           <label class="label" for="line_price">Цена</label>
-          <input class="input" id="line_price" type="number" step="0.01" min="0" x-model="newLine.price"
-            @input="calcNewLine">
+          <input class="input" id="line_price" type="number" step="0.01" min="0" inputmode="decimal"
+            x-model="newLine.price" @input="calcNewLine" @click="focusZero($el)" @blur="blurZero($el)">
         </div>
         <div class="field">
           <label class="label" for="line_amount">Сумма</label>
-          <input class="input" id="line_amount" type="number" step="0.01" min="0" x-model="newLine.amount"
-            @input="calcNewLineFromAmount">
+          <input class="input" id="line_amount" type="number" step="0.01" min="0" inputmode="decimal"
+            x-model="newLine.amount" @input="calcNewLineFromAmount" @click="focusZero($el)" @blur="blurZero($el)">
         </div>
       </section>
     </div>
@@ -346,7 +352,7 @@
     </div>
   </div>
 
-  <div class="modal" x-cloak :class="{ 'is-active': pickerOpen }">
+  <div class="modal picker-modal" x-cloak :class="{ 'is-active': pickerOpen }">
     <div class="modal-background" @click="pickerOpen = false"></div>
     <div class="modal-card">
       <header class="modal-card-head picker-modal-head">
@@ -363,10 +369,10 @@
       <section class="modal-card-body">
         <div class="buttons is-flex is-flex-direction-column is-align-items-stretch">
           <template x-for="item in availablePickerItems" :key="item.id">
-            <button type="button" class="button is-light is-justify-content-space-between" x-show="matchesPicker(item)"
+            <button type="button" class="button is-light is-justify-content-space-between receipt-picker-item" x-show="matchesPicker(item)"
               @click="selectPickerItem(item)">
-              <span x-text="item.name"></span>
-              <span class="has-text-grey" x-text="item.unit || ''"></span>
+              <span class="receipt-picker-name" x-text="item.name"></span>
+              <span class="receipt-picker-unit has-text-grey" x-text="item.unit || ''"></span>
             </button>
           </template>
         </div>
@@ -445,17 +451,19 @@
       <div class="receipt-item-field receipt-item-qty">
         <label class="receipt-item-label" :for="'item_quantity_' + i">Количество</label>
         <input class="input" type="number" step="0.001" :id="'item_quantity_' + i"
-          :name="'items[' + i + '][quantity]'" x-model="item.quantity" @input="calcLine(i)">
+          :name="'items[' + i + '][quantity]'" inputmode="decimal" x-model="item.quantity"
+          @input="calcLine(i)" @click="focusZero($el)" @blur="blurZero($el)">
       </div>
       <div class="receipt-item-field receipt-item-price">
         <label class="receipt-item-label" :for="'item_price_' + i">Цена</label>
         <input class="input" type="number" step="0.01" :id="'item_price_' + i" :name="'items[' + i + '][price]'"
-          x-model="item.price" @input="calcLine(i)">
+          inputmode="decimal" x-model="item.price" @input="calcLine(i)" @click="focusZero($el)" @blur="blurZero($el)">
       </div>
       <div class="receipt-item-field receipt-item-amount">
         <span class="receipt-item-label">Сумма</span>
         <input class="input" type="number" step="0.01" :id="'item_amount_' + i" :name="'items[' + i + '][amount]'"
-          x-model="item.amount" @input="calcLineFromAmount(i)">
+          inputmode="decimal" x-model="item.amount" @input="calcLineFromAmount(i)" @click="focusZero($el)"
+          @blur="blurZero($el)">
       </div>
       <div class="receipt-item-actions">
         <button type="button" class="icon-button" @click.stop="openLineModal(i)" aria-label="Редактировать"
