@@ -49,6 +49,7 @@ X-API-Key: <ключ интеграции>
 ```
 PUT /api/integration/organizations/{oid}/customers
 PUT /api/integration/organizations/{oid}/products
+PUT /api/integration/organizations/{oid}/receipts/{ruuid}/files
 ```
 
 `oid` — UUID организации из внешней системы. Извлекается из URL
@@ -200,6 +201,83 @@ Content-Type: application/json
 | `400 Bad Request` | Неверный JSON, пустое id/name, дубликат id, неизвестное поле, лишние данные после JSON |
 | `401 Unauthorized` | X-API-Key отсутствует, пуст или неверен |
 | `500 Internal Server Error` | Ошибка базы данных |
+
+---
+
+### 5.3 PUT /api/integration/organizations/{oid}/receipts/{ruuid}/files
+
+Загрузка файла (PDF) для конкретного документа. На первом этапе API
+принимает только PDF. Модель и таблица допускают расширение на другие
+типы файлов без изменения механизма хранения.
+
+`ruuid` — внешний UUID товарного чека (`receipts.uuid`), назначенный
+документу внешней системой.
+
+#### Request
+
+```
+PUT /api/integration/organizations/{oid}/receipts/{ruuid}/files
+Content-Type: multipart/form-data
+X-API-Key: <ключ>
+```
+
+Тело — форма `multipart/form-data` с двумя частями:
+
+| Часть | Значение |
+|-------|----------|
+| `uuid` | Внешний UUID файла (обязательное, строка) |
+| `file` | Контент PDF (ровно одна часть, обязательное) |
+
+Валидация выполняется в следующем порядке:
+
+```
+Content-Type: multipart/form-data
+→ лимит всего запроса 30 MiB
+→ ровно одна часть file
+→ uuid непустой
+→ MIME части = application/pdf
+→ первые 5 байт = %PDF-
+→ существует организация
+→ существует чек с uuid = ruuid
+→ чек принадлежит этой организации
+→ Upsert(receipt_id, uuid)
+```
+
+Файл с одинаковым `uuid` в пределах одного чека сохраняется
+идемпотентно: повторная загрузка не создаёт дубликат, а **полностью**
+заменяет содержимое, имя и метаданные существующего файла.
+Один и тот же `uuid` в разных документах — независимые записи.
+
+#### Успешный ответ
+
+```
+200 OK
+Content-Type: application/json
+```
+
+```json
+{
+  "inserted": 1,
+  "updated": 0
+}
+```
+
+- `inserted: 1, updated: 0` — файл создан;
+- `inserted: 0, updated: 1` — существующий файл заменён;
+- `inserted: 0, updated: 0` — невозможен (каждому запросу
+  соответствует одна операция).
+
+#### Ошибки
+
+| Код | Причина |
+|-----|---------|
+| `400 Bad Request` | Неверный `Content-Type`, отсутствует часть `file`, пустой `uuid`, не-PDF (MIME не `application/pdf` или первая часть `%PDF-` нарушена), превышен лимит 30 MiB |
+| `401 Unauthorized` | X-API-Key отсутствует, пуст или неверен |
+| `404 Not Found` | Организация не существует; чек с `ruuid` не существует; чек принадлежит другой организации |
+| `500 Internal Server Error` | Ошибка базы данных |
+
+Примечание: **30 MiB — максимальный размер всего HTTP multipart-запроса,
+а не PDF-файла.**
 
 ---
 

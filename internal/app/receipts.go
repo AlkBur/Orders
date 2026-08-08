@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io/fs"
+	"mime"
 	"net/http"
 	"strconv"
 	"strings"
@@ -553,11 +554,26 @@ func (a *App) ReceiptFiles(w http.ResponseWriter, r *http.Request) {
 		header.Total = total
 	}
 
+	files, err := a.receiptFiles.ListByReceipt(r.Context(), id)
+	if err != nil {
+		a.InternalError(w, r, err)
+		return
+	}
+
+	fileViews := make([]pages.ReceiptFile, 0, len(files))
+	for _, f := range files {
+		fileViews = append(fileViews, pages.ReceiptFile{
+			Name: f.FileName,
+			Icon: "file-text",
+			URL:  "/receipts/" + idStr + "/files/" + strconv.FormatInt(f.ID, 10),
+		})
+	}
+
 	filesPage := pages.ReceiptFilesPage{
 		Page:    pages.Page{Title: "Файлы чека №" + rec.Number},
 		Header:  pageHeader(r, "Товарные чеки"),
 		Receipt: header,
-		Files:   nil,
+		Files:   fileViews,
 		BackURL: RouteReceipts,
 	}
 
@@ -575,6 +591,50 @@ func (a *App) ReceiptFiles(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := ui.RenderPage(w, TemplateFS(), filesFS, filesPage); err != nil {
 		a.InternalError(w, r, err)
+	}
+}
+
+// ReceiptFileContent отдаёт содержимое файла для открытия в браузере.
+// Проверяются оба идентификатора: файл обязан принадлежать документу id,
+// иначе нельзя открыть файл одного чека через другой. Заголовок
+// Content-Disposition строится безопасно через mime.FormatMediaType: имя
+// приходит из внешней системы и не должно влиять на заголовок ответа.
+func (a *App) ReceiptFileContent(w http.ResponseWriter, r *http.Request) {
+	NoCache(w)
+
+	id := receiptIDFromURL(r)
+	if id == 0 {
+		http.NotFound(w, r)
+		return
+	}
+
+	fileIDStr := chi.URLParam(r, "fileID")
+	fileID, err := strconv.ParseInt(fileIDStr, 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	file, err := a.receiptFiles.GetByID(r.Context(), id, fileID)
+	if err != nil {
+		if errors.Is(err, receipts.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		a.InternalError(w, r, err)
+		return
+	}
+
+	contentType := file.MimeType
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Length", strconv.Itoa(len(file.Data)))
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("inline", map[string]string{"filename": file.FileName}))
+	if _, err := w.Write(file.Data); err != nil {
+		a.log.Error().Err(err).Msg("receipt file: write failed")
 	}
 }
 

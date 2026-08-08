@@ -43,6 +43,7 @@ func (a *App) NewRouter() *chi.Mux {
 		r.Use(a.RequireOrganizationAPIKey)
 		r.Put("/customers", a.HandlePutCustomers)
 		r.Put("/products", a.HandlePutProducts)
+		r.Put("/receipts/{ruuid}/files", a.HandlePutReceiptFile)
 	})
 
 	r.Group(func(r chi.Router) {
@@ -70,6 +71,7 @@ func (a *App) NewRouter() *chi.Mux {
 			r.Post("/receipts/{id}", a.ReceiptSave)
 			r.Get("/receipts/{id}/copy", a.ReceiptCopyPage)
 			r.Get("/receipts/{id}/files", a.ReceiptFiles)
+			r.Get("/receipts/{id}/files/{fileID}", a.ReceiptFileContent)
 			r.Post("/receipts/{id}/send", a.ReceiptSubmit)
 			r.Post("/receipts/{id}/delete", a.ReceiptDelete)
 

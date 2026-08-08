@@ -10,6 +10,7 @@ const (
 	TypeReal     ColumnType = "real"
 	TypeBool     ColumnType = "bool"
 	TypeDateTime ColumnType = "datetime"
+	TypeBlob     ColumnType = "blob"
 )
 
 type Column struct {
@@ -85,6 +86,10 @@ func Bool(name string) Column {
 
 func DateTime(name string) Column {
 	return Column{Name: name, Type: TypeDateTime}
+}
+
+func Blob(name string) Column {
+	return Column{Name: name, Type: TypeBlob}
 }
 
 type UniqueConstraint struct {

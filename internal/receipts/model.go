@@ -45,6 +45,21 @@ type Document struct {
 	Items   []ReceiptItem
 }
 
+// ReceiptFile — файл документа (PDF). Хранится в отдельной базе files.db.
+// Модель не знает про базу данных; uuid — внешний UUID файла из 1С,
+// уникальный только в контексте документа (receipt_id, uuid).
+type ReceiptFile struct {
+	ID        int64
+	ReceiptID int64
+	UUID      string
+	FileName  string
+	MimeType  string
+	FileSize  int64
+	Data      []byte
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
 type ReceiptUpdate struct {
 	ExchangeID  string
 	UUID        *string

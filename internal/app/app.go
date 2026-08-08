@@ -23,6 +23,7 @@ type App struct {
 	log    zerolog.Logger
 
 	db            *sql.DB
+	filesDB       *sql.DB
 	users         *users.Store
 	identity      *users.IdentityService
 	sessions      *sessions.Store
@@ -30,6 +31,7 @@ type App struct {
 	organizations *organizations.Store
 	products      *products.Store
 	receipts      *receipts.Store
+	receiptFiles  *receipts.FileStore
 
 	router *chi.Mux
 	server *http.Server
@@ -51,6 +53,18 @@ func New(configPath string) (*App, error) {
 
 	schema := NewSchema()
 	if err := schema.RunMigrations(db); err != nil {
+		db.Close()
+		return nil, err
+	}
+
+	filesDB, err := database.OpenPath(config.FilesDatabasePath)
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+	filesSchema := NewFilesSchema()
+	if err := filesSchema.RunMigrations(filesDB); err != nil {
+		filesDB.Close()
 		db.Close()
 		return nil, err
 	}
@@ -80,6 +94,7 @@ func New(configPath string) (*App, error) {
 		config:        config,
 		log:           NewLogger(false),
 		db:            db,
+		filesDB:       filesDB,
 		users:         usersStore,
 		identity:      identity,
 		sessions:      sessionStore,
@@ -87,6 +102,7 @@ func New(configPath string) (*App, error) {
 		organizations: orgStore,
 		products:      products.NewStore(db),
 		receipts:      receipts.NewStore(db),
+		receiptFiles:  receipts.NewFileStore(filesDB),
 		orgKeys:       orgKeys,
 	}
 
@@ -102,5 +118,6 @@ func New(configPath string) (*App, error) {
 
 func (a *App) Run() error {
 	defer a.db.Close()
+	defer a.filesDB.Close()
 	return a.server.ListenAndServe()
 }

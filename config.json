@@ -1,6 +1,7 @@
 {
     "http_address": ":3000",
     "database_path": "data/base.db",
+    "files_database_path": "data/files.db",
     "secret": "very-long-random-secret",
     "auth": {
         "initial_password": "admin"

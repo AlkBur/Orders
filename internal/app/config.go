@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"path/filepath"
 )
 
 type AuthConfig struct {
@@ -23,11 +24,12 @@ type RateLimitConfig struct {
 }
 
 type Config struct {
-	HTTPAddress  string          `json:"http_address"`
-	DatabasePath string          `json:"database_path"`
-	Secret       string          `json:"secret"`
-	Auth         AuthConfig      `json:"auth"`
-	RateLimit    RateLimitConfig `json:"rate_limit"`
+	HTTPAddress       string          `json:"http_address"`
+	DatabasePath      string          `json:"database_path"`
+	FilesDatabasePath string          `json:"files_database_path"`
+	Secret            string          `json:"secret"`
+	Auth              AuthConfig      `json:"auth"`
+	RateLimit         RateLimitConfig `json:"rate_limit"`
 }
 
 // defaultRateLimit применяется, когда соответствующая секция не задана или
@@ -52,6 +54,12 @@ func LoadConfig(filename string) (*Config, error) {
 
 	if config.Auth.InitialPassword == "" {
 		return nil, errors.New("auth.initial_password is required")
+	}
+
+	// Старые конфиги без files_database_path продолжают работать:
+	// файловая база по умолчанию лежит рядом с основной.
+	if config.DatabasePath != "" && config.FilesDatabasePath == "" {
+		config.FilesDatabasePath = filepath.Join(filepath.Dir(config.DatabasePath), "files.db")
 	}
 
 	config.applyRateLimitDefaults()
