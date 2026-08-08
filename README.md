@@ -7,10 +7,10 @@ The project focuses on simplicity, maintainability and minimal dependencies.
 ## Features
 
 - Server-side rendering (SSR)
-- Go standard library
+- Go standard library with minimal dependencies
 - SQLite
 - HTML templates
-- Pico CSS
+- Bulma CSS theme
 - Embedded assets for release builds
 - Automatic template reload in debug mode
 - Session-based authentication
@@ -24,7 +24,7 @@ The project focuses on simplicity, maintainability and minimal dependencies.
 ### Debug
 
 ```bash
-go run -tags debug ./cmd/orders
+go run -tags debug ./cmd/server
 ```
 
 Templates and static files are loaded directly from disk.
@@ -32,27 +32,32 @@ Templates and static files are loaded directly from disk.
 ### Release
 
 ```bash
-go build ./cmd/orders
+go build ./cmd/server
 ```
 
 Templates and static files are embedded into the executable.
 
----
+Config file can be overridden with the `ORDERS_CONFIG` environment variable.
 
 ## Project Structure
 
 ```
 cmd/
-    orders/
+    server/
 
 internal/
     app/
         templates/
         static/
-
+    database/
+    ui/
+    entity/
     users/
     sessions/
-    database/
+    customers/
+    organizations/
+    products/
+    receipts/
 ```
 
 ---
@@ -88,12 +93,12 @@ JavaScript is optional and used only where necessary.
 
 ## UI
 
-The UI is based on Pico CSS.
+The UI is based on a Bulma theme.
 
 Custom styles are located in:
 
 ```
-internal/app/static/css/main.css
+internal/app/static/themes/bulma/theme.css
 ```
 
 ---
