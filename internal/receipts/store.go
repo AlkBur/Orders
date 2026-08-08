@@ -53,6 +53,38 @@ func (s *Store) GetByID(ctx context.Context, id int64) (*Document, error) {
 	return &Document{Receipt: r, Items: items}, nil
 }
 
+// GetByExternal находит документ по внешнему UUID чека (receipts.uuid,
+// который присваивает внешняя система). Используется в Integration API.
+func (s *Store) GetByExternal(ctx context.Context, externalUUID string) (*Document, error) {
+	r, err := scanReceipt(s.db.QueryRowContext(ctx, `
+		SELECT
+			r.id, r.uuid, r.exchange_id, r.number, r.date,
+			r.organization_id, COALESCE(o.name, '') AS org_name,
+			r.user_id, COALESCE(u.login, '') AS user_login,
+			r.customer_id, COALESCE(c.name, '') AS customer_name,
+			r.total, r.sent_at, r.status, r.status_color,
+			r.created_at, r.updated_at
+		FROM receipts r
+		LEFT JOIN organizations o ON o.id = r.organization_id
+		LEFT JOIN users u ON u.id = r.user_id
+		LEFT JOIN customers c ON c.id = r.customer_id
+		WHERE r.uuid = ?
+	`, externalUUID))
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+
+	items, err := s.listItems(ctx, r.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Document{Receipt: r, Items: items}, nil
+}
+
 func (s *Store) Count(ctx context.Context) (int64, error) {
 	var n int64
 	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM receipts`).Scan(&n)

@@ -95,15 +95,14 @@ type ReceiptFile struct {
 	Blank bool
 }
 
-// ReceiptFilesPage — модель окна «Файлы» чека.
-// Применяется к чекам; полная страница получает заголовок из Page.Title.
+// ReceiptFilesPage — модель окна «Файлы» чека (просмотр только для чтения:
+// загрузка и удаление файлов происходят через Integration API).
 type ReceiptFilesPage struct {
 	Page
-	Header    ui.HeaderData
-	Receipt   ReceiptHeader
-	Files     []ReceiptFile
-	CanUpload bool
-	BackURL   string
+	Header  ui.HeaderData
+	Receipt ReceiptHeader
+	Files   []ReceiptFile
+	BackURL string
 }
 
 // ReceiptHeader — сводка документа в окне «Файлы».

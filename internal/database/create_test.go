@@ -121,6 +121,24 @@ func TestCreateSQL_Organizations(t *testing.T) {
 	assertColumn(t, cols, 3, "active", "INTEGER", true, "1", 0)
 }
 
+func TestCreateSQL_BlobColumn(t *testing.T) {
+	db, err := sql.Open("sqlite", t.TempDir()+"/test.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	execSQL(t, db, blobsTable().CreateSQL())
+
+	cols := getColumns(t, db, "file_blobs")
+	if len(cols) != 2 {
+		t.Fatalf("expected 2 columns, got %d", len(cols))
+	}
+
+	assertColumn(t, cols, 0, "id", "INTEGER", false, "", 1)
+	assertColumn(t, cols, 1, "data", "BLOB", true, "", 0)
+}
+
 func TestCreateSQLIfNotExists_Idempotent(t *testing.T) {
 	db, err := sql.Open("sqlite", t.TempDir()+"/test.db")
 	if err != nil {
@@ -200,5 +218,12 @@ func organizationsTable() Table {
 		Bool("active").NotNull().Default(true),
 		DateTime("created_at").NotNull().Default("CURRENT_TIMESTAMP"),
 		DateTime("updated_at").NotNull().Default("CURRENT_TIMESTAMP"),
+	))
+}
+
+func blobsTable() Table {
+	return Must(NewTable("file_blobs",
+		Int("id").PrimaryKey().AutoIncrement(),
+		Blob("data").NotNull(),
 	))
 }

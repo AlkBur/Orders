@@ -124,6 +124,8 @@ func sqliteType(t ColumnType) string {
 		return "INTEGER"
 	case TypeDateTime:
 		return "DATETIME"
+	case TypeBlob:
+		return "BLOB"
 	default:
 		return string(t)
 	}

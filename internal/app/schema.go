@@ -43,6 +43,19 @@ func NewSchema() *database.Schema {
 	return s
 }
 
+// NewFilesSchema собирает схему отдельной базы files.db
+// (файлы документов). Миграций у неё нет: существующие БД создаются
+// заново из описаний таблиц, как и новая база.
+func NewFilesSchema() *database.Schema {
+	s := database.NewSchema()
+
+	if err := s.Register(receipts.FilesTable); err != nil {
+		panic(err)
+	}
+
+	return s
+}
+
 func registerMigrations(s *database.Schema) {
 	s.AddMigration(database.Migration{
 		Version: 2,
