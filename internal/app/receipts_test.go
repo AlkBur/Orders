@@ -601,6 +601,75 @@ func TestReceiptSendConfirmPage_NoButtonsAfterSend(t *testing.T) {
 	}
 }
 
+// getReceiptCard выполняет GET /receipts/{id}[?mode=...] через ReceiptCard.
+func getReceiptCard(t *testing.T, app *App, idStr, mode string) *httptest.ResponseRecorder {
+	t.Helper()
+	target := "/receipts/" + idStr
+	if mode != "" {
+		target += "?mode=" + mode
+	}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, target, nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", idStr)
+	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+	app.ReceiptCard(w, r)
+	return w
+}
+
+// TestReceiptCard_ViewMode: несохранённый чек в mode=view — read-only просмотр.
+// Карточка рендерится через ReceiptCardPage, а не ReceiptSendConfirmPage,
+// поэтому не должно быть ни confirm-формы, ни формы отправки.
+func TestReceiptCard_ViewMode(t *testing.T) {
+	app, doc := setupSendableReceipt(t)
+
+	idStr := strconv.FormatInt(doc.Receipt.ID, 10)
+	w := getReceiptCard(t, app, idStr, "view")
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "Товарный чек") {
+		t.Errorf("expected card content, got %s", body)
+	}
+	if strings.Contains(body, "data-confirm=") {
+		t.Errorf("expected no send confirmation form in view mode, got %s", body)
+	}
+	if strings.Contains(body, `action="/receipts/`+idStr+`/send"`) {
+		t.Errorf("expected no send form action in view mode, got %s", body)
+	}
+}
+
+// TestReceiptCard_ReadOnlySent: отправленный чек без mode — штатный просмотр.
+// canEdit=false → read-only ветка через ReceiptCardPage: без действий отправки.
+func TestReceiptCard_ReadOnlySent(t *testing.T) {
+	app, doc := setupSendableReceipt(t)
+
+	now := time.Now()
+	doc.Receipt.SentAt = &now
+	if err := app.receipts.Save(context.Background(), doc); err != nil {
+		t.Fatal(err)
+	}
+
+	idStr := strconv.FormatInt(doc.Receipt.ID, 10)
+	w := getReceiptCard(t, app, idStr, "")
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "Товарный чек") {
+		t.Errorf("expected card content, got %s", body)
+	}
+	if strings.Contains(body, "data-confirm=") {
+		t.Errorf("expected no send confirmation form for sent document, got %s", body)
+	}
+	if strings.Contains(body, `action="/receipts/`+idStr+`/send"`) {
+		t.Errorf("expected no send form action for sent document, got %s", body)
+	}
+}
+
 func TestReceiptSubmit_SuccessRedirectsToFlash(t *testing.T) {
 	app, doc := setupSendableReceipt(t)
 

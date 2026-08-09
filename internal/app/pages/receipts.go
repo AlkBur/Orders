@@ -54,11 +54,16 @@ type ReceiptCopyPage struct {
 	ReceiptCardPage
 }
 
+// CanConfirmSend и ReturnURL — нулевые по умолчанию: обычный просмотр
+// (view = read-only) не показывает действий отправки. Заполняются только
+// на экране confirm (ReceiptSendConfirmPage).
 type ReceiptCardPage struct {
 	Header         ui.HeaderData
 	Alert          *ui.AlertData
 	CanEdit        bool
 	CanSend        bool
+	CanConfirmSend bool
+	ReturnURL      string
 	Title          string
 	FormAction     string
 	Card           ui.CardData
