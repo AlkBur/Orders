@@ -414,3 +414,243 @@ func TestStore_SentAt(t *testing.T) {
 func itoa(i int) string {
 	return strconv.Itoa(i)
 }
+
+func saveReceipt(t *testing.T, store *Store, ctx context.Context, orgID int64, number string, sent bool) *Receipt {
+	t.Helper()
+	rec := &Receipt{
+		Number:         number,
+		Date:           time.Now(),
+		OrganizationID: orgID,
+		UserID:         1,
+		CustomerID:     1,
+		Total:          100,
+		Status:         "",
+		StatusColor:    "",
+	}
+	now := time.Now()
+	if sent {
+		rec.SentAt = &now
+	}
+	if err := store.Save(ctx, &Document{Receipt: rec}); err != nil {
+		t.Fatal(err)
+	}
+	return rec
+}
+
+func TestStore_ListAvailableForSync(t *testing.T) {
+	ctx, store, orgID, _ := setupTestData(t)
+
+	sent := saveReceipt(t, store, ctx, orgID, "100001", true)
+	unsent := saveReceipt(t, store, ctx, orgID, "100002", false)
+
+	docs, err := store.ListAvailableForSync(ctx, orgID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(docs) != 1 {
+		t.Fatalf("expected 1 documented, got %d", len(docs))
+	}
+	if docs[0].Receipt.ID != sent.ID {
+		t.Fatalf("expected receipt %d, got %d", sent.ID, docs[0].Receipt.ID)
+	}
+	if docs[0].Receipt.Number != sent.Number {
+		t.Fatalf("expected Number %s, got %s", sent.Number, docs[0].Receipt.Number)
+	}
+	if docs[0].Receipt.CustomerName != "Test Customer" {
+		t.Fatalf("expected CustomerName Test Customer, got %s", docs[0].Receipt.CustomerName)
+	}
+	if docs[0].Receipt.CustomerUUID != "rec-test-cust" {
+		t.Fatalf("expected CustomerUUID rec-test-cust, got %s", docs[0].Receipt.CustomerUUID)
+	}
+	if len(docs[0].Items) != 0 {
+		t.Fatalf("expected 0 items, got %d", len(docs[0].Items))
+	}
+	if unsent.ID == 0 {
+		t.Fatal("expected unsent receipt to have an ID")
+	}
+}
+
+func TestStore_ListAvailableForSync_CrossOrg(t *testing.T) {
+	ctx, store, orgID, _ := setupTestData(t)
+
+	sent := saveReceipt(t, store, ctx, orgID, "100003", true)
+
+	docs, err := store.ListAvailableForSync(ctx, 999)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(docs) != 0 {
+		t.Fatalf("expected empty queue for other org, got %d", len(docs))
+	}
+	if sent.ID == 0 {
+		t.Fatal("expected receipt to have an ID")
+	}
+}
+
+func TestStore_SynchronizeByID_Assign(t *testing.T) {
+	ctx, store, orgID, _ := setupTestData(t)
+
+	rec := saveReceipt(t, store, ctx, orgID, "100010", true)
+
+	status := "Отгружен"
+	color := "info"
+	uuid := "1c-doc-010"
+
+	result, err := store.SynchronizeByID(ctx, orgID, []SyncUpdate{
+		{ID: rec.ID, UUID: &uuid, Status: &status, StatusColor: &color},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Updated != 1 {
+		t.Fatalf("expected Updated 1, got %d", result.Updated)
+	}
+
+	doc, err := store.GetByID(ctx, rec.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if doc.Receipt.UUID != uuid {
+		t.Fatalf("expected UUID %s, got %s", uuid, doc.Receipt.UUID)
+	}
+	if doc.Receipt.Status != status {
+		t.Fatalf("expected Status %s, got %s", status, doc.Receipt.Status)
+	}
+	if doc.Receipt.StatusColor != color {
+		t.Fatalf("expected StatusColor %s, got %s", color, doc.Receipt.StatusColor)
+	}
+
+	remaining, err := store.ListAvailableForSync(ctx, orgID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(remaining) != 0 {
+		t.Fatalf("expected empty queue, got %d", len(remaining))
+	}
+}
+
+func TestStore_SynchronizeByID_PartialStatus(t *testing.T) {
+	ctx, store, orgID, _ := setupTestData(t)
+
+	rec := saveReceipt(t, store, ctx, orgID, "100011", true)
+
+	status := "Проверен"
+	if _, err := store.SynchronizeByID(ctx, orgID, []SyncUpdate{
+		{ID: rec.ID, Status: &status},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	doc, err := store.GetByID(ctx, rec.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if doc.Receipt.Status != status {
+		t.Fatalf("expected Status %s, got %s", status, doc.Receipt.Status)
+	}
+	if doc.Receipt.UUID != "" {
+		t.Fatalf("expected UUID to stay empty, got %s", doc.Receipt.UUID)
+	}
+}
+
+func TestStore_SynchronizeByID_UUIDImmutable(t *testing.T) {
+	ctx, store, orgID, _ := setupTestData(t)
+
+	rec := saveReceipt(t, store, ctx, orgID, "100012", true)
+
+	uuid1 := "uuid-x"
+	uuid2 := "uuid-y"
+	if _, err := store.SynchronizeByID(ctx, orgID, []SyncUpdate{
+		{ID: rec.ID, UUID: &uuid1},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.SynchronizeByID(ctx, orgID, []SyncUpdate{
+		{ID: rec.ID, UUID: &uuid2},
+	}); err != ErrUUIDAlreadyAssigned {
+		t.Fatalf("expected ErrUUIDAlreadyAssigned, got %v", err)
+	}
+}
+
+func TestStore_SynchronizeByID_IdempotentSameUUID(t *testing.T) {
+	ctx, store, orgID, _ := setupTestData(t)
+
+	rec := saveReceipt(t, store, ctx, orgID, "100013", true)
+
+	uuid := "uuid-immutable"
+	if _, err := store.SynchronizeByID(ctx, orgID, []SyncUpdate{
+		{ID: rec.ID, UUID: &uuid},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.SynchronizeByID(ctx, orgID, []SyncUpdate{
+		{ID: rec.ID, UUID: &uuid},
+	}); err != nil {
+		t.Fatalf("expected same UUID to be idempotent, got %v", err)
+	}
+}
+
+func TestStore_SynchronizeByID_NotFound(t *testing.T) {
+	ctx, store, orgID, _ := setupTestData(t)
+
+	status := "test"
+	if _, err := store.SynchronizeByID(ctx, orgID, []SyncUpdate{
+		{ID: 999999, Status: &status},
+	}); err != ErrNotFound {
+		t.Fatalf("expected ErrNotFound, got %v", err)
+	}
+}
+
+func TestStore_UpdateByExternal_Partial(t *testing.T) {
+	ctx, store, orgID, _ := setupTestData(t)
+
+	rec := saveReceipt(t, store, ctx, orgID, "100020", true)
+	uuid := "1c-status-020"
+	if _, err := store.SynchronizeByID(ctx, orgID, []SyncUpdate{
+		{ID: rec.ID, UUID: &uuid},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	status := "Оплачен"
+	if err := store.UpdateByExternal(ctx, orgID, uuid, &status, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	doc, err := store.GetByID(ctx, rec.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if doc.Receipt.Status != status {
+		t.Fatalf("expected Status %s, got %s", status, doc.Receipt.Status)
+	}
+	if doc.Receipt.StatusColor != "" {
+		t.Fatalf("expected StatusColor to stay empty, got %s", doc.Receipt.StatusColor)
+	}
+}
+
+func TestStore_UpdateByExternal_NotFound(t *testing.T) {
+	ctx, store, orgID, _ := setupTestData(t)
+
+	status := "test"
+	if err := store.UpdateByExternal(ctx, orgID, "no-such-uuid", &status, nil); err != ErrNotFound {
+		t.Fatalf("expected ErrNotFound, got %v", err)
+	}
+}
+
+func TestStore_UpdateByExternal_CrossOrgNotFound(t *testing.T) {
+	ctx, store, orgID, _ := setupTestData(t)
+
+	rec := saveReceipt(t, store, ctx, orgID, "100021", true)
+	uuid := "1c-status-021"
+	if _, err := store.SynchronizeByID(ctx, orgID, []SyncUpdate{
+		{ID: rec.ID, UUID: &uuid},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	status := "test"
+	if err := store.UpdateByExternal(ctx, 999, uuid, &status, nil); err != ErrNotFound {
+		t.Fatalf("expected ErrNotFound for other org, got %v", err)
+	}
+}

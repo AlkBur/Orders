@@ -356,10 +356,204 @@ func (s *Store) Synchronize(ctx context.Context, updates []ReceiptUpdate) error 
 	return tx.Commit()
 }
 
+// SyncResult — результат синхронизации чеков через Integration API.
+type SyncResult struct {
+	Inserted int `json:"inserted"`
+	Updated  int `json:"updated"`
+}
+
+// SyncUpdate — обновление чека по внутреннему ID в рамках организации.
+// UUID необязателен: его отсутствие оставляет документ в очереди
+// синхронизации. Остальные поля заполняются частично.
+type SyncUpdate struct {
+	ID          int64
+	UUID        *string
+	Status      *string
+	StatusColor *string
+}
+
+// ListAvailableForSync возвращает чеки организации, которые пользователь
+// опубликовал (SentAt IS NOT NULL) и которые ещё не получили внешний UUID
+// от 1С (UUID IS NULL). Это очередь синхронизации для Integration API.
+// Возвращает документы с положительными строками.
+func (s *Store) ListAvailableForSync(ctx context.Context, orgID int64) ([]*Document, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT
+			r.id, r.uuid, r.exchange_id, r.number, r.date,
+			r.organization_id, COALESCE(o.name, '') AS org_name,
+			r.user_id, COALESCE(u.login, '') AS user_login,
+			r.customer_id, COALESCE(c.name, '') AS customer_name,
+			COALESCE(c.uuid, '') AS customer_uuid,
+			r.total, r.sent_at, r.status, r.status_color,
+			r.created_at, r.updated_at
+		FROM receipts r
+		LEFT JOIN organizations o ON o.id = r.organization_id
+		LEFT JOIN users u ON u.id = r.user_id
+		LEFT JOIN customers c ON c.id = r.customer_id
+		WHERE r.organization_id = ?
+		  AND r.sent_at IS NOT NULL
+		  AND r.uuid IS NULL
+		ORDER BY r.date DESC, r.id DESC
+	`, orgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var docs []*Document
+	for rows.Next() {
+		r, err := scanReceiptWithCustomerUUID(rows)
+		if err != nil {
+			return nil, err
+		}
+		items, err := s.listItems(ctx, r.ID)
+		if err != nil {
+			return nil, err
+		}
+		docs = append(docs, &Document{Receipt: r, Items: items})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if docs == nil {
+		docs = []*Document{}
+	}
+	return docs, nil
+}
+
+// SynchronizeByID применяет обновления к чекам по внутреннему ID,
+// ограниченным организацией. Частичные обновления: заполняются только
+// переданные поля. UUID подчиняется инварианту:
+//
+//	nil  → можно назначить (документ покидает очередь)
+//	X    → повторная передача X (идемпотентно)
+//	X≠Y  → ошибка ErrUUIDAlreadyAssigned (uuid неизменяем)
+//
+// Строка без полей пропускается. Все операции в рамках одного вызова
+// атомарны.
+func (s *Store) SynchronizeByID(ctx context.Context, orgID int64, updates []SyncUpdate) (SyncResult, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return SyncResult{}, err
+	}
+	defer tx.Rollback()
+
+	var result SyncResult
+	for _, upd := range updates {
+		var currentUUID sql.NullString
+		err := tx.QueryRowContext(ctx,
+			`SELECT uuid FROM receipts WHERE id = ? AND organization_id = ?`,
+			upd.ID, orgID).Scan(&currentUUID)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return SyncResult{}, ErrNotFound
+			}
+			return SyncResult{}, err
+		}
+
+		if upd.UUID != nil && *upd.UUID != "" {
+			if currentUUID.Valid && *upd.UUID != currentUUID.String {
+				return SyncResult{}, ErrUUIDAlreadyAssigned
+			}
+		}
+
+		var sets []string
+		var args []any
+
+		if upd.UUID != nil {
+			if *upd.UUID == "" {
+				return SyncResult{}, ErrEmptyUUID
+			}
+			sets = append(sets, "uuid = ?")
+			args = append(args, *upd.UUID)
+		}
+		if upd.Status != nil {
+			sets = append(sets, "status = ?")
+			args = append(args, *upd.Status)
+		}
+		if upd.StatusColor != nil {
+			sets = append(sets, "status_color = ?")
+			args = append(args, *upd.StatusColor)
+		}
+
+		if len(sets) == 0 {
+			continue
+		}
+
+		sets = append(sets, "updated_at = ?")
+		args = append(args, time.Now().Format(time.RFC3339))
+		args = append(args, upd.ID, orgID)
+
+		query := "UPDATE receipts SET "
+		for i, set := range sets {
+			if i > 0 {
+				query += ", "
+			}
+			query += set
+		}
+		query += " WHERE id = ? AND organization_id = ?"
+
+		if _, err := tx.ExecContext(ctx, query, args...); err != nil {
+			return SyncResult{}, err
+		}
+		result.Updated++
+	}
+
+	return result, tx.Commit()
+}
+
+// UpdateByExternal обновляет статус и цвет статуса чека по внешнему UUID
+// (receipts.uuid) в рамках организации. Частичное обновление: заполняются
+// только переданные поля, остальные не сбрасываются.
+func (s *Store) UpdateByExternal(ctx context.Context, orgID int64, externalUUID string, status, statusColor *string) error {
+	var sets []string
+	var args []any
+
+	if status != nil {
+		sets = append(sets, "status = ?")
+		args = append(args, *status)
+	}
+	if statusColor != nil {
+		sets = append(sets, "status_color = ?")
+		args = append(args, *statusColor)
+	}
+	if len(sets) == 0 {
+		return nil
+	}
+
+	sets = append(sets, "updated_at = ?")
+	args = append(args, time.Now().Format(time.RFC3339))
+	args = append(args, orgID, externalUUID)
+
+	query := "UPDATE receipts SET "
+	for i, set := range sets {
+		if i > 0 {
+			query += ", "
+		}
+		query += set
+	}
+	query += " WHERE organization_id = ? AND uuid = ?"
+
+	res, err := s.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (s *Store) listItems(ctx context.Context, receiptID int64) ([]ReceiptItem, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT
 			i.id, i.receipt_id, i.line_num, i.product_id,
+			COALESCE(p.uuid, '') AS product_uuid,
 			COALESCE(p.name, '') AS product_name,
 			i.unit, i.quantity, i.price, i.amount
 		FROM receipt_items i
@@ -377,7 +571,7 @@ func (s *Store) listItems(ctx context.Context, receiptID int64) ([]ReceiptItem, 
 		var item ReceiptItem
 		if err := rows.Scan(
 			&item.ID, &item.ReceiptID, &item.LineNum, &item.ProductID,
-			&item.ProductName, &item.Unit, &item.Quantity, &item.Price, &item.Amount,
+			&item.ProductUUID, &item.ProductName, &item.Unit, &item.Quantity, &item.Price, &item.Amount,
 		); err != nil {
 			return nil, err
 		}
@@ -407,6 +601,43 @@ func scanReceipt(row interface {
 		&r.OrganizationID, &r.OrganizationName,
 		&r.UserID, &r.UserLogin,
 		&r.CustomerID, &r.CustomerName,
+		&r.Total, &sentAt, &r.Status, &r.StatusColor,
+		&createdAt, &updatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if uuid.Valid {
+		r.UUID = uuid.String
+	}
+	if sentAt.Valid {
+		r.SentAt = &sentAt.Time
+	}
+	if dateStr != "" {
+		r.Date, _ = time.Parse("2006-01-02", dateStr[:10])
+	}
+
+	return r, nil
+}
+
+// scanReceiptWithCustomerUUID — как scanReceipt, но дополнительно читает
+// внешний UUID клиента (receipts.customer_uuid) для Integration API.
+func scanReceiptWithCustomerUUID(row interface {
+	Scan(dest ...any) error
+}) (*Receipt, error) {
+	r := &Receipt{}
+
+	var uuid sql.NullString
+	var sentAt sql.NullTime
+	var dateStr, createdAt, updatedAt string
+
+	err := row.Scan(
+		&r.ID, &uuid, &r.ExchangeID, &r.Number, &dateStr,
+		&r.OrganizationID, &r.OrganizationName,
+		&r.UserID, &r.UserLogin,
+		&r.CustomerID, &r.CustomerName,
+		&r.CustomerUUID,
 		&r.Total, &sentAt, &r.Status, &r.StatusColor,
 		&createdAt, &updatedAt,
 	)

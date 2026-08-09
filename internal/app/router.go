@@ -43,6 +43,9 @@ func (a *App) NewRouter() *chi.Mux {
 		r.Use(a.RequireOrganizationAPIKey)
 		r.Put("/customers", a.HandlePutCustomers)
 		r.Put("/products", a.HandlePutProducts)
+		r.Get("/receipts", a.HandleGetReceiptsQueue)
+		r.Put("/receipts", a.HandleSyncReceipts)
+		r.Put("/receipts/{ruuid}", a.HandleUpdateReceiptStatus)
 		r.Put("/receipts/{ruuid}/files", a.HandlePutReceiptFile)
 	})
 

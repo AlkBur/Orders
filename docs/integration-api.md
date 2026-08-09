@@ -49,6 +49,9 @@ X-API-Key: <ключ интеграции>
 ```
 PUT /api/integration/organizations/{oid}/customers
 PUT /api/integration/organizations/{oid}/products
+GET /api/integration/organizations/{oid}/receipts
+PUT /api/integration/organizations/{oid}/receipts
+PUT /api/integration/organizations/{oid}/receipts/{ruuid}
 PUT /api/integration/organizations/{oid}/receipts/{ruuid}/files
 ```
 
@@ -281,7 +284,212 @@ Content-Type: application/json
 
 ---
 
+### 5.4 GET /api/integration/organizations/{oid}/receipts
+
+Очередь синхронизации товарных чеков: опубликованные документы
+организации (`sent_at IS NOT NULL`), которым 1С ещё не назначила
+внешний UUID (`receipts.uuid IS NULL`). Такие документы ожидают
+первичного подтверждения через `PUT /receipts`.
+
+#### Request
+
+```
+GET /api/integration/organizations/{oid}/receipts
+X-API-Key: <ключ>
+```
+
+Запрос без тела.
+
+#### Успешный ответ
+
+```
+200 OK
+Content-Type: application/json
+```
+
+```json
+[
+  {
+    "id": 12,
+    "number": "000001",
+    "date": "2026-08-01",
+    "customer_uuid": "550e8400-e29b-41d4-a716-446655440000",
+    "customer_name": "ООО Ромашка",
+    "total": 123.45,
+    "items": [
+      {
+        "product_uuid": "660e8400-e29b-41d4-a716-446655440001",
+        "product_name": "Молоток",
+        "unit": "шт",
+        "quantity": 2,
+        "price": 50.25,
+        "amount": 100.50
+      }
+    ]
+  }
+]
+```
+
+Поля элемента массива:
+
+- `id` — внутренний ID документа в Orders (используется только для
+  первичного подтверждения через `PUT /receipts`, не является внешним
+  идентификатором);
+- `number` — номер документа;
+- `date` — дата документа, формат `YYYY-MM-DD`;
+- `customer_uuid` — внешний UUID клиента из 1С;
+- `customer_name` — имя клиента;
+- `total` — сумма документа;
+- `items` — строки документа. Поля строки:
+
+  - `product_uuid` — внешний UUID товара из 1С;
+  - `product_name` — название товара;
+  - `unit` — единица измерения;
+  - `quantity` — количество;
+  - `price` — цена за единицу;
+  - `amount` — сумма строки.
+
+Если очереди нет, возвращается пустой массив `[]`.
+
+#### Ошибки
+
+| Код | Причина |
+|-----|---------|
+| `401 Unauthorized` | X-API-Key отсутствует, пуст или неверен |
+| `404 Not Found` | Организация не существует |
+| `500 Internal Server Error` | Ошибка базы данных |
+
+---
+
+### 5.5 PUT /api/integration/organizations/{oid}/receipts
+
+Первичное подтверждение документов: по внутренним `id` из очереди
+(п. 5.4) 1С сообщает назначенный внешний UUID и (опционально)
+статус документа. Операция атомарна для всего массива.
+
+#### Request
+
+```
+PUT /api/integration/organizations/{oid}/receipts
+Content-Type: application/json
+X-API-Key: <ключ>
+```
+
+Тело запроса — JSON-массив объектов:
+
+```json
+[
+  {
+    "id": 12,
+    "uuid": "770e8400-e29b-41d4-a716-446655440000",
+    "status": "Принят",
+    "status_color": "success"
+  }
+]
+```
+
+Поля объекта:
+
+- `id` — внутренний ID документа (обязательное, из п. 5.4);
+- `uuid` — внешний UUID документа, назначаемый 1С. Необязательное:
+  если не передано или пустая строка, документ остаётся в очереди;
+- `status` — текст статуса, необязательное;
+- `status_color` — имя цвета статуса, необязательное.
+
+Обновление частичное: переданы только указанные поля, остальные
+не сбрасываются. Строка без полей пропускается.
+
+Инварианты `uuid`:
+
+- `nil` → можно назначить (документ покидает очередь);
+- то же значение повторно → идемпотентно;
+- другое значение → `409 Conflict` (`uuid` неизменяем после назначения).
+
+#### Успешный ответ
+
+```
+200 OK
+Content-Type: application/json
+```
+
+```json
+{
+  "inserted": 0,
+  "updated": 1
+}
+```
+
+- `updated` — количество обработанных документов;
+- `inserted` — всегда `0` (документы не создаются этим методом).
+
+#### Ошибки
+
+| Код | Причина |
+|-----|---------|
+| `400 Bad Request` | Неверный JSON, пустой/отрицательный `id`, пустой `uuid` (`ErrEmptyUUID`), неизвестное поле, лишние данные после JSON |
+| `401 Unauthorized` | X-API-Key отсутствует, пуст или неверен |
+| `404 Not Found` | Организация не существует; документ с `id` не найден в этой организации |
+| `409 Conflict` | `uuid` документа уже назначен другим значением |
+| `500 Internal Server Error` | Ошибка базы данных |
+
+---
+
+### 5.6 PUT /api/integration/organizations/{oid}/receipts/{ruuid}
+
+Изменение статуса документа по его внешнему UUID. Используется для
+оперативных обновлений после первичного подтверждения (п. 5.5).
+
+`ruuid` — внешний UUID товарного чека (`receipts.uuid`).
+
+#### Request
+
+```
+PUT /api/integration/organizations/{oid}/receipts/{ruuid}
+Content-Type: application/json
+X-API-Key: <ключ>
+```
+
+Тело запроса — JSON-объект:
+
+```json
+{
+  "status": "Оплачен",
+  "status_color": "success"
+}
+```
+
+Поля объекта:
+
+- `status` — текст статуса, опциональное;
+- `status_color` — имя цвета статуса, опциональное.
+
+Обновление частичное (PATCH-семантика): заполняются только переданные
+поля, остальные не сбрасываются. Хотя бы одно поле обязательно.
+
+#### Успешный ответ
+
+```
+200 OK
+Content-Type: application/json
+```
+
+```json
+{
+  "updated": 1
+}
+```
+
+#### Ошибки
+
+| Код | Причина |
+|-----|---------|
+| `400 Bad Request` | Неверный JSON, пустое тело (нет `status` и `status_color`), неизвестное поле, лишние данные после JSON |
+| `401 Unauthorized` | X-API-Key отсутствует, пуст или неверен |
+| `404 Not Found` | Организация не существует; чек с `ruuid` не существует; чек принадлежит другой организации |
+| `500 Internal Server Error` | Ошибка базы данных |
+
+---
+
 ## 6. Будущие endpointы
 
-- `PUT /api/integration/organizations/{oid}/receipts` — синхронизация
-  товарных чеков (выгрузка в 1С и получение UUID/статуса).
+> Зарезервировано для последующих этапов интеграции.

@@ -20,6 +20,7 @@ type Receipt struct {
 	UserLogin        string     `readonly:"true" label:"Пользователь" order:"25"`
 	CustomerID       int64      `db:"customer_id" order:"30"`
 	CustomerName     string     `readonly:"true" label:"Клиент" order:"35" list:"true"`
+	CustomerUUID     string     `readonly:"true" order:"36"`
 	Total            float64    `db:"total" label:"Сумма" order:"40" list:"true"`
 	SentAt           *time.Time `db:"sent_at" order:"42"`
 	Status           string     `db:"status" label:"Статус" order:"45" list:"true"`
@@ -33,6 +34,7 @@ type ReceiptItem struct {
 	ReceiptID   int64   `db:"receipt_id" order:"2"`
 	LineNum     int     `db:"line_num" label:"№" order:"5" list:"true"`
 	ProductID   int64   `db:"product_id" order:"7"`
+	ProductUUID string  `readonly:"true" order:"8"`
 	ProductName string  `readonly:"true" label:"Товар" order:"10" list:"true"`
 	Unit        string  `db:"unit" label:"Е. изм" order:"15" list:"true"`
 	Quantity    float64 `db:"quantity" label:"Количество" order:"20" list:"true"`
