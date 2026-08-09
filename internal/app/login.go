@@ -21,7 +21,7 @@ func (a *App) LoginPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	a.RenderAuth(w, r, ResponseModeFromRequest(r), "login", a.loginPageData("", nil))
+	a.RenderAuth(w, r, ResponseModeFromRequest(r), "login", "login_card", a.loginPageData("", nil))
 }
 
 func (a *App) Login(w http.ResponseWriter, r *http.Request) {
@@ -44,7 +44,7 @@ func (a *App) Login(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(msgs) > 0 {
 		NoCache(w)
-		a.RenderAuth(w, r, mode, "login", a.loginPageData(login, &ui.AlertData{
+		a.RenderAuth(w, r, mode, "login", "login_card", a.loginPageData(login, &ui.AlertData{
 			Type:     ui.AlertError,
 			Messages: msgs,
 		}))
@@ -54,7 +54,7 @@ func (a *App) Login(w http.ResponseWriter, r *http.Request) {
 	identity, ok := a.identity.GetByLogin(login)
 	if !ok {
 		NoCache(w)
-		a.RenderAuth(w, r, mode, "login", a.loginPageData(login, &ui.AlertData{
+		a.RenderAuth(w, r, mode, "login", "login_card", a.loginPageData(login, &ui.AlertData{
 			Type:     ui.AlertError,
 			Messages: []string{"Неверный логин или пароль."},
 		}))
@@ -72,7 +72,7 @@ func (a *App) Login(w http.ResponseWriter, r *http.Request) {
 
 	if !authenticated {
 		NoCache(w)
-		a.RenderAuth(w, r, mode, "login", a.loginPageData(login, &ui.AlertData{
+		a.RenderAuth(w, r, mode, "login", "login_card", a.loginPageData(login, &ui.AlertData{
 			Type:     ui.AlertError,
 			Messages: []string{"Неверный логин или пароль."},
 		}))
@@ -91,11 +91,8 @@ func (a *App) Login(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) loginPageData(login string, alert *ui.AlertData) pages.LoginPage {
 	return pages.LoginPage{
-		Title: "Вход",
-		Fields: []ui.Field{
-			{Name: "login", Label: "Пользователь", Type: ui.FieldText, Value: login, Autocomplete: "username", Autofocus: true, Icon: "user"},
-			{Name: "password", Label: "Пароль", Type: ui.FieldPassword, Autocomplete: "current-password", Icon: "lock"},
-		},
+		Title: "Ввод данных по товарным чекам",
+		Login: login,
 		Alert: alert,
 	}
 }

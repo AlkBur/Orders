@@ -8,8 +8,10 @@ import (
 )
 
 // RenderAuth рендерит страницу авторизации: полный Auth Layout для обычного
-// запроса или только фрагмент (page_content) для Fragment-режима.
-func (a *App) RenderAuth(w http.ResponseWriter, r *http.Request, mode ResponseMode, pageDir string, data any) {
+// запроса или только фрагмент для Fragment-режима. Имя фрагмент-шаблона
+// задаёт сам обработчик: login использует "login_card", set_password —
+// "page_content" (там карточка и есть весь контент страницы).
+func (a *App) RenderAuth(w http.ResponseWriter, r *http.Request, mode ResponseMode, pageDir, fragment string, data any) {
 	pageFS, err := fs.Sub(TemplateFS(), "pages/"+pageDir)
 	if err != nil {
 		a.InternalError(w, r, err)
@@ -17,7 +19,7 @@ func (a *App) RenderAuth(w http.ResponseWriter, r *http.Request, mode ResponseMo
 	}
 	name := "auth"
 	if mode == Fragment {
-		name = "page_content"
+		name = fragment
 	}
 	if err := ui.Render(w, TemplateFS(), pageFS, a.basePath(), name, data); err != nil {
 		a.InternalError(w, r, err)

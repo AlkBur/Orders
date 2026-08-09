@@ -370,3 +370,64 @@ func TestBasePathHTMLContainsNoBareURLs(t *testing.T) {
 		}
 	}
 }
+
+// TestLoginRenderContract фиксирует архитектурный контракт рендера логина:
+// полная страница включает аватар, заголовок и карточку, а HTMX-фрагмент —
+// только карточку (#login-card). Аватар и заголовок не должны проникать
+// во фрагмент, иначе при outerHTML-подмене они продублируются.
+func TestLoginRenderContract(t *testing.T) {
+	app := newBasePathApp(t, "")
+
+	t.Run("FullPage", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/login", nil)
+		app.Handler().ServeHTTP(w, r)
+		if w.Code != http.StatusOK {
+			t.Fatalf("GET /login = %d, want 200", w.Code)
+		}
+
+		html := w.Body.String()
+		for _, want := range []string{
+			`class="auth-avatar"`,
+			`src="/static/images/delivery_man.svg"`,
+			`Ввод данных по товарным чекам`,
+			`id="login-card"`,
+			`<form`,
+		} {
+			if !strings.Contains(html, want) {
+				t.Fatalf("full login HTML missing %q", want)
+			}
+		}
+	})
+
+	t.Run("Fragment", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("login=admin&password=wrong"))
+		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		r.Header.Set("HX-Request", "true")
+		app.Handler().ServeHTTP(w, r)
+		if w.Code != http.StatusOK {
+			t.Fatalf("POST /login fragment = %d, want 200", w.Code)
+		}
+
+		html := w.Body.String()
+		for _, want := range []string{
+			`id="login-card"`,
+			`<form`,
+			`Неверный логин или пароль.`,
+		} {
+			if !strings.Contains(html, want) {
+				t.Fatalf("fragment login HTML missing %q", want)
+			}
+		}
+		for _, absent := range []string{
+			`auth-avatar`,
+			`Ввод данных по товарным чекам`,
+			`delivery_man.svg`,
+		} {
+			if strings.Contains(html, absent) {
+				t.Fatalf("fragment login HTML must not contain %q", absent)
+			}
+		}
+	})
+}

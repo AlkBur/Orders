@@ -339,6 +339,22 @@
 .auth-card {
   width: min(420px, calc(100vw - 2rem));
 }
+.auth-container {
+  width: min(420px, calc(100vw - 2rem));
+}
+.auth-avatar {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 0.75rem;
+}
+.auth-avatar img {
+  width: 6rem;
+  height: 6rem;
+}
+.auth-layout .title {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
 .auth-subtitle {
   color: var(--bulma-text-light);
   margin: 0 0 0.75rem;

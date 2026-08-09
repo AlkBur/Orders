@@ -29,5 +29,5 @@ func DeleteSessionCookie(w http.ResponseWriter) {
 func (a *App) RenderPageStatus(w http.ResponseWriter, r *http.Request, mode ResponseMode, status int, data any) {
 	NoCache(w)
 	w.WriteHeader(status)
-	a.RenderAuth(w, r, mode, "login", data)
+	a.RenderAuth(w, r, mode, "login", "login_card", data)
 }

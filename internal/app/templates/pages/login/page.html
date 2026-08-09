@@ -1,9 +1,30 @@
 {{define "page_content"}}
+<div class="auth-avatar">
+  <img src="{{ url "/static/images/delivery_man.svg" }}" alt="">
+</div>
+<h3 class="title has-text-grey">Ввод данных по товарным чекам</h3>
+{{template "login_card" .}}
+{{end}}
+
+{{define "login_card"}}
 <div class="auth-card" id="login-card">
-  {{template "card_open" "Вход"}}
+  {{template "card_open"}}
     {{if .Alert}}{{template "alert" .Alert}}{{end}}
     <form method="post" action="{{ url "/login" }}" hx-post="{{ url "/login" }}" hx-target="#login-card" hx-swap="outerHTML" data-response-errors>
-      {{range .Fields}}{{template "form_field" .}}{{end}}
+      <div class="field">
+        <label class="label" for="login">Пользователь</label>
+        <div class="control has-icons-left">
+          <input class="input" type="text" id="login" name="login" value="{{.Login}}" autocomplete="username" required autofocus>
+          <span class="icon is-left">{{icon "user"}}</span>
+        </div>
+      </div>
+      <div class="field">
+        <label class="label" for="password">Пароль</label>
+        <div class="control has-icons-left">
+          <input class="input" type="password" id="password" name="password" autocomplete="current-password" required>
+          <span class="icon is-left">{{icon "lock"}}</span>
+        </div>
+      </div>
       <div class="buttons mt-2">
         <button type="submit" class="button is-primary is-fullwidth">Войти</button>
       </div>

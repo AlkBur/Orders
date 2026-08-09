@@ -16,7 +16,7 @@ func (a *App) SetPasswordPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	a.RenderAuth(w, r, ResponseModeFromRequest(r), "set_password", a.setPasswordPageData(user.Login, nil))
+	a.RenderAuth(w, r, ResponseModeFromRequest(r), "set_password", "page_content", a.setPasswordPageData(user.Login, nil))
 }
 
 func (a *App) SetPasswordSubmit(w http.ResponseWriter, r *http.Request) {
@@ -49,7 +49,7 @@ func (a *App) SetPasswordSubmit(w http.ResponseWriter, r *http.Request) {
 
 	if len(msgs) > 0 {
 		NoCache(w)
-		a.RenderAuth(w, r, mode, "set_password", a.setPasswordPageData(identity.Login, &ui.AlertData{
+		a.RenderAuth(w, r, mode, "set_password", "page_content", a.setPasswordPageData(identity.Login, &ui.AlertData{
 			Type:     ui.AlertError,
 			Messages: msgs,
 		}))
