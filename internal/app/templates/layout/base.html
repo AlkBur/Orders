@@ -2,10 +2,11 @@
 {{$fab := getFAB .}}
 <!DOCTYPE html>
 <html lang="ru" data-theme="light">
+
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{.Title}} — Orders UI</title>
+  <title>{{.Title}} — Orders</title>
   <link rel="icon" type="image/x-icon" href="{{ url "/static/favicon.ico" }}">
   <link rel="stylesheet" href="{{ url "/static/css/bulma.min.css" }}">
   <link rel="stylesheet" href="{{ url "/static/themes/bulma/theme.css" }}">
@@ -15,15 +16,17 @@
   <script src="{{ url "/static/js/search.js" }}" defer></script>
   <script src="{{ url "/static/js/htmx-errors.js" }}" defer></script>
 </head>
+
 <body class="{{if $fab}}has-fab{{end}}">
   <div class="container is-fluid p-3">
-  {{template "header" .Header}}
-  <main class="section pt-3">
-    {{template "page_content" .}}
-  </main>
+    {{template "header" .Header}}
+    <main class="section pt-3">
+      {{template "page_content" .}}
+    </main>
   </div>
   {{if $fab}}{{template "fab" $fab}}{{end}}
   {{block "page_scripts" .}}{{end}}
 </body>
+
 </html>
 {{end}}

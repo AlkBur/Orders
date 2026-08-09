@@ -343,6 +343,58 @@ func TestBasePathStaticContent(t *testing.T) {
 	}
 }
 
+func TestBasePathRootVariants(t *testing.T) {
+	// "" и "/" после нормализации дают один и тот же BasePath == "".
+	// Приложение опубликовано в корне: HTML логина и статика доступны
+	// с одного и того же префикса /static/..., без %20 и двойных слешей.
+	for _, basePath := range []string{"", "/"} {
+		t.Run("base_path_"+strings.ReplaceAll(basePath, "/", "_"), func(t *testing.T) {
+			app := newBasePathApp(t, basePath)
+
+			w := httptest.NewRecorder()
+			r := httptest.NewRequest(http.MethodGet, "/login", nil)
+			app.Handler().ServeHTTP(w, r)
+			if w.Code != http.StatusOK {
+				t.Fatalf("GET /login = %d, want 200", w.Code)
+			}
+
+			html := w.Body.String()
+			for _, want := range []string{`href="/static/favicon.ico"`, `href="/static/css/bulma.min.css"`, `href="/static/themes/bulma/theme.css"`, `src="/static/images/delivery_man.svg"`, `Ввод данных по товарным чекам`} {
+				if !strings.Contains(html, want) {
+					t.Fatalf("login HTML missing %q", want)
+				}
+			}
+			for _, bad := range []string{`href=" /static`, `href="//static`, `%20`, `src=" /static`, `src="//static`} {
+				if strings.Contains(html, bad) {
+					t.Fatalf("login HTML contains broken fragment %q", bad)
+				}
+			}
+
+			for _, path := range []string{
+				"/static/css/bulma.min.css",
+				"/static/themes/bulma/theme.css",
+				"/static/js/htmx.min.js",
+				"/static/js/htmx-errors.js",
+				"/static/images/delivery_man.svg",
+			} {
+				sw := httptest.NewRecorder()
+				sr := httptest.NewRequest(http.MethodGet, path, nil)
+				app.Handler().ServeHTTP(sw, sr)
+				if sw.Code != http.StatusOK {
+					t.Fatalf("GET %s = %d, want 200", path, sw.Code)
+				}
+				body, err := io.ReadAll(sw.Result().Body)
+				if err != nil {
+					t.Fatalf("GET %s: %v", path, err)
+				}
+				if len(body) == 0 {
+					t.Fatalf("GET %s: empty body", path)
+				}
+			}
+		})
+	}
+}
+
 func TestBasePathHTMLContainsNoBareURLs(t *testing.T) {
 	app := newBasePathApp(t, "/office")
 

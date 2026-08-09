@@ -87,6 +87,86 @@ func TestSave_Update(t *testing.T) {
 	}
 }
 
+func TestSave_DuplicateUUID_Create(t *testing.T) {
+	db := testDB(t)
+	store := NewStore(db)
+
+	o1 := store.New()
+	o1.Name = "First"
+	o1.UUID = "org-shared-uuid"
+	if err := store.Save(context.Background(), o1); err != nil {
+		t.Fatal(err)
+	}
+
+	o2 := store.New()
+	o2.Name = "Second"
+	o2.UUID = "org-shared-uuid"
+	if err := store.Save(context.Background(), o2); err != ErrDuplicateUUID {
+		t.Fatalf("expected ErrDuplicateUUID, got %v", err)
+	}
+}
+
+func TestSave_DuplicateUUID_Update(t *testing.T) {
+	db := testDB(t)
+	store := NewStore(db)
+
+	o1 := store.New()
+	o1.Name = "First"
+	o1.UUID = "org-uuid-1"
+	if err := store.Save(context.Background(), o1); err != nil {
+		t.Fatal(err)
+	}
+
+	o2 := store.New()
+	o2.Name = "Second"
+	o2.UUID = "org-uuid-2"
+	if err := store.Save(context.Background(), o2); err != nil {
+		t.Fatal(err)
+	}
+
+	// Меняем uuid второй организации на занятый.
+	o2.UUID = "org-uuid-1"
+	if err := store.Save(context.Background(), o2); err != ErrDuplicateUUID {
+		t.Fatalf("expected ErrDuplicateUUID, got %v", err)
+	}
+
+	got, err := store.GetByUUID(context.Background(), "org-uuid-2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.UUID != "org-uuid-2" {
+		t.Fatalf("expected uuid to remain org-uuid-2, got %s", got.UUID)
+	}
+}
+
+func TestSave_EmptyUUID(t *testing.T) {
+	db := testDB(t)
+	store := NewStore(db)
+
+	o := store.New()
+	o.Name = "No UUID"
+	if err := store.Save(context.Background(), o); err != ErrEmptyUUID {
+		t.Fatalf("expected ErrEmptyUUID, got %v", err)
+	}
+}
+
+func TestSave_EmptyUUID_Update(t *testing.T) {
+	db := testDB(t)
+	store := NewStore(db)
+
+	o := store.New()
+	o.Name = "Existing"
+	o.UUID = "org-uuid"
+	if err := store.Save(context.Background(), o); err != nil {
+		t.Fatal(err)
+	}
+
+	o.UUID = ""
+	if err := store.Save(context.Background(), o); err != ErrEmptyUUID {
+		t.Fatalf("expected ErrEmptyUUID, got %v", err)
+	}
+}
+
 func TestSave_NotFound(t *testing.T) {
 	db := testDB(t)
 	store := NewStore(db)

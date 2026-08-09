@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"Orders/internal/database/search"
 	"Orders/internal/entity"
@@ -173,9 +174,12 @@ func (s *Store) Count(ctx context.Context) (int64, error) {
 // INSERT (ID == 0):
 //   - UUID must already be assigned.
 //   - Returns ErrEmptyUUID if UUID is empty.
+//   - Returns ErrDuplicateUUID if UUID is already used by another organization.
 //
 // UPDATE (ID > 0):
 //   - Updates the existing record by ID.
+//   - Returns ErrEmptyUUID if UUID is empty.
+//   - Returns ErrDuplicateUUID if UUID is already used by another organization.
 //   - Returns ErrNotFound if the record does not exist.
 func (s *Store) Save(ctx context.Context, org *Organization) error {
 	if org.ID == 0 {
@@ -196,7 +200,7 @@ func (s *Store) Save(ctx context.Context, org *Organization) error {
 			VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 		`, org.UUID, org.Name, org.APIKey, org.Active)
 		if err != nil {
-			return err
+			return errorFromExec(err)
 		}
 
 		id, err := result.LastInsertId()
@@ -207,13 +211,17 @@ func (s *Store) Save(ctx context.Context, org *Organization) error {
 		return nil
 	}
 
+	if org.UUID == "" {
+		return ErrEmptyUUID
+	}
+
 	result, err := s.db.ExecContext(ctx, `
 		UPDATE organizations
 		SET uuid = ?, name = ?, active = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
 	`, org.UUID, org.Name, org.Active, org.ID)
 	if err != nil {
-		return err
+		return errorFromExec(err)
 	}
 	n, _ := result.RowsAffected()
 	if n == 0 {
@@ -277,4 +285,13 @@ func generateAPIKey() (string, error) {
 		return "", err
 	}
 	return "ord_" + fmt.Sprintf("%x", b), nil
+}
+
+// errorFromExec транслирует ошибки SQLite, связанные с constraint,
+// в доменные ошибки организации.
+func errorFromExec(err error) error {
+	if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+		return ErrDuplicateUUID
+	}
+	return err
 }

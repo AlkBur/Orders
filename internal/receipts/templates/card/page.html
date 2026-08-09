@@ -19,7 +19,8 @@
     customer_id: {{.CustomerID}},
     customer_name: {{printf " %q" .CustomerName}}, number: {{printf "%q" .Receipt.Number}}, date: {{printf "%q"
   (.Receipt.Date.Format "2006-01-02" )}} }, items: {{.ItemsJSON}}, customers: {{.CustomersJSON}}, products:
-  {{.ProductsJSON}}, form: null, lineQuery: '' , lineModalOpen: false, pickerOpen: false, infoOpen: false, infoTitle: '', infoErrors: [], confirmOpen: false, confirmLine: null, confirmLineNumber: 0, pickerType: '' , pickerQuery: '' ,
+  {{.ProductsJSON}}, form: null, lineQuery: '' , lineModalOpen: false, pickerOpen: false, infoOpen: false, infoTitle: ''
+  , infoErrors: [], confirmOpen: false, confirmLine: null, confirmLineNumber: 0, pickerType: '' , pickerQuery: '' ,
   lineIndex: -1, newLine: { product_id: 0, product_name: '' , unit: '' , quantity: 1, price: 0, amount: 0 }, get
   orgSelected() { return Number(this.values.organization_id)> 0; },
   requireOrganization() {
@@ -231,7 +232,7 @@
         <div class="level-item">
           <button type="button" class="button is-primary receipt-line-add" @click="openLineModal()"
             :class="{ 'is-disabled': !orgSelected }" :aria-disabled="!orgSelected"><span class="icon">{{icon
-            "plus"}}</span><span>Добавить</span></button>
+              "plus"}}</span><span>Добавить</span></button>
         </div>
       </div>
       <div class="level-right">
@@ -265,7 +266,7 @@
       <button type="submit" class="button is-primary"><span class="icon">{{icon
           "save"}}</span><span>Сохранить</span></button>
       <button type="submit" name="send_to_1c" value="1" class="button is-link"><span class="icon">{{icon
-          "send"}}</span><span>Отправить в 1С</span></button>
+          "send"}}</span><span>Отправить в бухгалтерию</span></button>
     </div>
   </form>
 
@@ -369,8 +370,8 @@
       <section class="modal-card-body">
         <div class="buttons is-flex is-flex-direction-column is-align-items-stretch">
           <template x-for="item in availablePickerItems" :key="item.id">
-            <button type="button" class="button is-light is-justify-content-space-between receipt-picker-item" x-show="matchesPicker(item)"
-              @click="selectPickerItem(item)">
+            <button type="button" class="button is-light is-justify-content-space-between receipt-picker-item"
+              x-show="matchesPicker(item)" @click="selectPickerItem(item)">
               <span class="receipt-picker-name" x-text="item.name"></span>
               <span class="receipt-picker-unit has-text-grey" x-text="item.unit || ''"></span>
             </button>
@@ -381,7 +382,7 @@
   </div>
   <button type="button" class="app-fab" aria-label="Добавить позицию" @click="openLineModal()"
     :class="{ 'is-disabled': !orgSelected }" :aria-disabled="!orgSelected"><span class="icon">{{icon
-    "plus"}}</span></button>
+      "plus"}}</span></button>
 </div>
 {{else}}
 {{$r := .Receipt}}
@@ -420,9 +421,10 @@
 {{template "lines_view" .}}
 
 {{if .CanConfirmSend}}
-<form method="POST" action="{{ url (printf "/receipts/%d/send" $r.ID) }}" style="display:inline" data-confirm="Отправить документ в 1С?">
+<form method="POST" action="{{ url (printf "/receipts/%d/send" $r.ID) }}" style="display:inline"
+  data-confirm="Отправить документ в бухгалтерию?">
   <button type="submit" class="button is-primary"><span class="icon">{{icon "send"}}</span><span>Отправить в
-      1С</span></button>
+      бухгалтерию</span></button>
 </form>
 <a class="button" href="{{.ReturnURL}}"><span>Отмена</span></a>
 {{end}}
@@ -450,9 +452,9 @@
       </div>
       <div class="receipt-item-field receipt-item-qty">
         <label class="receipt-item-label" :for="'item_quantity_' + i">Количество</label>
-        <input class="input" type="number" step="0.001" :id="'item_quantity_' + i"
-          :name="'items[' + i + '][quantity]'" inputmode="decimal" x-model="item.quantity"
-          @input="calcLine(i)" @click="focusZero($el)" @blur="blurZero($el)">
+        <input class="input" type="number" step="0.001" :id="'item_quantity_' + i" :name="'items[' + i + '][quantity]'"
+          inputmode="decimal" x-model="item.quantity" @input="calcLine(i)" @click="focusZero($el)"
+          @blur="blurZero($el)">
       </div>
       <div class="receipt-item-field receipt-item-price">
         <label class="receipt-item-label" :for="'item_price_' + i">Цена</label>
@@ -485,25 +487,25 @@
       изм</span><span>Количество</span><span>Цена</span><span>Сумма</span>
   </div>
   {{range .Items}}
-    <div class="receipt-item-row">
-      <div class="receipt-item-main">
-        <span class="receipt-item-number">{{.LineNum}}</span>
-        <div class="receipt-item-product"><span>{{.ProductName}}</span></div>
-        <span class="receipt-item-unit-inline">{{.Unit}}</span>
-      </div>
-      <div class="receipt-item-field receipt-item-qty">
-        <span class="receipt-item-label">Количество</span>
-        <span>{{printf "%.2f" .Quantity}}</span>
-      </div>
-      <div class="receipt-item-field receipt-item-price">
-        <span class="receipt-item-label">Цена</span>
-        <span>{{printf "%.2f" .Price}}</span>
-      </div>
-      <div class="receipt-item-field receipt-item-amount">
-        <span class="receipt-item-label">Сумма</span>
-        <span>{{printf "%.2f" .Amount}}</span>
-      </div>
+  <div class="receipt-item-row">
+    <div class="receipt-item-main">
+      <span class="receipt-item-number">{{.LineNum}}</span>
+      <div class="receipt-item-product"><span>{{.ProductName}}</span></div>
+      <span class="receipt-item-unit-inline">{{.Unit}}</span>
     </div>
+    <div class="receipt-item-field receipt-item-qty">
+      <span class="receipt-item-label">Количество</span>
+      <span>{{printf "%.2f" .Quantity}}</span>
+    </div>
+    <div class="receipt-item-field receipt-item-price">
+      <span class="receipt-item-label">Цена</span>
+      <span>{{printf "%.2f" .Price}}</span>
+    </div>
+    <div class="receipt-item-field receipt-item-amount">
+      <span class="receipt-item-label">Сумма</span>
+      <span>{{printf "%.2f" .Amount}}</span>
+    </div>
+  </div>
   {{else}}
   <div class="receipt-items-empty">Нет позиций</div>
   {{end}}

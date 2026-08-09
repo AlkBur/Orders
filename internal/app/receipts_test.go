@@ -546,14 +546,14 @@ func TestReceiptSendConfirmPage_FromEditCancel(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 	body := w.Body.String()
-	if !strings.Contains(body, `data-confirm="Отправить документ в 1С?"`) {
-		t.Fatalf("expected send confirm form with data-confirm, got %s", body)
+	if !strings.Contains(body, "data-confirm=") {
+		t.Fatalf("expected send confirmation form, got %s", body)
+	}
+	if !strings.Contains(body, `method="POST" action="/receipts/`+idStr+`/send"`) {
+		t.Fatalf("expected send form to POST /receipts/%s/send, got %s", idStr, body)
 	}
 	if !strings.Contains(body, `href="/receipts/`+idStr+`"`) {
 		t.Fatalf("expected cancel href to editor (from=edit), got %s", body)
-	}
-	if !strings.Contains(body, "Отмена") {
-		t.Fatalf("expected cancel button, got %s", body)
 	}
 }
 
@@ -593,8 +593,8 @@ func TestReceiptSendConfirmPage_NoButtonsAfterSend(t *testing.T) {
 	app.ReceiptCard(w, r)
 
 	body := w.Body.String()
-	if strings.Contains(body, "Отправить документ в 1С?") {
-		t.Errorf("expected no confirm button for already sent document, got %s", body)
+	if strings.Contains(body, "data-confirm=") {
+		t.Errorf("expected no confirmation form for already sent document, got %s", body)
 	}
 	if strings.Contains(body, "Отмена") {
 		t.Errorf("expected no cancel button for already sent document, got %s", body)

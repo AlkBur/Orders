@@ -1,20 +1,23 @@
 {{define "auth"}}
 <!DOCTYPE html>
 <html lang="ru" data-theme="light">
+
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{.Title}} — Orders UI</title>
+  <title>{{.Title}} — Orders</title>
   <link rel="icon" type="image/x-icon" href="{{ url "/static/favicon.ico" }}">
   <link rel="stylesheet" href="{{ url "/static/css/bulma.min.css" }}">
   <link rel="stylesheet" href="{{ url "/static/themes/bulma/theme.css" }}">
   <script src="{{ url "/static/js/htmx.min.js" }}"></script>
   <script src="{{ url "/static/js/htmx-errors.js" }}"></script>
 </head>
+
 <body class="auth-layout">
   <main class="auth-container">
     {{template "page_content" .}}
   </main>
 </body>
+
 </html>
 {{end}}

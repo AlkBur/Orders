@@ -22,6 +22,7 @@ type organizationCardData struct {
 	Header     ui.HeaderData
 	Card       ui.CardData
 	FormAction string
+	Alert      *ui.AlertData
 	Fields     []ui.Field
 }
 
@@ -130,6 +131,12 @@ func (a *App) OrganizationCard(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	a.renderOrganizationCard(w, r, id, org, nil)
+}
+
+// renderOrganizationCard рендерит карточку организации. alert отображается
+// над полями формы при ошибке валидации (карточка остаётся открытой).
+func (a *App) renderOrganizationCard(w http.ResponseWriter, r *http.Request, id int64, org *organizations.Organization, alert *ui.AlertData) {
 	pageFS, err := fs.Sub(organizations.Templates(), "card")
 	if err != nil {
 		a.InternalError(w, r, err)
@@ -146,8 +153,9 @@ func (a *App) OrganizationCard(w http.ResponseWriter, r *http.Request) {
 		Header:     a.pageHeader(r, "Организации"),
 		Card:       ui.CardData{Title: "Основная информация", CloseURL: a.URL("/organizations")},
 		FormAction: action,
+		Alert:      alert,
 		Fields: []ui.Field{
-			{Name: "uuid", Label: "UUID", Type: ui.FieldText, Value: org.UUID, Readonly: true},
+			{Name: "uuid", Label: "UUID", Type: ui.FieldText, Value: org.UUID, Required: true},
 			{Name: "name", Label: "Наименование", Type: ui.FieldText, Value: org.Name, Required: true},
 			{Name: "active", Label: "Активна", Type: ui.FieldCheckbox, Value: checkValue(org.Active)},
 			{Name: "apikey", Label: "API Key", Type: ui.FieldText, Value: org.APIKey, Readonly: true},
@@ -169,11 +177,28 @@ func (a *App) OrganizationSave(w http.ResponseWriter, r *http.Request) {
 
 	org := &organizations.Organization{
 		ID:     id,
-		UUID:   r.FormValue("uuid"),
+		UUID:   strings.TrimSpace(r.FormValue("uuid")),
 		Name:   strings.TrimSpace(r.FormValue("name")),
 		Active: r.FormValue("active") == "on",
 	}
 
+	var oldUUID string
+	var apiKey string
+	if id > 0 {
+		existing, err := a.organizations.GetByID(r.Context(), id)
+		if err == organizations.ErrNotFound {
+			http.NotFound(w, r)
+			return
+		}
+		if err != nil {
+			a.InternalError(w, r, err)
+			return
+		}
+		oldUUID = existing.UUID
+		apiKey = existing.APIKey
+	}
+
+	// При создании UUID может остаться пустым — тогда он генерируется.
 	if id == 0 && org.UUID == "" {
 		uuid, err := common.GenerateUUID()
 		if err != nil {
@@ -188,13 +213,40 @@ func (a *App) OrganizationSave(w http.ResponseWriter, r *http.Request) {
 			http.NotFound(w, r)
 			return
 		}
+		if errors.Is(err, organizations.ErrDuplicateUUID) {
+			if id > 0 {
+				org.UUID = oldUUID
+			}
+			w.WriteHeader(http.StatusUnprocessableEntity)
+			a.renderOrganizationCard(w, r, id, org, &ui.AlertData{
+				Type:     ui.AlertError,
+				Messages: []string{"Организация с таким UUID уже существует"},
+			})
+			return
+		}
+		if errors.Is(err, organizations.ErrEmptyUUID) {
+			w.WriteHeader(http.StatusUnprocessableEntity)
+			a.renderOrganizationCard(w, r, id, org, &ui.AlertData{
+				Type:     ui.AlertError,
+				Messages: []string{"UUID обязателен"},
+			})
+			return
+		}
 		a.InternalError(w, r, err)
 		return
 	}
 
+	// API key организации не меняется при смене UUID. Старый UUID удаляется
+	// из кеша, чтобы перестать аутентифицировать организацию.
 	a.orgKeysMu.Lock()
 	if a.orgKeys != nil {
-		a.orgKeys[org.UUID] = org.APIKey
+		if oldUUID != "" && oldUUID != org.UUID {
+			delete(a.orgKeys, oldUUID)
+		}
+		if apiKey == "" {
+			apiKey = org.APIKey
+		}
+		a.orgKeys[org.UUID] = apiKey
 	}
 	a.orgKeysMu.Unlock()
 

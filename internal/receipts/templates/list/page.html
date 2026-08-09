@@ -1,8 +1,12 @@
 {{define "page_content"}}
 {{if .Alert}}{{template "alert" .Alert}}{{end}}
 <div class="level mb-3">
-  {{if .Toolbar}}<div class="level-left"><div class="level-item">{{template "toolbar" .Toolbar}}</div></div>{{end}}
-  {{if .Search}}<div class="level-right"><div class="level-item">{{template "search" .Search}}</div></div>{{end}}
+  {{if .Toolbar}}<div class="level-left">
+    <div class="level-item">{{template "toolbar" .Toolbar}}</div>
+  </div>{{end}}
+  {{if .Search}}<div class="level-right">
+    <div class="level-item">{{template "search" .Search}}</div>
+  </div>{{end}}
 </div>
 {{template "receipts_list" .}}
 {{template "receipts_files_host" .}}
@@ -33,11 +37,18 @@
     <div class="receipts-cell">{{.Status}}</div>
     <div class="receipts-cell is-actions">
       <div class="receipts-actions">
-        <a class="button is-primary is-small" href="{{.FilesURL}}" data-dialog-url="{{.FilesURL}}" title="Файлы">{{icon "paperclip"}}<span class="receipts-action-label">Файлы</span></a>
-        <a class="button is-info is-small" href="{{.CopyURL}}" title="Копировать">{{icon "file-plus"}}<span class="receipts-action-label">Копировать</span></a>
-        <a class="button is-success is-small" href="{{.SendURL}}" {{if not .CanSend}}aria-disabled="true"{{end}} title="{{if .CanSend}}Отправить{{else}}Документ уже отправлен{{end}}">{{icon "send"}}<span class="receipts-action-label">Отправить</span></a>
-        <a class="button is-link is-small" href="{{.ViewURL}}" title="Просмотр">{{icon "file-search"}}<span class="receipts-action-label">Просмотр</span></a>
-        <a class="button is-warning is-small" href="{{.EditURL}}" {{if not .CanEdit}}aria-disabled="true"{{end}} title="{{if .CanEdit}}Редактировать{{else}}Документ уже отправлен{{end}}">{{icon "file-pen"}}<span class="receipts-action-label">Изменить</span></a>
+        <a class="button is-primary is-small" href="{{.FilesURL}}" data-dialog-url="{{.FilesURL}}" title="Файлы">{{icon
+          "paperclip"}}<span class="receipts-action-label">Файлы</span></a>
+        <a class="button is-info is-small" href="{{.CopyURL}}" title="Копировать">{{icon "file-plus"}}<span
+            class="receipts-action-label">Копировать</span></a>
+        <a class="button is-success is-small" href="{{.SendURL}}" {{if not .CanSend}}aria-disabled="true" {{end}}
+          title="{{if .CanSend}}Отправить{{else}}Документ уже отправлен{{end}}">{{icon "send"}}<span
+            class="receipts-action-label">Отправить</span></a>
+        <a class="button is-link is-small" href="{{.ViewURL}}" title="Просмотр">{{icon "file-search"}}<span
+            class="receipts-action-label">Просмотр</span></a>
+        <a class="button is-warning is-small" href="{{.EditURL}}" {{if not .CanEdit}}aria-disabled="true" {{end}}
+          title="{{if .CanEdit}}Редактировать{{else}}Документ уже отправлен{{end}}">{{icon "file-pen"}}<span
+            class="receipts-action-label">Изменить</span></a>
       </div>
     </div>
   </div>

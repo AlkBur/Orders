@@ -1,5 +1,6 @@
 {{define "page_content"}}
 {{template "card_open_closable" .Card}}
+{{if .Alert}}{{template "alert" .Alert}}{{end}}
 <form method="post" action="{{.FormAction}}">
   {{range .Fields}}
     {{template "form_field" .}}
