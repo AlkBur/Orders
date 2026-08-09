@@ -97,7 +97,7 @@ func (a *App) CustomersPage(w http.ResponseWriter, r *http.Request) {
 				URL:   pickerSelectURL(r, c.ID),
 			}}
 		} else {
-			row.URL = c.URL()
+			row.URL = a.URL(c.URL())
 		}
 		rows = append(rows, row)
 	}
@@ -123,7 +123,7 @@ func (a *App) CustomersPage(w http.ResponseWriter, r *http.Request) {
 
 	page := pages.ListViewPage{
 		Title:  "Контрагенты",
-		Header: pageHeader(r, "Контрагенты"),
+		Header: a.pageHeader(r, "Контрагенты"),
 		List: ui.ListView{
 			List: ui.ListData{
 				Columns:    columns,
@@ -135,10 +135,10 @@ func (a *App) CustomersPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !pickerMode {
-		page.NewURL = newURL
+		page.NewURL = a.URL(newURL)
 		page.List.Toolbar = &ui.ToolbarData{
 			Buttons: []ui.Button{
-				{Style: ui.ButtonPrimary, Text: "Добавить", URL: newURL, Icon: "plus"},
+				{Style: ui.ButtonPrimary, Text: "Добавить", URL: a.URL(newURL), Icon: "plus"},
 			},
 		}
 	}
@@ -146,7 +146,7 @@ func (a *App) CustomersPage(w http.ResponseWriter, r *http.Request) {
 	if pickerMode {
 		searchURL = pickerListURL(r, listPath)
 	}
-	page.List.Search = &ui.SearchData{URL: searchURL, Placeholder: "Поиск контрагентов...", Query: query, Mode: ui.SearchLive}
+	page.List.Search = &ui.SearchData{URL: a.URL(searchURL), Placeholder: "Поиск контрагентов...", Query: query, Mode: ui.SearchLive}
 
 	if flash != nil {
 		page.Alert = FlashToAlert(*flash)
@@ -249,9 +249,9 @@ func (a *App) CustomerCard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	action := "/customers"
+	action := a.URL("/customers")
 	if oid > 0 {
-		action = "/organizations/" + strconv.FormatInt(oid, 10) + "/customers"
+		action = a.URL("/organizations/" + strconv.FormatInt(oid, 10) + "/customers")
 		if id > 0 {
 			action += "/" + strconv.FormatInt(id, 10)
 		}
@@ -259,16 +259,16 @@ func (a *App) CustomerCard(w http.ResponseWriter, r *http.Request) {
 
 	data := customerCardData{
 		Title:      title,
-		Header:     pageHeader(r, "Контрагенты"),
-		Card:       ui.CardData{Title: "Основная информация", CloseURL: "/customers"},
+		Header:     a.pageHeader(r, "Контрагенты"),
+		Card:       ui.CardData{Title: "Основная информация", CloseURL: a.URL("/customers")},
 		FormAction: action,
 		Fields:     fields,
 	}
 	if oid > 0 {
-		data.Card.CloseURL = "/organizations/" + strconv.FormatInt(oid, 10) + "/customers"
+		data.Card.CloseURL = a.URL("/organizations/" + strconv.FormatInt(oid, 10) + "/customers")
 	}
 
-	if err := ui.RenderPage(w, TemplateFS(), pageFS, data); err != nil {
+	if err := ui.RenderPage(w, TemplateFS(), pageFS, a.basePath(), data); err != nil {
 		a.InternalError(w, r, err)
 	}
 }
@@ -323,9 +323,9 @@ func (a *App) CustomerSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	target := "/customers"
+	target := a.URL("/customers")
 	if oid > 0 {
-		target = "/organizations/" + strconv.FormatInt(oid, 10) + "/customers"
+		target = a.URL("/organizations/" + strconv.FormatInt(oid, 10) + "/customers")
 	}
 	http.Redirect(w, r, target, http.StatusSeeOther)
 }

@@ -420,7 +420,7 @@
 {{template "lines_view" .}}
 
 {{if .CanConfirmSend}}
-<form method="POST" action="/receipts/{{$r.ID}}/send" style="display:inline" data-confirm="Отправить документ в 1С?">
+<form method="POST" action="{{ url (printf "/receipts/%d/send" $r.ID) }}" style="display:inline" data-confirm="Отправить документ в 1С?">
   <button type="submit" class="button is-primary"><span class="icon">{{icon "send"}}</span><span>Отправить в
       1С</span></button>
 </form>

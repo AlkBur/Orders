@@ -10,7 +10,7 @@ func (a *App) Home(w http.ResponseWriter, r *http.Request) {
 
 	session := CurrentSession(r)
 	if session == nil || session.UserID == nil {
-		http.Redirect(w, r, RouteLogin, http.StatusSeeOther)
+		http.Redirect(w, r, a.URL(RouteLogin), http.StatusSeeOther)
 		return
 	}
 
@@ -18,9 +18,9 @@ func (a *App) Home(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		a.sessions.Delete(session.ID)
 		DeleteSessionCookie(w)
-		http.Redirect(w, r, RouteLogin, http.StatusSeeOther)
+		http.Redirect(w, r, a.URL(RouteLogin), http.StatusSeeOther)
 		return
 	}
 
-	http.Redirect(w, r, LandingURL(user), http.StatusSeeOther)
+	http.Redirect(w, r, a.URL(LandingURL(user)), http.StatusSeeOther)
 }

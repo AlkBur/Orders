@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 type AuthConfig struct {
@@ -27,6 +28,7 @@ type Config struct {
 	HTTPAddress       string          `json:"http_address"`
 	DatabasePath      string          `json:"database_path"`
 	FilesDatabasePath string          `json:"files_database_path"`
+	BasePath          string          `json:"base_path"`
 	Secret            string          `json:"secret"`
 	Auth              AuthConfig      `json:"auth"`
 	RateLimit         RateLimitConfig `json:"rate_limit"`
@@ -62,9 +64,35 @@ func LoadConfig(filename string) (*Config, error) {
 		config.FilesDatabasePath = filepath.Join(filepath.Dir(config.DatabasePath), "files.db")
 	}
 
+	config.BasePath = NormalizeBasePath(config.BasePath)
+
 	config.applyRateLimitDefaults()
 
 	return &config, nil
+}
+
+// NormalizeBasePath приводит base_path из конфига к каноническому виду.
+//
+// Базовый префикс — это всегда внутренний абсолютный путь приложения,
+// начинающийся с "/" и не заканчивающийся "/".
+//
+//	""      → ""
+//	"/"     → ""
+//	"app"   → "/app"
+//	"/app/" → "/app"
+//	" /app/ " → "/app"
+//
+// Пустой результат означает «приложение опубликовано в корне» —
+// префикс не добавляется ни к одному URL.
+func NormalizeBasePath(basePath string) string {
+	basePath = strings.TrimSpace(basePath)
+	if basePath == "" || basePath == "/" {
+		return ""
+	}
+	if !strings.HasPrefix(basePath, "/") {
+		basePath = "/" + basePath
+	}
+	return strings.TrimRight(basePath, "/")
 }
 
 // applyRateLimitDefaults заменяет лимиты, отсутствующие в конфиге, значениями

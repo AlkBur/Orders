@@ -1,6 +1,7 @@
 {
     "http_address": ":3001",
     "database_path": "tools/agent/temp/test.db",
+    "base_path": "",
     "secret": "change-this-secret",
     "rate_limit": {
         "login_by_ip": { "requests": 10, "window_sec": 60 },

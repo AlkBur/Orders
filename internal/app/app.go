@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"net/http"
+	"strings"
 	"sync"
 
 	"Orders/internal/customers"
@@ -110,10 +111,46 @@ func New(configPath string) (*App, error) {
 
 	app.server = &http.Server{
 		Addr:    config.HTTPAddress,
-		Handler: app.router,
+		Handler: app.Handler(),
 	}
 
 	return app, nil
+}
+
+// Handler возвращает HTTP-приложение целиком.
+//
+// При непустом BasePath роутер монтируется под префиксом:
+// публикация меняет внешний путь, но сам chi-router продолжает
+// работать с внутренними маршрутами приложения (/receipts, /api/...).
+// Без префикса возвращается роутер без изменений.
+func (a *App) Handler() http.Handler {
+	if a.basePath() == "" {
+		return a.router
+	}
+	return http.StripPrefix(a.basePath(), a.router)
+}
+
+// basePath возвращает нормализованный префикс приложения.
+func (a *App) basePath() string {
+	if a.config == nil || a.config.BasePath == "" {
+		return ""
+	}
+	return a.config.BasePath
+}
+
+// URL добавляет базовый префикс к внутреннему абсолютному пути.
+//
+// Контракт: path — это путь приложения без BasePath (/receipts/1,
+// /static/js/app.js). Код, вызывающий URL, обязан передавать чистый
+// внутренний путь, а не результат другого вызова a.URL().
+//
+// При пустом префиксе путь возвращается без изменений.
+func (a *App) URL(path string) string {
+	base := a.basePath()
+	if base == "" || path == "" || !strings.HasPrefix(path, "/") {
+		return path
+	}
+	return base + path
 }
 
 func (a *App) Run() error {

@@ -67,24 +67,24 @@ func (a *App) DashboardPage(w http.ResponseWriter, r *http.Request) {
 
 	data := dashboardData{
 		Title:  "Рабочий стол",
-		Header: pageHeader(r, "Рабочий стол"),
+		Header: a.pageHeader(r, "Рабочий стол"),
 		Modules: []dashboardModule{
 			{
 				Name:  "Документы",
 				Icon:  "file-text",
-				URL:   RouteReceipts,
+				URL:   a.URL(RouteReceipts),
 				Count: display.FormatNumber(docCount),
 				Hero:  true,
 				Note:  "Работа с товарными чеками",
 			},
-			{Name: "Организации", Icon: "building", URL: "/organizations", Count: display.FormatNumber(orgCount)},
-			{Name: "Контрагенты", Icon: "people", URL: "/customers", Count: display.FormatNumber(customerCount)},
-			{Name: "Товары", Icon: "package", URL: "/products", Count: display.FormatNumber(productCount)},
-			{Name: "Пользователи", Icon: "user", URL: "/users", Count: display.FormatNumber(userCount)},
+			{Name: "Организации", Icon: "building", URL: a.URL("/organizations"), Count: display.FormatNumber(orgCount)},
+			{Name: "Контрагенты", Icon: "people", URL: a.URL("/customers"), Count: display.FormatNumber(customerCount)},
+			{Name: "Товары", Icon: "package", URL: a.URL("/products"), Count: display.FormatNumber(productCount)},
+			{Name: "Пользователи", Icon: "user", URL: a.URL("/users"), Count: display.FormatNumber(userCount)},
 		},
 	}
 
-	if err := ui.RenderPage(w, TemplateFS(), pageFS, data); err != nil {
+	if err := ui.RenderPage(w, TemplateFS(), pageFS, a.basePath(), data); err != nil {
 		a.InternalError(w, r, err)
 	}
 }

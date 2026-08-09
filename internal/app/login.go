@@ -14,10 +14,10 @@ func (a *App) LoginPage(w http.ResponseWriter, r *http.Request) {
 	session := CurrentSession(r)
 	if session != nil && session.UserID != nil {
 		if identity, ok := a.identity.GetByID(*session.UserID); ok {
-			http.Redirect(w, r, LandingURL(identity), http.StatusSeeOther)
+			http.Redirect(w, r, a.URL(LandingURL(identity)), http.StatusSeeOther)
 			return
 		}
-		http.Redirect(w, r, RouteLogin, http.StatusSeeOther)
+		http.Redirect(w, r, a.URL(RouteLogin), http.StatusSeeOther)
 		return
 	}
 
@@ -86,7 +86,7 @@ func (a *App) Login(w http.ResponseWriter, r *http.Request) {
 	}
 	SetSessionCookie(w, session.ID)
 
-	a.Redirect(w, r, mode, LandingURL(identity))
+	a.Redirect(w, r, mode, a.URL(LandingURL(identity)))
 }
 
 func (a *App) loginPageData(login string, alert *ui.AlertData) pages.LoginPage {

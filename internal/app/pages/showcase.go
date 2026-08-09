@@ -29,7 +29,7 @@ func (CatalogPage) FAB() *ui.FAB {
 	return &ui.FAB{Icon: "plus", URL: "#", Text: "Добавить"}
 }
 
-func HandleCatalog(tmplFS fs.FS) http.HandlerFunc {
+func HandleCatalog(tmplFS fs.FS, basePath string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := CatalogPage{
 			Title: "Компоненты",
@@ -37,7 +37,7 @@ func HandleCatalog(tmplFS fs.FS) http.HandlerFunc {
 				Section:  "Компоненты",
 				Username: "Администратор",
 				Menu: []ui.MenuItem{
-					{ID: "logout", Label: "Выход", Icon: "logout", URL: "/logout"},
+					{ID: "logout", Label: "Выход", Icon: "logout", URL: basePath + "/logout"},
 				},
 			},
 			Toolbar: ui.ToolbarData{
@@ -46,7 +46,7 @@ func HandleCatalog(tmplFS fs.FS) http.HandlerFunc {
 					{Style: ui.ButtonOutline, Text: "Экспорт", URL: "#", Icon: "save"},
 				},
 			},
-			Search: ui.SearchData{URL: "/ui", Placeholder: "Поиск компонентов...", Mode: ui.SearchLive},
+			Search: ui.SearchData{URL: basePath + "/ui", Placeholder: "Поиск компонентов...", Mode: ui.SearchLive},
 			Buttons: []ui.Button{
 				{Style: ui.ButtonDefault, Text: "Обычная", URL: "#"},
 				{Style: ui.ButtonPrimary, Text: "Основная", URL: "#", Icon: "plus"},
@@ -121,7 +121,7 @@ func HandleCatalog(tmplFS fs.FS) http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		if err := ui.RenderPage(w, tmplFS, pageFS, data); err != nil {
+		if err := ui.RenderPage(w, tmplFS, pageFS, basePath, data); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	}

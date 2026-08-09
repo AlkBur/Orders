@@ -127,15 +127,16 @@ func receiptReturnURL(doc *receipts.Document, from string) string {
 // (mode=send): читает режим из файловой системы card и рендерит страницу.
 // alert может быть nil.
 func (a *App) renderReceiptSendConfirmPage(w http.ResponseWriter, r *http.Request, doc *receipts.Document, from string, alert *ui.AlertData) {
-	returnURL := receiptReturnURL(doc, from)
-	page := buildReceiptSendConfirmPage(pageHeader(r, "Товарные чеки"), doc, returnURL, alert)
+	returnURL := a.URL(receiptReturnURL(doc, from))
+	formAction := a.URL(doc.Receipt.URL())
+	page := buildReceiptSendConfirmPage(a.pageHeader(r, "Товарные чеки"), doc, formAction, returnURL, alert)
 
 	pageFS, err := fs.Sub(receipts.Templates(), "card")
 	if err != nil {
 		a.InternalError(w, r, err)
 		return
 	}
-	if err := ui.RenderPage(w, TemplateFS(), pageFS, page); err != nil {
+	if err := ui.RenderPage(w, TemplateFS(), pageFS, a.basePath(), page); err != nil {
 		a.InternalError(w, r, err)
 	}
 }
@@ -143,7 +144,7 @@ func (a *App) renderReceiptSendConfirmPage(w http.ResponseWriter, r *http.Reques
 // buildReceiptSendConfirmPage — единственный путь построения экрана
 // подтверждения отправки. Используется и GET (mode=send), и POST /send
 // при ошибке. Alert может быть nil — ошибки нет.
-func buildReceiptSendConfirmPage(header ui.HeaderData, doc *receipts.Document, returnURL string, alert *ui.AlertData) pages.ReceiptSendConfirmPage {
+func buildReceiptSendConfirmPage(header ui.HeaderData, doc *receipts.Document, formAction, returnURL string, alert *ui.AlertData) pages.ReceiptSendConfirmPage {
 	title := "Товарный чек №" + doc.Receipt.Number
 	confirmable := doc.Receipt.ID > 0 && doc.Receipt.SentAt == nil
 	return pages.ReceiptSendConfirmPage{
@@ -152,7 +153,7 @@ func buildReceiptSendConfirmPage(header ui.HeaderData, doc *receipts.Document, r
 			Alert:      alert,
 			CanSend:    confirmable,
 			Title:      title,
-			FormAction: doc.Receipt.URL(),
+			FormAction: formAction,
 			Card:       ui.CardData{Title: title, CloseURL: returnURL},
 			Receipt:    doc.Receipt,
 			Items:      doc.Items,
@@ -190,7 +191,7 @@ func (a *App) ReceiptsPage(w http.ResponseWriter, r *http.Request) {
 		}
 
 		sent := rec.SentAt != nil
-		base := rec.URL()
+		base := a.URL(rec.URL())
 		idStr := strconv.FormatInt(rec.ID, 10)
 
 		rows = append(rows, pages.ReceiptListRow{
@@ -204,8 +205,8 @@ func (a *App) ReceiptsPage(w http.ResponseWriter, r *http.Request) {
 			CanEdit: !sent,
 			CanSend: !sent,
 
-			FilesURL: "/receipts/" + idStr + "/files",
-			CopyURL:  "/receipts/" + idStr + "/copy",
+			FilesURL: a.URL("/receipts/" + idStr + "/files"),
+			CopyURL:  a.URL("/receipts/" + idStr + "/copy"),
 			SendURL:  base + "?mode=send",
 			ViewURL:  base + "?mode=view",
 			EditURL:  base,
@@ -213,16 +214,16 @@ func (a *App) ReceiptsPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	page := pages.ReceiptsListPage{
-		Page:    pages.Page{Title: "Товарные чеки"},
-		Header:  pageHeader(r, "Товарные чеки"),
+		Page:   pages.Page{Title: "Товарные чеки"},
+		Header: a.pageHeader(r, "Товарные чеки"),
 		Toolbar: &ui.ToolbarData{
 			Buttons: []ui.Button{
-				{Style: ui.ButtonPrimary, Text: "Добавить", URL: "/receipts/new", Icon: "plus"},
+				{Style: ui.ButtonPrimary, Text: "Добавить", URL: a.URL("/receipts/new"), Icon: "plus"},
 			},
 		},
-		Search: &ui.SearchData{URL: RouteReceipts, Placeholder: "Поиск чеков...", Query: query, Mode: ui.SearchLive},
+		Search: &ui.SearchData{URL: a.URL(RouteReceipts), Placeholder: "Поиск чеков...", Query: query, Mode: ui.SearchLive},
 		Rows:   rows,
-		NewURL: "/receipts/new",
+		NewURL: a.URL("/receipts/new"),
 	}
 
 	if flash, err := a.consumeFlash(r); err != nil {
@@ -239,12 +240,12 @@ func (a *App) ReceiptsPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if ResponseModeFromRequest(r) == Fragment {
-		if err := ui.Render(w, TemplateFS(), pageFS, "receipts_list", page); err != nil {
+		if err := ui.Render(w, TemplateFS(), pageFS, a.basePath(), "receipts_list", page); err != nil {
 			a.InternalError(w, r, err)
 		}
 		return
 	}
-	if err := ui.RenderPage(w, TemplateFS(), pageFS, page); err != nil {
+	if err := ui.RenderPage(w, TemplateFS(), pageFS, a.basePath(), page); err != nil {
 		a.InternalError(w, r, err)
 	}
 }
@@ -317,9 +318,9 @@ func (a *App) ReceiptCard(w http.ResponseWriter, r *http.Request) {
 	canEdit := doc.Receipt.ID == 0 || (!sent && !isView && !isSend)
 	canSend := isSend && !sent && doc.Receipt.ID > 0
 
-	formAction := RouteReceipts
+	formAction := a.URL(RouteReceipts)
 	if doc.Receipt.ID > 0 {
-		formAction = "/receipts/" + strconv.FormatInt(doc.Receipt.ID, 10)
+		formAction = a.URL("/receipts/" + strconv.FormatInt(doc.Receipt.ID, 10))
 	}
 
 	if isSend {
@@ -368,12 +369,12 @@ func (a *App) ReceiptCard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	page := pages.ReceiptCardPage{
-		Header:         pageHeader(r, "Товарные чеки"),
+		Header:         a.pageHeader(r, "Товарные чеки"),
 		CanEdit:        canEdit,
 		CanSend:        canSend,
 		Title:          title,
 		FormAction:     formAction,
-		Card:           ui.CardData{Title: title, CloseURL: RouteReceipts},
+		Card:           ui.CardData{Title: title, CloseURL: a.URL(RouteReceipts)},
 		Receipt:        doc.Receipt,
 		Items:          doc.Items,
 		CustomerID:     doc.Receipt.CustomerID,
@@ -392,7 +393,7 @@ func (a *App) ReceiptCard(w http.ResponseWriter, r *http.Request) {
 		a.InternalError(w, r, err)
 		return
 	}
-	if err := ui.RenderPage(w, TemplateFS(), pageFS, page); err != nil {
+	if err := ui.RenderPage(w, TemplateFS(), pageFS, a.basePath(), page); err != nil {
 		a.InternalError(w, r, err)
 	}
 }
@@ -490,11 +491,11 @@ func (a *App) renderReceiptEditorPage(w http.ResponseWriter, r *http.Request, do
 
 	card := pages.ReceiptCopyPage{
 		ReceiptCardPage: pages.ReceiptCardPage{
-			Header:         pageHeader(r, "Товарные чеки"),
+			Header:         a.pageHeader(r, "Товарные чеки"),
 			CanEdit:        true,
 			Title:          "Новый товарный чек",
-			FormAction:     RouteReceipts,
-			Card:           ui.CardData{Title: "Новый товарный чек", CloseURL: RouteReceipts},
+			FormAction:     a.URL(RouteReceipts),
+			Card:           ui.CardData{Title: "Новый товарный чек", CloseURL: a.URL(RouteReceipts)},
 			Receipt:        doc.Receipt,
 			Items:          doc.Items,
 			CustomerID:     doc.Receipt.CustomerID,
@@ -517,7 +518,7 @@ func (a *App) renderReceiptEditorPage(w http.ResponseWriter, r *http.Request, do
 		a.InternalError(w, r, err)
 		return
 	}
-	if err := ui.RenderPage(w, TemplateFS(), pageFS, card); err != nil {
+	if err := ui.RenderPage(w, TemplateFS(), pageFS, a.basePath(), card); err != nil {
 		a.InternalError(w, r, err)
 	}
 }
@@ -565,16 +566,16 @@ func (a *App) ReceiptFiles(w http.ResponseWriter, r *http.Request) {
 		fileViews = append(fileViews, pages.ReceiptFile{
 			Name: f.FileName,
 			Icon: "file-text",
-			URL:  "/receipts/" + idStr + "/files/" + strconv.FormatInt(f.ID, 10),
+			URL:  a.URL("/receipts/" + idStr + "/files/" + strconv.FormatInt(f.ID, 10)),
 		})
 	}
 
 	filesPage := pages.ReceiptFilesPage{
 		Page:    pages.Page{Title: "Файлы чека №" + rec.Number},
-		Header:  pageHeader(r, "Товарные чеки"),
+		Header:  a.pageHeader(r, "Товарные чеки"),
 		Receipt: header,
 		Files:   fileViews,
-		BackURL: RouteReceipts,
+		BackURL: a.URL(RouteReceipts),
 	}
 
 	filesFS, err := fs.Sub(receipts.Templates(), "files")
@@ -584,12 +585,12 @@ func (a *App) ReceiptFiles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if ResponseModeFromRequest(r) == Fragment {
-		if err := ui.Render(w, TemplateFS(), filesFS, "receipts_files_modal", filesPage); err != nil {
+		if err := ui.Render(w, TemplateFS(), filesFS, a.basePath(), "receipts_files_modal", filesPage); err != nil {
 			a.InternalError(w, r, err)
 		}
 		return
 	}
-	if err := ui.RenderPage(w, TemplateFS(), filesFS, filesPage); err != nil {
+	if err := ui.RenderPage(w, TemplateFS(), filesFS, a.basePath(), filesPage); err != nil {
 		a.InternalError(w, r, err)
 	}
 }
@@ -777,7 +778,7 @@ func (a *App) ReceiptSave(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if sendTo1C {
-		sendURL := doc.Receipt.URL() + "?mode=send&from=" + receiptFromEdit
+		sendURL := a.URL(doc.Receipt.URL()) + "?mode=send&from=" + receiptFromEdit
 		if ResponseModeFromRequest(r) == Fragment {
 			w.Header().Set("HX-Redirect", sendURL)
 			w.WriteHeader(http.StatusOK)
@@ -788,11 +789,11 @@ func (a *App) ReceiptSave(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if ResponseModeFromRequest(r) == Fragment {
-		w.Header().Set("HX-Redirect", RouteReceipts)
+		w.Header().Set("HX-Redirect", a.URL(RouteReceipts))
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-	http.Redirect(w, r, RouteReceipts, http.StatusSeeOther)
+	http.Redirect(w, r, a.URL(RouteReceipts), http.StatusSeeOther)
 }
 
 // RenderReceiptValidationError доставляет ошибки валидации чека в зависимости
@@ -855,11 +856,11 @@ func (a *App) renderReceiptForm(w http.ResponseWriter, r *http.Request, ve *Vali
 	}
 
 	page := pages.ReceiptCardPage{
-		Header:         pageHeader(r, "Товарные чеки"),
+		Header:         a.pageHeader(r, "Товарные чеки"),
 		CanEdit:        true,
 		Title:          "Новый товарный чек",
-		FormAction:     RouteReceipts,
-		Card:           ui.CardData{Title: "Новый товарный чек", CloseURL: RouteReceipts},
+		FormAction:     a.URL(RouteReceipts),
+		Card:           ui.CardData{Title: "Новый товарный чек", CloseURL: a.URL(RouteReceipts)},
 		Receipt:        receipt,
 		Errors:         ve.ErrorsMap(),
 		OrganizationID: organizationID,
@@ -872,7 +873,7 @@ func (a *App) renderReceiptForm(w http.ResponseWriter, r *http.Request, ve *Vali
 		Orgs:           orgOptions,
 	}
 	if id > 0 {
-		page.FormAction = "/receipts/" + strconv.FormatInt(id, 10)
+		page.FormAction = a.URL("/receipts/" + strconv.FormatInt(id, 10))
 	}
 	page.ErrorsJSON, _ = common.ToJSON(ve.ErrorsMap())
 	if page.ErrorsJSON == "" {
@@ -884,7 +885,7 @@ func (a *App) renderReceiptForm(w http.ResponseWriter, r *http.Request, ve *Vali
 		return
 	}
 	w.WriteHeader(http.StatusUnprocessableEntity)
-	if err := ui.RenderPage(w, TemplateFS(), pageFS, page); err != nil {
+	if err := ui.RenderPage(w, TemplateFS(), pageFS, a.basePath(), page); err != nil {
 		a.InternalError(w, r, err)
 	}
 }
@@ -916,7 +917,7 @@ func (a *App) ReceiptDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, RouteReceipts, http.StatusSeeOther)
+	http.Redirect(w, r, a.URL(RouteReceipts), http.StatusSeeOther)
 }
 
 func (a *App) ReceiptSubmit(w http.ResponseWriter, r *http.Request) {
@@ -966,7 +967,7 @@ func (a *App) ReceiptSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, RouteReceipts, http.StatusSeeOther)
+	http.Redirect(w, r, a.URL(RouteReceipts), http.StatusSeeOther)
 }
 
 // sendReceiptTo1C выполняет отправку документа в 1С. Сейчас — заглушка,

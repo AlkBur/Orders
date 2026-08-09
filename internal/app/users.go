@@ -51,7 +51,7 @@ func (a *App) UsersPage(w http.ResponseWriter, r *http.Request) {
 		}
 		rows = append(rows, ui.ListRow{
 			Cells: cells,
-			URL:   u.URL(),
+			URL:   a.URL(u.URL()),
 		})
 	}
 
@@ -63,14 +63,14 @@ func (a *App) UsersPage(w http.ResponseWriter, r *http.Request) {
 
 	page := pages.ListViewPage{
 		Title:  "Пользователи",
-		Header: pageHeader(r, "Пользователи"),
+		Header: a.pageHeader(r, "Пользователи"),
 		List: ui.ListView{
 			Toolbar: &ui.ToolbarData{
 				Buttons: []ui.Button{
-					{Style: ui.ButtonPrimary, Text: "Добавить", URL: "/users/new", Icon: "plus"},
+					{Style: ui.ButtonPrimary, Text: "Добавить", URL: a.URL("/users/new"), Icon: "plus"},
 				},
 			},
-			Search: &ui.SearchData{URL: "/users", Placeholder: "Поиск пользователей...", Query: query, Mode: ui.SearchLive},
+			Search: &ui.SearchData{URL: a.URL("/users"), Placeholder: "Поиск пользователей...", Query: query, Mode: ui.SearchLive},
 			List: ui.ListData{
 				Columns:    columns,
 				Rows:       rows,
@@ -78,7 +78,7 @@ func (a *App) UsersPage(w http.ResponseWriter, r *http.Request) {
 				Preset:     ui.ListDefault,
 			},
 		},
-		NewURL: "/users/new",
+		NewURL: a.URL("/users/new"),
 	}
 
 	a.renderListView(w, r, TemplateFS(), pageFS, page)
@@ -128,9 +128,9 @@ func (a *App) UserCard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	formAction := "/users"
+	formAction := a.URL("/users")
 	if user.ID > 0 {
-		formAction = "/users/" + strconv.FormatInt(user.ID, 10)
+		formAction = a.URL("/users/" + strconv.FormatInt(user.ID, 10))
 	}
 
 	data := struct {
@@ -142,8 +142,8 @@ func (a *App) UserCard(w http.ResponseWriter, r *http.Request) {
 		HasPassword bool
 	}{
 		Title:      title,
-		Header:     pageHeader(r, "Пользователи"),
-		Card:       ui.CardData{Title: "Основная информация", CloseURL: "/users"},
+		Header:     a.pageHeader(r, "Пользователи"),
+		Card:       ui.CardData{Title: "Основная информация", CloseURL: a.URL("/users")},
 		FormAction: formAction,
 		Fields: []ui.Field{
 			{Name: "uuid", Label: "UUID", Type: ui.FieldText, Value: user.UUID},
@@ -154,7 +154,7 @@ func (a *App) UserCard(w http.ResponseWriter, r *http.Request) {
 		HasPassword: user.HasPassword,
 	}
 
-	if err := ui.RenderPage(w, TemplateFS(), pageFS, data); err != nil {
+	if err := ui.RenderPage(w, TemplateFS(), pageFS, a.basePath(), data); err != nil {
 		a.InternalError(w, r, err)
 	}
 }
@@ -207,7 +207,7 @@ func (a *App) UserSave(w http.ResponseWriter, r *http.Request) {
 		a.identity.Update(user)
 	}
 
-	http.Redirect(w, r, "/users/"+strconv.FormatInt(user.ID, 10), http.StatusSeeOther)
+	http.Redirect(w, r, a.URL("/users/"+strconv.FormatInt(user.ID, 10)), http.StatusSeeOther)
 }
 
 func (a *App) UserDelete(w http.ResponseWriter, r *http.Request) {
@@ -225,5 +225,5 @@ func (a *App) UserDelete(w http.ResponseWriter, r *http.Request) {
 
 	a.identity.Remove(id)
 
-	http.Redirect(w, r, "/users", http.StatusSeeOther)
+	http.Redirect(w, r, a.URL("/users"), http.StatusSeeOther)
 }

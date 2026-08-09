@@ -57,19 +57,19 @@ func SessionMiddleware(store *sessions.Store) func(http.Handler) http.Handler {
 	}
 }
 
-func RequireAuth(store *sessions.Store, identity *users.IdentityService, next http.Handler) http.Handler {
+func (a *App) RequireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		session := CurrentSession(r)
 		if session == nil || session.UserID == nil {
-			http.Redirect(w, r, RouteLogin, http.StatusSeeOther)
+			http.Redirect(w, r, a.URL(RouteLogin), http.StatusSeeOther)
 			return
 		}
 
-		user, ok := identity.GetByID(*session.UserID)
+		user, ok := a.identity.GetByID(*session.UserID)
 		if !ok {
-			store.Delete(session.ID)
+			a.sessions.Delete(session.ID)
 			DeleteSessionCookie(w)
-			http.Redirect(w, r, RouteLogin, http.StatusSeeOther)
+			http.Redirect(w, r, a.URL(RouteLogin), http.StatusSeeOther)
 			return
 		}
 
@@ -89,11 +89,11 @@ func RequireAdmin(next http.Handler) http.Handler {
 	})
 }
 
-func RequirePassword(next http.Handler) http.Handler {
+func (a *App) RequirePassword(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		user := CurrentUser(r)
 		if user.ID != 0 && user.NeedsPasswordSetup() {
-			http.Redirect(w, r, RouteSetPassword, http.StatusSeeOther)
+			http.Redirect(w, r, a.URL(RouteSetPassword), http.StatusSeeOther)
 			return
 		}
 		next.ServeHTTP(w, r)

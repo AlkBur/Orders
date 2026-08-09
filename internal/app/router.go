@@ -35,7 +35,7 @@ func (a *App) NewRouter() *chi.Mux {
 	// UI Catalog — компоненты платформы
 	r.Route("/ui", func(r chi.Router) {
 		showcaseFS := TemplateFS()
-		r.Get("/", pages.HandleCatalog(showcaseFS))
+		r.Get("/", pages.HandleCatalog(showcaseFS, a.basePath()))
 	})
 
 	// Integration API — обмен между системами (UUID-based)
@@ -47,16 +47,14 @@ func (a *App) NewRouter() *chi.Mux {
 	})
 
 	r.Group(func(r chi.Router) {
-		r.Use(func(next http.Handler) http.Handler {
-			return RequireAuth(a.sessions, a.identity, next)
-		})
+		r.Use(a.RequireAuth)
 
 		r.Get(RouteSetPassword, a.SetPasswordPage)
 		r.Post(RouteSetPassword, a.SetPasswordSubmit)
 		r.Post("/logout", a.Logout)
 
 		r.Group(func(r chi.Router) {
-			r.Use(RequirePassword)
+			r.Use(a.RequirePassword)
 
 			r.Group(func(r chi.Router) {
 				r.Use(RequireAdmin)

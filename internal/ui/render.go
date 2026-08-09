@@ -16,11 +16,14 @@ import (
 // pageFS must contain a single page.html. name selects the template to
 // execute (e.g. "base", "auth", "page_content", "dialog", ...).
 //
+// basePath — базовый префикс публикации приложения: передаётся в
+// Funcs и доступен шаблонам через {{ url "/..." }}.
+//
 // Render is a general mechanism for full pages and fragments alike.
 // HTMX is just one consumer of fragment rendering; it does not define
 // the capability.
-func Render(w http.ResponseWriter, baseFS, pageFS fs.FS, name string, data any) error {
-	tmpl, err := template.New("").Funcs(Funcs()).ParseFS(baseFS,
+func Render(w http.ResponseWriter, baseFS, pageFS fs.FS, basePath, name string, data any) error {
+	tmpl, err := template.New("").Funcs(Funcs(basePath)).ParseFS(baseFS,
 		"layout/*.html",
 		"components/*.html",
 	)
@@ -34,11 +37,11 @@ func Render(w http.ResponseWriter, baseFS, pageFS fs.FS, name string, data any) 
 }
 
 // RenderPage renders a full application page using the base layout.
-func RenderPage(w http.ResponseWriter, baseFS, pageFS fs.FS, data any) error {
-	return Render(w, baseFS, pageFS, "base", data)
+func RenderPage(w http.ResponseWriter, baseFS, pageFS fs.FS, basePath string, data any) error {
+	return Render(w, baseFS, pageFS, basePath, "base", data)
 }
 
 // RenderAuthPage renders a full authentication page using the auth layout.
-func RenderAuthPage(w http.ResponseWriter, baseFS, pageFS fs.FS, data any) error {
-	return Render(w, baseFS, pageFS, "auth", data)
+func RenderAuthPage(w http.ResponseWriter, baseFS, pageFS fs.FS, basePath string, data any) error {
+	return Render(w, baseFS, pageFS, basePath, "auth", data)
 }

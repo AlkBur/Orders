@@ -99,7 +99,7 @@ func (a *App) ProductsPage(w http.ResponseWriter, r *http.Request) {
 				URL:   pickerSelectURL(r, p.ID),
 			}}
 		} else {
-			row.URL = p.URL()
+			row.URL = a.URL(p.URL())
 		}
 		rows = append(rows, row)
 	}
@@ -120,7 +120,7 @@ func (a *App) ProductsPage(w http.ResponseWriter, r *http.Request) {
 
 	page := pages.ListViewPage{
 		Title:  "Товары",
-		Header: pageHeader(r, "Товары"),
+		Header: a.pageHeader(r, "Товары"),
 		List: ui.ListView{
 			List: ui.ListData{
 				Columns:    columns,
@@ -132,10 +132,10 @@ func (a *App) ProductsPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !pickerMode {
-		page.NewURL = newURL
+		page.NewURL = a.URL(newURL)
 		page.List.Toolbar = &ui.ToolbarData{
 			Buttons: []ui.Button{
-				{Style: ui.ButtonPrimary, Text: "Добавить", URL: newURL, Icon: "plus"},
+				{Style: ui.ButtonPrimary, Text: "Добавить", URL: a.URL(newURL), Icon: "plus"},
 			},
 		}
 	}
@@ -143,7 +143,7 @@ func (a *App) ProductsPage(w http.ResponseWriter, r *http.Request) {
 	if pickerMode {
 		searchURL = pickerListURL(r, listPath)
 	}
-	page.List.Search = &ui.SearchData{URL: searchURL, Placeholder: "Поиск товаров...", Query: query, Mode: ui.SearchLive}
+	page.List.Search = &ui.SearchData{URL: a.URL(searchURL), Placeholder: "Поиск товаров...", Query: query, Mode: ui.SearchLive}
 
 	a.renderListView(w, r, TemplateFS(), pageFS, page)
 }
@@ -191,16 +191,16 @@ func (a *App) ProductCard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	formAction := "/products"
-	closeURL := "/products"
+	formAction := a.URL("/products")
+	closeURL := a.URL("/products")
 	if oid > 0 {
-		formAction = "/organizations/" + strconv.FormatInt(oid, 10) + "/products"
+		formAction = a.URL("/organizations/" + strconv.FormatInt(oid, 10) + "/products")
 		closeURL = formAction
 		if product.ID > 0 {
 			formAction += "/" + strconv.FormatInt(product.ID, 10)
 		}
 	} else if product.ID > 0 {
-		formAction = "/organizations/" + strconv.FormatInt(product.OrganizationID, 10) + "/products/" + strconv.FormatInt(product.ID, 10)
+		formAction = a.URL("/organizations/" + strconv.FormatInt(product.OrganizationID, 10) + "/products/" + strconv.FormatInt(product.ID, 10))
 	}
 
 	fields := []ui.Field{
@@ -242,13 +242,13 @@ func (a *App) ProductCard(w http.ResponseWriter, r *http.Request) {
 		Fields     []ui.Field
 	}{
 		Title:      title,
-		Header:     pageHeader(r, "Товары"),
+		Header:     a.pageHeader(r, "Товары"),
 		Card:       ui.CardData{Title: "Основная информация", CloseURL: closeURL},
 		FormAction: formAction,
 		Fields:     fields,
 	}
 
-	if err := ui.RenderPage(w, TemplateFS(), pageFS, data); err != nil {
+	if err := ui.RenderPage(w, TemplateFS(), pageFS, a.basePath(), data); err != nil {
 		a.InternalError(w, r, err)
 	}
 }
@@ -300,7 +300,7 @@ func (a *App) ProductSave(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r,
-		"/organizations/"+strconv.FormatInt(product.OrganizationID, 10)+"/products/"+strconv.FormatInt(product.ID, 10),
+		a.URL("/organizations/"+strconv.FormatInt(product.OrganizationID, 10)+"/products/"+strconv.FormatInt(product.ID, 10)),
 		http.StatusSeeOther,
 	)
 }
@@ -315,7 +315,7 @@ func (a *App) ProductDelete(w http.ResponseWriter, r *http.Request) {
 
 	oid := orgIDFromURL(r)
 	http.Redirect(w, r,
-		"/organizations/"+strconv.FormatInt(oid, 10)+"/products",
+		a.URL("/organizations/"+strconv.FormatInt(oid, 10)+"/products"),
 		http.StatusSeeOther,
 	)
 }

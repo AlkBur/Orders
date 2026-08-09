@@ -46,7 +46,7 @@ func (a *App) OrganizationsPage(w http.ResponseWriter, r *http.Request) {
 	var rows []ui.ListRow
 	for _, o := range orgs {
 		rows = append(rows, ui.ListRow{
-			URL: "/organizations/" + strconv.FormatInt(o.ID, 10),
+			URL: a.URL("/organizations/" + strconv.FormatInt(o.ID, 10)),
 			Cells: []string{
 				o.Name,
 				orgStatus(o.Active),
@@ -69,14 +69,14 @@ func (a *App) OrganizationsPage(w http.ResponseWriter, r *http.Request) {
 
 	page := pages.ListViewPage{
 		Title:  "Организации",
-		Header: pageHeader(r, "Организации"),
+		Header: a.pageHeader(r, "Организации"),
 		List: ui.ListView{
 			Toolbar: &ui.ToolbarData{
 				Buttons: []ui.Button{
-					{Style: ui.ButtonPrimary, Text: "Добавить", URL: "/organizations/new", Icon: "plus"},
+					{Style: ui.ButtonPrimary, Text: "Добавить", URL: a.URL("/organizations/new"), Icon: "plus"},
 				},
 			},
-			Search: &ui.SearchData{URL: "/organizations", Placeholder: "Поиск организаций...", Query: query, Mode: ui.SearchLive},
+			Search: &ui.SearchData{URL: a.URL("/organizations"), Placeholder: "Поиск организаций...", Query: query, Mode: ui.SearchLive},
 			List: ui.ListData{
 				Columns: []ui.ListColumn{
 					{Label: "Название"},
@@ -88,7 +88,7 @@ func (a *App) OrganizationsPage(w http.ResponseWriter, r *http.Request) {
 				Preset:     ui.ListWide,
 			},
 		},
-		NewURL: "/organizations/new",
+		NewURL: a.URL("/organizations/new"),
 	}
 	if flash != nil {
 		page.Alert = FlashToAlert(*flash)
@@ -136,15 +136,15 @@ func (a *App) OrganizationCard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	action := "/organizations"
+	action := a.URL("/organizations")
 	if id > 0 {
-		action = "/organizations/" + strconv.FormatInt(id, 10)
+		action = a.URL("/organizations/" + strconv.FormatInt(id, 10))
 	}
 
 	data := organizationCardData{
 		Title:      "Организация",
-		Header:     pageHeader(r, "Организации"),
-		Card:       ui.CardData{Title: "Основная информация", CloseURL: "/organizations"},
+		Header:     a.pageHeader(r, "Организации"),
+		Card:       ui.CardData{Title: "Основная информация", CloseURL: a.URL("/organizations")},
 		FormAction: action,
 		Fields: []ui.Field{
 			{Name: "uuid", Label: "UUID", Type: ui.FieldText, Value: org.UUID, Readonly: true},
@@ -154,7 +154,7 @@ func (a *App) OrganizationCard(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	if err := ui.RenderPage(w, TemplateFS(), pageFS, data); err != nil {
+	if err := ui.RenderPage(w, TemplateFS(), pageFS, a.basePath(), data); err != nil {
 		a.InternalError(w, r, err)
 	}
 }
@@ -203,16 +203,16 @@ func (a *App) OrganizationSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, "/organizations", http.StatusSeeOther)
+	http.Redirect(w, r, a.URL("/organizations"), http.StatusSeeOther)
 }
 
-func pageHeader(r *http.Request, section string) ui.HeaderData {
+func (a *App) pageHeader(r *http.Request, section string) ui.HeaderData {
 	user := CurrentUser(r)
 	return ui.HeaderData{
 		Section:  section,
 		Username: user.Login,
 		Menu: []ui.MenuItem{
-			{ID: "logout", Label: "Выход", Icon: "logout", URL: "/logout"},
+			{ID: "logout", Label: "Выход", Icon: "logout", URL: a.URL("/logout")},
 		},
 	}
 }

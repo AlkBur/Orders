@@ -19,7 +19,7 @@ func (a *App) RenderAuth(w http.ResponseWriter, r *http.Request, mode ResponseMo
 	if mode == Fragment {
 		name = "page_content"
 	}
-	if err := ui.Render(w, TemplateFS(), pageFS, name, data); err != nil {
+	if err := ui.Render(w, TemplateFS(), pageFS, a.basePath(), name, data); err != nil {
 		a.InternalError(w, r, err)
 	}
 }
