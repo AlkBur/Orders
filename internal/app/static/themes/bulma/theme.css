@@ -1016,6 +1016,48 @@ html.js .app-menu.is-open .app-menu-panel {
   opacity: 0.55;
 }
 
+/* --- Receipts: status text color ---
+   Цвет — только у текста статуса. Go передаёт семантический ключ
+   (is-created, is-sent, ...), фактический оттенок выбирает тема. */
+:root {
+  --status-overdue: #9a8500;
+  --status-sent: #0086b3;
+  --status-accepted: #b36b00;
+  --status-cancelled: #d00000;
+  --status-processed: #008f5a;
+  --status-finished: #006400;
+}
+[data-theme="dark"] {
+  --status-overdue: #ffe45c;
+  --status-sent: #4dd5ff;
+  --status-accepted: #ffb733;
+  --status-cancelled: #ff5c5c;
+  --status-processed: #45e6a0;
+  --status-finished: #55c77a;
+}
+.receipts-status {
+  font-weight: 600;
+}
+/* is-created не окрашивается: обычный цвет текста темы. */
+.receipts-status.is-overdue {
+  color: var(--status-overdue);
+}
+.receipts-status.is-sent {
+  color: var(--status-sent);
+}
+.receipts-status.is-accepted {
+  color: var(--status-accepted);
+}
+.receipts-status.is-cancelled {
+  color: var(--status-cancelled);
+}
+.receipts-status.is-processed {
+  color: var(--status-processed);
+}
+.receipts-status.is-finished {
+  color: var(--status-finished);
+}
+
 /* --- Receipts: files dialog --- */
 .receipts-file-summary {
   display: flex;

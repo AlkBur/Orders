@@ -211,8 +211,7 @@ func (a *App) ReceiptsPage(w http.ResponseWriter, r *http.Request) {
 			Customer:     rec.CustomerName,
 			Total:        total,
 			Status:       presentation.Display,
-			StatusBG:     presentation.BG,
-			StatusText:   presentation.Text,
+			StatusKey:    string(presentation.StatusKey),
 
 			CanEdit: !sent,
 			CanSend: !sent,

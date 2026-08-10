@@ -532,10 +532,11 @@ func TestReceiptsList_ActionsForThreeStates(t *testing.T) {
 	}
 }
 
-// TestReceiptsList_StatusCell — порядок ячеек журнала и расположение цвета
-// статуса. Проверяется структура целиком: Номер → Дата → Организация →
-// Контрагент → Сумма → Статус → Действия. Цвет присутствует только на
-// 6-й ячейке (статус); у .receipts-row inline-стиля статуса нет.
+// TestReceiptsList_StatusCell — порядок ячеек журнала и семантический
+// класс статуса. Проверяется структура целиком: Номер → Дата → Организация →
+// Контрагент → Сумма → Статус → Действия. Статус передаётся как
+// receipts-status is-<key> без inline-стиля; у .receipts-row и ячеек
+// фонового цвета и цвета текста нет (цвет определяет CSS темой).
 func TestReceiptsList_StatusCell(t *testing.T) {
 	db := testutil.NewTestDB(t, NewSchema())
 	orgID, _ := insertOrg(t, db, "StatusOrg", "k1")
@@ -543,7 +544,7 @@ func TestReceiptsList_StatusCell(t *testing.T) {
 	insertReceiptForOrg(t, db, orgID) // Чек 1: «Создан», сверху (id больше).
 	uSent := insertReceiptForOrg(t, db, orgID)
 
-	// Чек 2 становится опубликованным → «Отправлен», #00BFFF.
+	// Чек 2 становится опубликованным → «Отправлен».
 	now := time.Now().Format(time.RFC3339)
 	if _, err := db.Exec(`UPDATE receipts SET sent_at = ? WHERE uuid = ?`, now, uSent); err != nil {
 		t.Fatal(err)
@@ -560,12 +561,6 @@ func TestReceiptsList_StatusCell(t *testing.T) {
 
 	if strings.Contains(body, `<div class="receipts-row" style=`) {
 		t.Fatal("receipts-row must not carry inline status style")
-	}
-
-	// Данные собираются в «Создан» → «Отправлен» → ... (id DESC). Первая
-	// строка (с бóльшим id) — опубликованный чек со статусом «Отправлен».
-	if strings.Index(body, "Отправлен") > strings.Index(body, "Создан") {
-		t.Fatalf("expected Отправлен row before Создан row:\n%s", body)
 	}
 
 	rows := strings.Split(body, `<div class="receipts-row">`)
@@ -586,25 +581,32 @@ func TestReceiptsList_StatusCell(t *testing.T) {
 		}
 	}
 
-	// Отправлен: цвет только в 6-й ячейке, ровно одно вхождение #00BFFF.
-	colorIdx := indexesOf(sentRow, `style="background-color: #00BFFF; color: #000000;"`)
-	if len(colorIdx) != 1 {
-		t.Fatalf("sent: expected exactly one #00BFFF cell style, got %d", len(colorIdx))
+	// Отправлен: семантический класс is-sent, без inline-стиля.
+	if !strings.Contains(sentRow, `class="receipts-status is-sent">Отправлен`) {
+		t.Fatalf("sent: expected receipts-status is-sent class:\n%s", sentRow)
 	}
-	info := indexesOf(sentRow, `<div class="receipts-cell"`)
-	if colorIdx[0] < info[5] {
-		t.Fatal("sent: color must be on the 6th (status) cell only")
-	}
-	if !strings.Contains(sentRow, "Отправлен") {
-		t.Fatalf("sent: expected status text Отправлен in the cell:\n%s", sentRow)
+	// Создан: класс is-created сохраняется для единообразия модели.
+	if !strings.Contains(createdRow, `class="receipts-status is-created">Создан`) {
+		t.Fatalf("created: expected receipts-status is-created class:\n%s", createdRow)
 	}
 
-	// Создан: без inline-стиля и без цвета.
-	if strings.Contains(createdRow, `style="background-color:`) {
-		t.Fatal("created: must not have inline background-color")
+	// Ни у строки, ни у ячейки нет inline-цвета/фона статуса.
+	if strings.Contains(sentRow, `style="`) {
+		t.Fatalf("sent: inline style is not allowed on status:\n%s", sentRow)
 	}
-	if !strings.Contains(createdRow, "Создан") {
-		t.Fatalf("created: expected status text Создан in the cell:\n%s", createdRow)
+	for name, block := range map[string]string{"sent": sentRow, "created": createdRow} {
+		if strings.Contains(block, "background-color") {
+			t.Fatalf("%s: status must not set background-color:\n%s", name, block)
+		}
+		if strings.Contains(block, `style="color:`) {
+			t.Fatalf("%s: status must not set inline color:\n%s", name, block)
+		}
+	}
+
+	// Данные собираются в «Создан» → «Отправлен» → ... (id DESC). Первая
+	// строка (с бóльшим id) — опубликованный чек со статусом «Отправлен».
+	if strings.Index(body, "Отправлен") > strings.Index(body, "Создан") {
+		t.Fatalf("expected Отправлен row before Создан row:\n%s", body)
 	}
 }
 

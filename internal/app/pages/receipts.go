@@ -21,8 +21,12 @@ type ReceiptListRow struct {
 	Customer     string
 	Total        string
 	Status       string
-	StatusBG     string
-	StatusText   string
+
+	// StatusKey — семантический UI-ключ статуса (created, overdue, sent,
+	// accepted, cancelled, processed, finished). Не является цветом:
+	// фактический цвет задаёт CSS темой. Используется как класс
+	// receipts-status is-<StatusKey> и одинаков для обеих тем.
+	StatusKey string
 
 	CanEdit bool
 	CanSend bool
