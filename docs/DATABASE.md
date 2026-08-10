@@ -311,7 +311,7 @@ Descriptor предоставляет:
 | total | REAL | Итоговая сумма |
 | sent_at | DATETIME | Дата отправки (когда документ готов к выдаче 1С) |
 | status | TEXT | Статус (управляется 1С) |
-| status_color | TEXT | Цвет статуса (управляется 1С) |
+| status_color | TEXT | Цвет фона строки в списке документов, `#RRGGBB` (управляется 1С). Пустой — без окраски |
 | created_at | DATETIME | Создан |
 | updated_at | DATETIME | Изменен |
 

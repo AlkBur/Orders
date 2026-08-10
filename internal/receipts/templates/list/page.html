@@ -28,7 +28,7 @@
     <div class="receipts-cell is-actions"></div>
   </div>
   {{range .Rows}}
-  <div class="receipts-row">
+  <div class="receipts-row" {{if .StatusColor}}style="background-color: {{.StatusColor}}; color: {{.StatusTextColor}};"{{end}}>
     <div class="receipts-cell">{{.Number}}</div>
     <div class="receipts-cell">{{.Date}}</div>
     <div class="receipts-cell"><span class="receipts-cell-value">{{.Organization}}</span></div>

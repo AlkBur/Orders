@@ -132,6 +132,10 @@ func (a *App) HandleSyncReceipts(w http.ResponseWriter, r *http.Request) {
 			a.BadRequest(w, "id is required")
 			return
 		}
+		if item.StatusColor != nil && *item.StatusColor != "" && !validStatusColor(*item.StatusColor) {
+			a.BadRequest(w, "status_color must be #RRGGBB or empty")
+			return
+		}
 		updates = append(updates, receipts.SyncUpdate{
 			ID:          item.ID,
 			UUID:        item.UUID,
@@ -185,6 +189,10 @@ func (a *App) HandleUpdateReceiptStatus(w http.ResponseWriter, r *http.Request) 
 
 	if req.Status == nil && req.StatusColor == nil {
 		a.BadRequest(w, "status or status_color is required")
+		return
+	}
+	if req.StatusColor != nil && *req.StatusColor != "" && !validStatusColor(*req.StatusColor) {
+		a.BadRequest(w, "status_color must be #RRGGBB or empty")
 		return
 	}
 

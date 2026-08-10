@@ -202,6 +202,9 @@ func (a *App) ReceiptsPage(w http.ResponseWriter, r *http.Request) {
 			Total:        total,
 			Status:       status,
 
+			StatusColor:     statusColorIfValid(rec.StatusColor),
+			StatusTextColor: statusTextColor(rec.StatusColor),
+
 			CanEdit: !sent,
 			CanSend: !sent,
 

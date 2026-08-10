@@ -295,6 +295,118 @@ func TestSyncAPI_UpdateStatus_MissingFields(t *testing.T) {
 	}
 }
 
+// syncReceiptWithUUID создаёт опубликованный чек и назначает ему внешний
+// UUID напрямую через хранилище, возвращая uuid.
+func syncReceiptWithUUID(t *testing.T, app *App, orgID int64) string {
+	t.Helper()
+	rec := insertQueuedReceipt(t, app, orgID)
+	uuid := "1c-" + uniqueSuffix()
+	if _, err := app.receipts.SynchronizeByID(context.Background(), orgID, []receipts.SyncUpdate{{ID: rec.ID, UUID: &uuid}}); err != nil {
+		t.Fatal(err)
+	}
+	return uuid
+}
+
+func putReceiptStatus(t *testing.T, app *App, orgUUID, ruuid string, body []byte) *httptest.ResponseRecorder {
+	t.Helper()
+	w := httptest.NewRecorder()
+	r := syncRequest(t, http.MethodPut, "/api/integration/organizations/"+orgUUID+"/receipts/"+ruuid, orgUUID, ruuid, "k1", body)
+	app.RequireOrganizationAPIKey(http.HandlerFunc(app.HandleUpdateReceiptStatus)).ServeHTTP(w, r)
+	return w
+}
+
+func TestSyncAPI_UpdateStatus_ColorFormat(t *testing.T) {
+	app, orgID, orgUUID := setupSyncApp(t)
+	uuid := syncReceiptWithUUID(t, app, orgID)
+
+	invalid := []string{"123456", "#12345", "#1234567", "red", "rgb(0,0,0)"}
+	for _, c := range invalid {
+		body, _ := json.Marshal(receiptStatusRequest{StatusColor: &c})
+		if w := putReceiptStatus(t, app, orgUUID, uuid, body); w.Code != http.StatusBadRequest {
+			t.Errorf("color %q: expected 400, got %d: %s", c, w.Code, w.Body.String())
+		}
+	}
+
+	valid := []string{"#123456", "#ABCDEF", "#abcdef"}
+	for _, c := range valid {
+		body, _ := json.Marshal(receiptStatusRequest{StatusColor: &c})
+		if w := putReceiptStatus(t, app, orgUUID, uuid, body); w.Code != http.StatusOK {
+			t.Errorf("color %q: expected 200, got %d: %s", c, w.Code, w.Body.String())
+		}
+	}
+}
+
+func TestSyncAPI_UpdateStatus_SetClearColor(t *testing.T) {
+	app, orgID, orgUUID := setupSyncApp(t)
+	uuid := syncReceiptWithUUID(t, app, orgID)
+
+	color := "#00ff00"
+	body, _ := json.Marshal(receiptStatusRequest{StatusColor: &color})
+	if w := putReceiptStatus(t, app, orgUUID, uuid, body); w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Пустое значение — удалить цвет.
+	empty := ""
+	body, _ = json.Marshal(receiptStatusRequest{StatusColor: &empty})
+	if w := putReceiptStatus(t, app, orgUUID, uuid, body); w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	rec, _ := app.receipts.GetByExternal(context.Background(), uuid)
+	if rec.Receipt.StatusColor != "" {
+		t.Fatalf("expected StatusColor cleared, got %q", rec.Receipt.StatusColor)
+	}
+}
+
+func TestSyncAPI_UpdateStatus_ColorImmutabilityOnPartialUpdate(t *testing.T) {
+	app, orgID, orgUUID := setupSyncApp(t)
+	uuid := syncReceiptWithUUID(t, app, orgID)
+
+	color := "#ff0000"
+	body, _ := json.Marshal(receiptStatusRequest{StatusColor: &color})
+	if w := putReceiptStatus(t, app, orgUUID, uuid, body); w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	// Только статус — цвет должен остаться #ff0000.
+	status := "Проведен"
+	body, _ = json.Marshal(receiptStatusRequest{Status: &status})
+	if w := putReceiptStatus(t, app, orgUUID, uuid, body); w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	rec, _ := app.receipts.GetByExternal(context.Background(), uuid)
+	if rec.Receipt.Status != status {
+		t.Fatalf("expected Status %s, got %s", status, rec.Receipt.Status)
+	}
+	if rec.Receipt.StatusColor != "#ff0000" {
+		t.Fatalf("expected StatusColor #ff0000 preserved, got %q", rec.Receipt.StatusColor)
+	}
+}
+
+func TestSyncAPI_SyncColorFormat(t *testing.T) {
+	app, orgID, orgUUID := setupSyncApp(t)
+	rec := insertQueuedReceipt(t, app, orgID)
+
+	invalid := "red"
+	body, _ := json.Marshal([]receiptSyncRequest{{ID: rec.ID, StatusColor: &invalid}})
+	w := httptest.NewRecorder()
+	r := syncRequest(t, http.MethodPut, "/api/integration/organizations/"+orgUUID+"/receipts", orgUUID, "", "k1", body)
+	app.RequireOrganizationAPIKey(http.HandlerFunc(app.HandleSyncReceipts)).ServeHTTP(w, r)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+
+	valid := "#336699"
+	body, _ = json.Marshal([]receiptSyncRequest{{ID: rec.ID, StatusColor: &valid}})
+	w = httptest.NewRecorder()
+	r = syncRequest(t, http.MethodPut, "/api/integration/organizations/"+orgUUID+"/receipts", orgUUID, "", "k1", body)
+	app.RequireOrganizationAPIKey(http.HandlerFunc(app.HandleSyncReceipts)).ServeHTTP(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
 func TestSyncAPI_OtherOrgNotFound(t *testing.T) {
 	db := testutil.NewTestDB(t, NewSchema())
 	org1, org1UUID := insertOrg(t, db, "Org1", "k1")

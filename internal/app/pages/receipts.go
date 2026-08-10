@@ -22,6 +22,12 @@ type ReceiptListRow struct {
 	Total        string
 	Status       string
 
+	// StatusColor — фон строки (#RRGGBB), заданный 1С и одинаковый
+	// в светлой и тёмной темах. StatusTextColor — чёрный/белый,
+	// выбранный по WCAG-контрасту с фоном. Пустые значения = обычный вид.
+	StatusColor     string
+	StatusTextColor string
+
 	CanEdit bool
 	CanSend bool
 
