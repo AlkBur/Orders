@@ -83,7 +83,6 @@ func TestStore_CreateAndGetByID(t *testing.T) {
 		CustomerID:     1,
 		Total:          100.50,
 		Status:         "",
-		StatusColor:    "",
 	}
 
 	items := []ReceiptItem{
@@ -157,7 +156,6 @@ func TestStore_CreateAndUpdate(t *testing.T) {
 		CustomerID:     1,
 		Total:          200,
 		Status:         "",
-		StatusColor:    "",
 	}
 
 	items := []ReceiptItem{
@@ -198,7 +196,6 @@ func TestStore_List(t *testing.T) {
 			CustomerID:     1,
 			Total:          float64(i * 100),
 			Status:         "",
-			StatusColor:    "",
 		}
 		if err := store.Save(ctx, &Document{Receipt: rec}); err != nil {
 			t.Fatal(err)
@@ -226,7 +223,6 @@ func TestStore_DeleteByID(t *testing.T) {
 		CustomerID:     1,
 		Total:          500,
 		Status:         "",
-		StatusColor:    "",
 	}
 
 	if err := store.Save(ctx, &Document{Receipt: rec}); err != nil {
@@ -254,7 +250,6 @@ func TestStore_Synchronize_UpdateStatus(t *testing.T) {
 		CustomerID:     1,
 		Total:          300,
 		Status:         "",
-		StatusColor:    "",
 	}
 
 	if err := store.Save(ctx, &Document{Receipt: rec}); err != nil {
@@ -262,15 +257,13 @@ func TestStore_Synchronize_UpdateStatus(t *testing.T) {
 	}
 
 	status := "Обработан"
-	color := "success"
 	uuid := "1c-uuid-001"
 
 	err := store.Synchronize(ctx, []ReceiptUpdate{
 		{
-			ExchangeID:  rec.ExchangeID,
-			UUID:        &uuid,
-			Status:      &status,
-			StatusColor: &color,
+			ExchangeID: rec.ExchangeID,
+			UUID:       &uuid,
+			Status:     &status,
 		},
 	})
 	if err != nil {
@@ -288,9 +281,6 @@ func TestStore_Synchronize_UpdateStatus(t *testing.T) {
 	if doc.Receipt.Status != "Обработан" {
 		t.Fatalf("expected Status Обработан, got %s", doc.Receipt.Status)
 	}
-	if doc.Receipt.StatusColor != "success" {
-		t.Fatalf("expected StatusColor success, got %s", doc.Receipt.StatusColor)
-	}
 }
 
 func TestStore_Synchronize_PartialUpdate(t *testing.T) {
@@ -304,7 +294,6 @@ func TestStore_Synchronize_PartialUpdate(t *testing.T) {
 		CustomerID:     1,
 		Total:          300,
 		Status:         "",
-		StatusColor:    "",
 	}
 
 	if err := store.Save(ctx, &Document{Receipt: rec}); err != nil {
@@ -329,9 +318,6 @@ func TestStore_Synchronize_PartialUpdate(t *testing.T) {
 	if doc.Receipt.Status != "Отменен" {
 		t.Fatalf("expected Status Отменен, got %s", doc.Receipt.Status)
 	}
-	if doc.Receipt.StatusColor != "" {
-		t.Fatalf("expected StatusColor to remain empty, got %s", doc.Receipt.StatusColor)
-	}
 }
 
 func TestStore_Synchronize_UUIDReassignment(t *testing.T) {
@@ -345,7 +331,6 @@ func TestStore_Synchronize_UUIDReassignment(t *testing.T) {
 		CustomerID:     1,
 		Total:          300,
 		Status:         "",
-		StatusColor:    "",
 	}
 
 	if err := store.Save(ctx, &Document{Receipt: rec}); err != nil {
@@ -395,7 +380,6 @@ func TestStore_SentAt(t *testing.T) {
 		Total:          100,
 		SentAt:         &now,
 		Status:         "",
-		StatusColor:    "",
 	}
 
 	if err := store.Save(ctx, &Document{Receipt: rec}); err != nil {
@@ -425,7 +409,6 @@ func saveReceipt(t *testing.T, store *Store, ctx context.Context, orgID int64, n
 		CustomerID:     1,
 		Total:          100,
 		Status:         "",
-		StatusColor:    "",
 	}
 	now := time.Now()
 	if sent {
@@ -493,11 +476,10 @@ func TestStore_SynchronizeByID_Assign(t *testing.T) {
 	rec := saveReceipt(t, store, ctx, orgID, "100010", true)
 
 	status := "Отгружен"
-	color := "info"
 	uuid := "1c-doc-010"
 
 	result, err := store.SynchronizeByID(ctx, orgID, []SyncUpdate{
-		{ID: rec.ID, UUID: &uuid, Status: &status, StatusColor: &color},
+		{ID: rec.ID, UUID: &uuid, Status: &status},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -515,9 +497,6 @@ func TestStore_SynchronizeByID_Assign(t *testing.T) {
 	}
 	if doc.Receipt.Status != status {
 		t.Fatalf("expected Status %s, got %s", status, doc.Receipt.Status)
-	}
-	if doc.Receipt.StatusColor != color {
-		t.Fatalf("expected StatusColor %s, got %s", color, doc.Receipt.StatusColor)
 	}
 
 	remaining, err := store.ListAvailableForSync(ctx, orgID)
@@ -613,7 +592,7 @@ func TestStore_UpdateByExternal_Partial(t *testing.T) {
 	}
 
 	status := "Оплачен"
-	if err := store.UpdateByExternal(ctx, orgID, uuid, &status, nil); err != nil {
+	if err := store.UpdateByExternal(ctx, orgID, uuid, &status); err != nil {
 		t.Fatal(err)
 	}
 
@@ -624,16 +603,13 @@ func TestStore_UpdateByExternal_Partial(t *testing.T) {
 	if doc.Receipt.Status != status {
 		t.Fatalf("expected Status %s, got %s", status, doc.Receipt.Status)
 	}
-	if doc.Receipt.StatusColor != "" {
-		t.Fatalf("expected StatusColor to stay empty, got %s", doc.Receipt.StatusColor)
-	}
 }
 
 func TestStore_UpdateByExternal_NotFound(t *testing.T) {
 	ctx, store, orgID, _ := setupTestData(t)
 
 	status := "test"
-	if err := store.UpdateByExternal(ctx, orgID, "no-such-uuid", &status, nil); err != ErrNotFound {
+	if err := store.UpdateByExternal(ctx, orgID, "no-such-uuid", &status); err != ErrNotFound {
 		t.Fatalf("expected ErrNotFound, got %v", err)
 	}
 }
@@ -650,7 +626,7 @@ func TestStore_UpdateByExternal_CrossOrgNotFound(t *testing.T) {
 	}
 
 	status := "test"
-	if err := store.UpdateByExternal(ctx, 999, uuid, &status, nil); err != ErrNotFound {
+	if err := store.UpdateByExternal(ctx, 999, uuid, &status); err != ErrNotFound {
 		t.Fatalf("expected ErrNotFound for other org, got %v", err)
 	}
 }

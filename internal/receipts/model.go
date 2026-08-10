@@ -24,7 +24,6 @@ type Receipt struct {
 	Total            float64    `db:"total" label:"Сумма" order:"40" list:"true"`
 	SentAt           *time.Time `db:"sent_at" order:"42"`
 	Status           string     `db:"status" label:"Статус" order:"45" list:"true"`
-	StatusColor      string     `db:"status_color" order:"46"`
 	CreatedAt        time.Time  `order:"98"`
 	UpdatedAt        time.Time  `order:"99"`
 }
@@ -63,10 +62,9 @@ type ReceiptFile struct {
 }
 
 type ReceiptUpdate struct {
-	ExchangeID  string
-	UUID        *string
-	Status      *string
-	StatusColor *string
+	ExchangeID string
+	UUID       *string
+	Status     *string
 }
 
 var Descriptor = entity.Register[Receipt](
@@ -94,8 +92,6 @@ func (r Receipt) DisplayValue(name string) (string, error) {
 		return formatFloat(r.Total), nil
 	case "Status":
 		return displayStatus(r), nil
-	case "StatusColor":
-		return r.StatusColor, nil
 	default:
 		return "", fmt.Errorf("unknown display field %q for Receipt", name)
 	}

@@ -28,13 +28,16 @@
     <div class="receipts-cell is-actions"></div>
   </div>
   {{range .Rows}}
-  <div class="receipts-row" {{if .StatusColor}}style="background-color: {{.StatusColor}}; color: {{.StatusTextColor}};"{{end}}>
+  <div class="receipts-row">
     <div class="receipts-cell">{{.Number}}</div>
     <div class="receipts-cell">{{.Date}}</div>
     <div class="receipts-cell"><span class="receipts-cell-value">{{.Organization}}</span></div>
     <div class="receipts-cell"><span class="receipts-cell-value">{{.Customer}}</span></div>
     <div class="receipts-cell">{{.Total}}</div>
-    <div class="receipts-cell">{{.Status}}</div>
+    <div class="receipts-cell"
+      {{if .StatusBG}}style="background-color: {{.StatusBG}}; color: {{.StatusText}};"{{end}}>
+      {{.Status}}
+    </div>
     <div class="receipts-cell is-actions">
       <div class="receipts-actions">
         {{if .HasFiles}}<a class="button is-primary is-small" href="{{.FilesURL}}" data-dialog-url="{{.FilesURL}}" title="Файлы">{{icon

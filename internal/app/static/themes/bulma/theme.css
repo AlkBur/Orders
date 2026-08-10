@@ -951,7 +951,15 @@ html.js .app-menu.is-open .app-menu-panel {
   box-shadow: var(--bulma-shadow);
 }
 .receipts-row {
-  display: flex;
+  display: grid;
+  grid-template-columns:
+    minmax(5.5rem, 1fr)
+    minmax(6rem, 1fr)
+    minmax(9rem, 1.6fr)
+    minmax(9rem, 1.6fr)
+    minmax(6rem, 1fr)
+    minmax(6.5rem, 1fr)
+    11.5rem;
   align-items: center;
   padding: 0.75rem 0.75rem;
   border-bottom: 1px solid var(--bulma-border);
@@ -974,16 +982,13 @@ html.js .app-menu.is-open .app-menu-panel {
   padding-bottom: 0.5rem;
 }
 .receipts-cell {
-  flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.receipts-cell.is-actions {
-  flex: 0 0 auto;
-}
 .receipts-row.is-empty .receipts-cell {
+  grid-column: 1 / -1;
   text-align: center;
   color: var(--bulma-text-light);
   font-style: italic;

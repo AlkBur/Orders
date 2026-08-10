@@ -198,12 +198,8 @@ func (a *App) ReceiptsPage(w http.ResponseWriter, r *http.Request) {
 			a.InternalError(w, r, err)
 			return
 		}
-		status, err := rec.DisplayValue("Status")
-		if err != nil {
-			a.InternalError(w, r, err)
-			return
-		}
 
+		presentation := statusPresentation(rec.Status, rec.CreatedAt, rec.SentAt)
 		sent := rec.SentAt != nil
 		base := a.URL(rec.URL())
 		idStr := strconv.FormatInt(rec.ID, 10)
@@ -214,10 +210,9 @@ func (a *App) ReceiptsPage(w http.ResponseWriter, r *http.Request) {
 			Organization: rec.OrganizationName,
 			Customer:     rec.CustomerName,
 			Total:        total,
-			Status:       status,
-
-			StatusColor:     statusColorIfValid(rec.StatusColor),
-			StatusTextColor: statusTextColor(rec.StatusColor),
+			Status:       presentation.Display,
+			StatusBG:     presentation.BG,
+			StatusText:   presentation.Text,
 
 			CanEdit: !sent,
 			CanSend: !sent,

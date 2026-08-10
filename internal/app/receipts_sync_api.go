@@ -34,19 +34,17 @@ type ReceiptQueueLine struct {
 }
 
 // receiptSyncRequest — элемент первичного подтверждения: id (внутренний)
-// → uuid (необязательный) + status + status_color (частичное обновление).
+// → uuid (необязательный) + status (частичное обновление).
 type receiptSyncRequest struct {
-	ID          int64   `json:"id"`
-	UUID        *string `json:"uuid"`
-	Status      *string `json:"status"`
-	StatusColor *string `json:"status_color"`
+	ID     int64   `json:"id"`
+	UUID   *string `json:"uuid"`
+	Status *string `json:"status"`
 }
 
 // receiptStatusRequest — изменение статуса чека по внешнему UUID.
-// Частичная семантика: переданные поля изменяются, остальные не трогаются.
+// Частичная семантика: переданное поле изменяется, остальные не трогаются.
 type receiptStatusRequest struct {
-	Status      *string `json:"status"`
-	StatusColor *string `json:"status_color"`
+	Status *string `json:"status"`
 }
 
 // getOrgFromURL извлекает организацию из {oid} в URL. Используется всеми
@@ -132,15 +130,16 @@ func (a *App) HandleSyncReceipts(w http.ResponseWriter, r *http.Request) {
 			a.BadRequest(w, "id is required")
 			return
 		}
-		if item.StatusColor != nil && *item.StatusColor != "" && !validStatusColor(*item.StatusColor) {
-			a.BadRequest(w, "status_color must be #RRGGBB or empty")
-			return
+		if item.Status != nil {
+			if *item.Status == "" || !receipts.ValidStatus(*item.Status) {
+				a.BadRequest(w, "invalid status")
+				return
+			}
 		}
 		updates = append(updates, receipts.SyncUpdate{
-			ID:          item.ID,
-			UUID:        item.UUID,
-			Status:      item.Status,
-			StatusColor: item.StatusColor,
+			ID:     item.ID,
+			UUID:   item.UUID,
+			Status: item.Status,
 		})
 	}
 
@@ -163,8 +162,8 @@ func (a *App) HandleSyncReceipts(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(result)
 }
 
-// HandleUpdateReceiptStatus изменяет status/status_color чека по внешнему
-// UUID (receipts.uuid). PATCH-семантика: непереданные поля не сбрасываются.
+// HandleUpdateReceiptStatus изменяет статус чека по внешнему UUID
+// (receipts.uuid). PATCH-семантика: непереданный статус не сбрасывается.
 func (a *App) HandleUpdateReceiptStatus(w http.ResponseWriter, r *http.Request) {
 	orgID, ok := a.getOrgFromURL(w, r)
 	if !ok {
@@ -187,17 +186,17 @@ func (a *App) HandleUpdateReceiptStatus(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if req.Status == nil && req.StatusColor == nil {
-		a.BadRequest(w, "status or status_color is required")
+	if req.Status == nil {
+		a.BadRequest(w, "status is required")
 		return
 	}
-	if req.StatusColor != nil && *req.StatusColor != "" && !validStatusColor(*req.StatusColor) {
-		a.BadRequest(w, "status_color must be #RRGGBB or empty")
+	if *req.Status == "" || !receipts.ValidStatus(*req.Status) {
+		a.BadRequest(w, "invalid status")
 		return
 	}
 
 	ruuid := chi.URLParam(r, "ruuid")
-	if err := a.receipts.UpdateByExternal(r.Context(), orgID, ruuid, req.Status, req.StatusColor); err != nil {
+	if err := a.receipts.UpdateByExternal(r.Context(), orgID, ruuid, req.Status); err != nil {
 		if errors.Is(err, receipts.ErrNotFound) {
 			http.NotFound(w, r)
 			return

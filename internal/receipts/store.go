@@ -30,7 +30,7 @@ func (s *Store) GetByID(ctx context.Context, id int64) (*Document, error) {
 			r.organization_id, COALESCE(o.name, '') AS org_name,
 			r.user_id, COALESCE(u.login, '') AS user_login,
 			r.customer_id, COALESCE(c.name, '') AS customer_name,
-			r.total, r.sent_at, r.status, r.status_color,
+			r.total, r.sent_at, r.status,
 			r.created_at, r.updated_at
 		FROM receipts r
 		LEFT JOIN organizations o ON o.id = r.organization_id
@@ -62,7 +62,7 @@ func (s *Store) GetByExternal(ctx context.Context, externalUUID string) (*Docume
 			r.organization_id, COALESCE(o.name, '') AS org_name,
 			r.user_id, COALESCE(u.login, '') AS user_login,
 			r.customer_id, COALESCE(c.name, '') AS customer_name,
-			r.total, r.sent_at, r.status, r.status_color,
+			r.total, r.sent_at, r.status,
 			r.created_at, r.updated_at
 		FROM receipts r
 		LEFT JOIN organizations o ON o.id = r.organization_id
@@ -120,7 +120,7 @@ func (s *Store) List(ctx context.Context, opts ListOptions, visibleFields []enti
 			r.organization_id, COALESCE(o.name, '') AS org_name,
 			r.user_id, COALESCE(u.login, '') AS user_login,
 			r.customer_id, COALESCE(c.name, '') AS customer_name,
-			r.total, r.sent_at, r.status, r.status_color,
+			r.total, r.sent_at, r.status,
 			r.created_at, r.updated_at
 		FROM receipts r
 		LEFT JOIN organizations o ON o.id = r.organization_id
@@ -207,11 +207,11 @@ func (s *Store) Save(ctx context.Context, doc *Document) error {
 		result, err := tx.ExecContext(ctx, `
 			INSERT INTO receipts (uuid, exchange_id, number, date,
 				organization_id, user_id, customer_id, total, sent_at,
-				status, status_color, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				status, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`, uuidArg, r.ExchangeID, r.Number, r.Date.Format("2006-01-02"),
 			r.OrganizationID, r.UserID, r.CustomerID, r.Total,
-			sentAtArg, r.Status, r.StatusColor,
+			sentAtArg, r.Status,
 			r.CreatedAt.Format(time.RFC3339), r.UpdatedAt.Format(time.RFC3339))
 		if err != nil {
 			return err
@@ -239,12 +239,12 @@ func (s *Store) Save(ctx context.Context, doc *Document) error {
 			UPDATE receipts SET
 				uuid = ?, number = ?, date = ?,
 				organization_id = ?, user_id = ?, customer_id = ?,
-				total = ?, sent_at = ?, status = ?, status_color = ?,
+				total = ?, sent_at = ?, status = ?,
 				updated_at = ?
 			WHERE id = ?
 		`, uuidArg, r.Number, r.Date.Format("2006-01-02"),
 			r.OrganizationID, r.UserID, r.CustomerID, r.Total,
-			sentAtArg, r.Status, r.StatusColor,
+			sentAtArg, r.Status,
 			r.UpdatedAt.Format(time.RFC3339), r.ID)
 		if err != nil {
 			return err
@@ -326,10 +326,6 @@ func (s *Store) Synchronize(ctx context.Context, updates []ReceiptUpdate) error 
 			sets = append(sets, "status = ?")
 			args = append(args, *upd.Status)
 		}
-		if upd.StatusColor != nil {
-			sets = append(sets, "status_color = ?")
-			args = append(args, *upd.StatusColor)
-		}
 
 		if len(sets) == 0 {
 			continue
@@ -366,10 +362,9 @@ type SyncResult struct {
 // UUID необязателен: его отсутствие оставляет документ в очереди
 // синхронизации. Остальные поля заполняются частично.
 type SyncUpdate struct {
-	ID          int64
-	UUID        *string
-	Status      *string
-	StatusColor *string
+	ID     int64
+	UUID   *string
+	Status *string
 }
 
 // ListAvailableForSync возвращает чеки организации, которые пользователь
@@ -384,7 +379,7 @@ func (s *Store) ListAvailableForSync(ctx context.Context, orgID int64) ([]*Docum
 			r.user_id, COALESCE(u.login, '') AS user_login,
 			r.customer_id, COALESCE(c.name, '') AS customer_name,
 			COALESCE(c.uuid, '') AS customer_uuid,
-			r.total, r.sent_at, r.status, r.status_color,
+			r.total, r.sent_at, r.status,
 			r.created_at, r.updated_at
 		FROM receipts r
 		LEFT JOIN organizations o ON o.id = r.organization_id
@@ -472,10 +467,6 @@ func (s *Store) SynchronizeByID(ctx context.Context, orgID int64, updates []Sync
 			sets = append(sets, "status = ?")
 			args = append(args, *upd.Status)
 		}
-		if upd.StatusColor != nil {
-			sets = append(sets, "status_color = ?")
-			args = append(args, *upd.StatusColor)
-		}
 
 		if len(sets) == 0 {
 			continue
@@ -503,20 +494,16 @@ func (s *Store) SynchronizeByID(ctx context.Context, orgID int64, updates []Sync
 	return result, tx.Commit()
 }
 
-// UpdateByExternal обновляет статус и цвет статуса чека по внешнему UUID
+// UpdateByExternal обновляет статус чека по внешнему UUID
 // (receipts.uuid) в рамках организации. Частичное обновление: заполняются
 // только переданные поля, остальные не сбрасываются.
-func (s *Store) UpdateByExternal(ctx context.Context, orgID int64, externalUUID string, status, statusColor *string) error {
+func (s *Store) UpdateByExternal(ctx context.Context, orgID int64, externalUUID string, status *string) error {
 	var sets []string
 	var args []any
 
 	if status != nil {
 		sets = append(sets, "status = ?")
 		args = append(args, *status)
-	}
-	if statusColor != nil {
-		sets = append(sets, "status_color = ?")
-		args = append(args, *statusColor)
 	}
 	if len(sets) == 0 {
 		return nil
@@ -601,7 +588,7 @@ func scanReceipt(row interface {
 		&r.OrganizationID, &r.OrganizationName,
 		&r.UserID, &r.UserLogin,
 		&r.CustomerID, &r.CustomerName,
-		&r.Total, &sentAt, &r.Status, &r.StatusColor,
+		&r.Total, &sentAt, &r.Status,
 		&createdAt, &updatedAt,
 	)
 	if err != nil {
@@ -617,6 +604,8 @@ func scanReceipt(row interface {
 	if dateStr != "" {
 		r.Date, _ = time.Parse("2006-01-02", dateStr[:10])
 	}
+	r.CreatedAt, _ = parseReceiptTime(createdAt)
+	r.UpdatedAt, _ = parseReceiptTime(updatedAt)
 
 	return r, nil
 }
@@ -638,7 +627,7 @@ func scanReceiptWithCustomerUUID(row interface {
 		&r.UserID, &r.UserLogin,
 		&r.CustomerID, &r.CustomerName,
 		&r.CustomerUUID,
-		&r.Total, &sentAt, &r.Status, &r.StatusColor,
+		&r.Total, &sentAt, &r.Status,
 		&createdAt, &updatedAt,
 	)
 	if err != nil {
@@ -654,6 +643,18 @@ func scanReceiptWithCustomerUUID(row interface {
 	if dateStr != "" {
 		r.Date, _ = time.Parse("2006-01-02", dateStr[:10])
 	}
+	r.CreatedAt, _ = parseReceiptTime(createdAt)
+	r.UpdatedAt, _ = parseReceiptTime(updatedAt)
 
 	return r, nil
+}
+
+// parseReceiptTime разбирает время хранения SQLite: RFC3339 (пишется кодом)
+// или "2006-01-02 15:04:05" (CURRENT_TIMESTAMP). Ошибка невозможна при
+// корректных данных; при неверном формате возвращается нулевое время.
+func parseReceiptTime(value string) (time.Time, error) {
+	if t, err := time.Parse(time.RFC3339, value); err == nil {
+		return t, nil
+	}
+	return time.Parse("2006-01-02 15:04:05", value)
 }

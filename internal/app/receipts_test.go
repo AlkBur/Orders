@@ -532,6 +532,97 @@ func TestReceiptsList_ActionsForThreeStates(t *testing.T) {
 	}
 }
 
+// TestReceiptsList_StatusCell — порядок ячеек журнала и расположение цвета
+// статуса. Проверяется структура целиком: Номер → Дата → Организация →
+// Контрагент → Сумма → Статус → Действия. Цвет присутствует только на
+// 6-й ячейке (статус); у .receipts-row inline-стиля статуса нет.
+func TestReceiptsList_StatusCell(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	orgID, _ := insertOrg(t, db, "StatusOrg", "k1")
+
+	insertReceiptForOrg(t, db, orgID) // Чек 1: «Создан», сверху (id больше).
+	uSent := insertReceiptForOrg(t, db, orgID)
+
+	// Чек 2 становится опубликованным → «Отправлен», #00BFFF.
+	now := time.Now().Format(time.RFC3339)
+	if _, err := db.Exec(`UPDATE receipts SET sent_at = ? WHERE uuid = ?`, now, uSent); err != nil {
+		t.Fatal(err)
+	}
+
+	app := &App{receipts: receipts.NewStore(db)}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/receipts", nil)
+	app.ReceiptsPage(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+
+	if strings.Contains(body, `<div class="receipts-row" style=`) {
+		t.Fatal("receipts-row must not carry inline status style")
+	}
+
+	// Данные собираются в «Создан» → «Отправлен» → ... (id DESC). Первая
+	// строка (с бóльшим id) — опубликованный чек со статусом «Отправлен».
+	if strings.Index(body, "Отправлен") > strings.Index(body, "Создан") {
+		t.Fatalf("expected Отправлен row before Создан row:\n%s", body)
+	}
+
+	rows := strings.Split(body, `<div class="receipts-row">`)
+	// rows[0] — header + инструменты; далее data-строки.
+	if len(rows) < 3 {
+		t.Fatalf("expected 2 data rows, got %d", len(rows)-1)
+	}
+	sentRow, createdRow := rows[1], rows[2]
+
+	for name, block := range map[string]string{"sent": sentRow, "created": createdRow} {
+		info := indexesOf(block, `<div class="receipts-cell"`)
+		if len(info) != 6 {
+			t.Fatalf("%s: expected 6 info cells, got %d", name, len(info))
+		}
+		actions := indexesOf(block, `<div class="receipts-cell is-actions">`)
+		if len(actions) != 1 || actions[0] < info[5] {
+			t.Fatalf("%s: actions cell must follow the 6 info cells", name)
+		}
+	}
+
+	// Отправлен: цвет только в 6-й ячейке, ровно одно вхождение #00BFFF.
+	colorIdx := indexesOf(sentRow, `style="background-color: #00BFFF; color: #000000;"`)
+	if len(colorIdx) != 1 {
+		t.Fatalf("sent: expected exactly one #00BFFF cell style, got %d", len(colorIdx))
+	}
+	info := indexesOf(sentRow, `<div class="receipts-cell"`)
+	if colorIdx[0] < info[5] {
+		t.Fatal("sent: color must be on the 6th (status) cell only")
+	}
+	if !strings.Contains(sentRow, "Отправлен") {
+		t.Fatalf("sent: expected status text Отправлен in the cell:\n%s", sentRow)
+	}
+
+	// Создан: без inline-стиля и без цвета.
+	if strings.Contains(createdRow, `style="background-color:`) {
+		t.Fatal("created: must not have inline background-color")
+	}
+	if !strings.Contains(createdRow, "Создан") {
+		t.Fatalf("created: expected status text Создан in the cell:\n%s", createdRow)
+	}
+}
+
+// indexesOf возвращает абсолютные позиции всех вхождений подстроки.
+func indexesOf(s, sub string) []int {
+	var res []int
+	pos := 0
+	for pos < len(s) {
+		i := strings.Index(s[pos:], sub)
+		if i < 0 {
+			break
+		}
+		res = append(res, pos+i)
+		pos += i + len(sub)
+	}
+	return res
+}
+
 // TestReceiptCard_FilesBlock — в карточке просмотра блок «Файлы»
 // выводится только при наличии файлов, иначе отсутствует.
 func TestReceiptCard_FilesBlock(t *testing.T) {
