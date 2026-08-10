@@ -31,6 +31,11 @@ type ReceiptListRow struct {
 	CanEdit bool
 	CanSend bool
 
+	// HasFiles — булев признак наличия прикреплённых файлов у документа.
+	// Журналу требуется только факт существования файлов (показать кнопку
+	// «Файлы»), а не их количество.
+	HasFiles bool
+
 	FilesURL string
 	CopyURL  string
 	SendURL  string
@@ -85,6 +90,10 @@ type ReceiptCardPage struct {
 	ErrorsJSON     string
 	ItemsJSON      string
 	CopySource     string
+
+	// Files — файлы документа для просмотра (режим только для чтения).
+	// Пустое значение = файлов нет, блок «Файлы» не выводится.
+	Files []ReceiptFile
 }
 
 // ReceiptSendConfirmPage — экран подтверждения отправки документа в 1С

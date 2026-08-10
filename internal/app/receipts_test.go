@@ -476,6 +476,116 @@ func TestReceiptsListPage_BlankPageRegression(t *testing.T) {
 	}
 }
 
+// TestReceiptsList_ActionsForThreeStates — три состояния документа в
+// журнале: без файлов, с файлами, отправленный. Проверяются условия
+// показа кнопок «Файлы», «Отправить», «Редактировать».
+func TestReceiptsList_ActionsForThreeStates(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	filesDB := testutil.NewTestDB(t, NewFilesSchema())
+	orgID, _ := insertOrg(t, db, "ListOrg", "k1")
+
+	// Чек 1: новый, без файлов. Чек 2: новый, с файлом.
+	// Чек 3: отправленный, с файлом.
+	insertReceiptForOrg(t, db, orgID)
+	u2 := insertReceiptForOrg(t, db, orgID)
+	u3 := insertReceiptForOrg(t, db, orgID)
+
+	app := &App{
+		receipts:     receipts.NewStore(db),
+		receiptFiles: receipts.NewFileStore(filesDB),
+	}
+
+	doc2, _ := app.receipts.GetByExternal(context.Background(), u2)
+	if _, _, err := app.receiptFiles.Upsert(context.Background(), doc2.Receipt.ID, "f2", "d2.pdf", "application/pdf", pdfBody); err != nil {
+		t.Fatal(err)
+	}
+	doc3, _ := app.receipts.GetByExternal(context.Background(), u3)
+	if _, _, err := app.receiptFiles.Upsert(context.Background(), doc3.Receipt.ID, "f3", "d3.pdf", "application/pdf", pdfBody); err != nil {
+		t.Fatal(err)
+	}
+	// Чек 3 помечается отправленным.
+	now := time.Now().Format(time.RFC3339)
+	if _, err := db.Exec(`UPDATE receipts SET sent_at = ? WHERE id = ?`, now, doc3.Receipt.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/receipts", nil)
+	app.ReceiptsPage(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+
+	filesBtns := strings.Count(body, `title="Файлы"`)
+	if filesBtns != 2 {
+		t.Fatalf("expected 2 Files buttons (docs 2,3), got %d:\n%s", filesBtns, body)
+	}
+	sendBtns := strings.Count(body, `title="Отправить"`)
+	if sendBtns != 2 {
+		t.Fatalf("expected 2 Send buttons (docs 1,2), got %d", sendBtns)
+	}
+	editBtns := strings.Count(body, `title="Редактировать"`)
+	if editBtns != 2 {
+		t.Fatalf("expected 2 Edit buttons (docs 1,2), got %d", editBtns)
+	}
+}
+
+// TestReceiptCard_FilesBlock — в карточке просмотра блок «Файлы»
+// выводится только при наличии файлов, иначе отсутствует.
+func TestReceiptCard_FilesBlock(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	filesDB := testutil.NewTestDB(t, NewFilesSchema())
+	orgID, _ := insertOrg(t, db, "CardOrg", "k1")
+
+	// Два отправленных чека: первый без файлов, второй с файлом.
+	uEmpty := insertReceiptForOrg(t, db, orgID)
+	uWith := insertReceiptForOrg(t, db, orgID)
+
+	app := &App{
+		receipts:     receipts.NewStore(db),
+		receiptFiles: receipts.NewFileStore(filesDB),
+	}
+
+	docWith, _ := app.receipts.GetByExternal(context.Background(), uWith)
+	if _, _, err := app.receiptFiles.Upsert(context.Background(), docWith.Receipt.ID, "f1", "карта.pdf", "application/pdf", pdfBody); err != nil {
+		t.Fatal(err)
+	}
+	docEmpty, _ := app.receipts.GetByExternal(context.Background(), uEmpty)
+
+	now := time.Now().Format(time.RFC3339)
+	for _, doc := range []*receipts.Document{docEmpty, docWith} {
+		if _, err := db.Exec(`UPDATE receipts SET sent_at = ? WHERE id = ?`, now, doc.Receipt.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	renderCard := func(id int64) string {
+		t.Helper()
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/receipts/"+strconv.FormatInt(id, 10)+"?mode=view", nil)
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", strconv.FormatInt(id, 10))
+		r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+		app.ReceiptCard(w, r)
+		if w.Code != http.StatusOK {
+			t.Fatalf("render card %d: expected 200, got %d: %s", id, w.Code, w.Body.String())
+		}
+		return w.Body.String()
+	}
+
+	withBody := renderCard(docWith.Receipt.ID)
+	if !strings.Contains(withBody, ">Файлы</h2>") || !strings.Contains(withBody, "карта.pdf") {
+		t.Fatalf("expected files block with file name in card with files:\n%s", withBody)
+	}
+
+	emptyBody := renderCard(docEmpty.Receipt.ID)
+	if strings.Contains(emptyBody, ">Файлы</h2>") {
+		t.Fatalf("expected no files block for doc without files:\n%s", emptyBody)
+	}
+}
+
 func TestReceiptReturnURL(t *testing.T) {
 	doc := &receipts.Document{
 		Receipt: &receipts.Receipt{ID: 42},

@@ -1130,6 +1130,9 @@ html.js .app-menu.is-open .app-menu-panel {
   .receipts-cell:nth-child(6)::before {
     content: "Статус";
   }
+  .receipts-cell.is-actions::before {
+    content: "Действия";
+  }
 
   .receipts-actions {
     flex-wrap: wrap;

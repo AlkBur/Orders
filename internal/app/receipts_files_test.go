@@ -334,6 +334,65 @@ func TestReceiptFileContent_CrossReceipt404(t *testing.T) {
 	}
 }
 
+// receiptFilesURL строит GET-запрос на окно файлов чека.
+func receiptFilesURL(t *testing.T, id int64) *http.Request {
+	t.Helper()
+	r := httptest.NewRequest(http.MethodGet, "/receipts/"+strconv.FormatInt(id, 10)+"/files", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", strconv.FormatInt(id, 10))
+	return r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+}
+
+// TestReceiptFiles_HtmxModal — регрессия на 500: фрагмент окна «Файлы»
+// (HX-Request) обязан рендерить модалку. Модалка определена в
+// files/modal.html, поэтому ui.Render должен парсить все pageFS, а не
+// только page.html.
+func TestReceiptFiles_HtmxModal(t *testing.T) {
+	app, orgUUID, receiptUUID := setupFilesApp(t)
+	uploadFile(t, app, orgUUID, receiptUUID, "file-uuid-1", "док.pdf", pdfBody)
+
+	doc, _ := app.receipts.GetByExternal(context.Background(), receiptUUID)
+	w := httptest.NewRecorder()
+	r := receiptFilesURL(t, doc.Receipt.ID)
+	r.Header.Set("HX-Request", "true")
+	app.ReceiptFiles(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, `id="receipts-modal"`) {
+		t.Fatalf("expected modal shell in body:\n%s", body)
+	}
+	if !strings.Contains(body, "Файлы чека №") {
+		t.Fatalf("expected modal title in body")
+	}
+	if !strings.Contains(body, "док.pdf") {
+		t.Fatalf("expected file name in modal body")
+	}
+}
+
+// TestReceiptFiles_FullPage — полная страница окна файлов без HX.
+func TestReceiptFiles_FullPage(t *testing.T) {
+	app, orgUUID, receiptUUID := setupFilesApp(t)
+	uploadFile(t, app, orgUUID, receiptUUID, "file-uuid-1", "док.pdf", pdfBody)
+
+	doc, _ := app.receipts.GetByExternal(context.Background(), receiptUUID)
+	w := httptest.NewRecorder()
+	app.ReceiptFiles(w, receiptFilesURL(t, doc.Receipt.ID))
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "Файлы чека №") {
+		t.Fatalf("expected page title in body")
+	}
+	if !strings.Contains(body, "док.pdf") {
+		t.Fatalf("expected file name on full page")
+	}
+}
+
 // fileUploadRequest строит multipart PUT-запрос с полем uuid и частью file.
 // Часть file имеет Content-Type application/pdf (как от внешней системы).
 func fileUploadRequest(t *testing.T, orgUUID, receiptUUID, fileUUID, fileName string, data []byte) *http.Request {

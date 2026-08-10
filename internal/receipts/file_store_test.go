@@ -80,3 +80,38 @@ func TestFileStoreGetByID_RequiresReceiptID(t *testing.T) {
 		t.Fatalf("expected ErrNotFound for wrong receipt, got %v", err)
 	}
 }
+
+func TestFileStoreCountByReceipts(t *testing.T) {
+	filesDB := testutil.NewTestDB(t, fileSchema())
+	store := NewFileStore(filesDB)
+
+	// Два документа: у 1 — два файла, у 2 — один, у 3 — ни одного.
+	for _, u := range []string{"f-1", "f-2"} {
+		if _, _, err := store.Upsert(context.Background(), 1, u, u+".pdf", "application/pdf", []byte(u)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, _, err := store.Upsert(context.Background(), 2, "f-3", "f-3.pdf", "application/pdf", []byte("f-3")); err != nil {
+		t.Fatal(err)
+	}
+
+	// Пустой список — пустая карта без ошибки.
+	counts, err := store.CountByReceipts(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(counts) != 0 {
+		t.Fatalf("expected empty counts, got %d", len(counts))
+	}
+
+	counts, err = store.CountByReceipts(context.Background(), []int64{1, 2, 3, 99})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(counts) != 2 {
+		t.Fatalf("expected 2 receipts with files, got %d: %v", len(counts), counts)
+	}
+	if counts[1] != 2 || counts[2] != 1 {
+		t.Fatalf("expected counts[1]=2 counts[2]=1, got %v", counts)
+	}
+}

@@ -177,6 +177,20 @@ func (a *App) ReceiptsPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Наличие файлов у документов — одним запросом к files.db (без N+1).
+	var fileCounts map[int64]int
+	if a.receiptFiles != nil && len(list) > 0 {
+		ids := make([]int64, len(list))
+		for i, rec := range list {
+			ids[i] = rec.ID
+		}
+		fileCounts, err = a.receiptFiles.CountByReceipts(r.Context(), ids)
+		if err != nil {
+			a.InternalError(w, r, err)
+			return
+		}
+	}
+
 	rows := make([]pages.ReceiptListRow, 0, len(list))
 	for _, rec := range list {
 		total, err := rec.DisplayValue("Total")
@@ -207,6 +221,8 @@ func (a *App) ReceiptsPage(w http.ResponseWriter, r *http.Request) {
 
 			CanEdit: !sent,
 			CanSend: !sent,
+
+			HasFiles: fileCounts[rec.ID] > 0,
 
 			FilesURL: a.URL("/receipts/" + idStr + "/files"),
 			CopyURL:  a.URL("/receipts/" + idStr + "/copy"),
@@ -371,6 +387,29 @@ func (a *App) ReceiptCard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Файлы документа нужны только в режиме просмотра (read-only):
+	// один запрос к files.db, без N+1. В режиме правки блок файлов
+	// не показывается.
+	var fileViews []pages.ReceiptFile
+	if !canEdit && doc.Receipt.ID > 0 && a.receiptFiles != nil {
+		files, err := a.receiptFiles.ListByReceipt(r.Context(), doc.Receipt.ID)
+		if err != nil {
+			a.InternalError(w, r, err)
+			return
+		}
+		if len(files) > 0 {
+			idStr := strconv.FormatInt(doc.Receipt.ID, 10)
+			fileViews = make([]pages.ReceiptFile, 0, len(files))
+			for _, f := range files {
+				fileViews = append(fileViews, pages.ReceiptFile{
+					Name: f.FileName,
+					Icon: "file-text",
+					URL:  a.URL("/receipts/" + idStr + "/files/" + strconv.FormatInt(f.ID, 10)),
+				})
+			}
+		}
+	}
+
 	page := pages.ReceiptCardPage{
 		Header:         a.pageHeader(r, "Товарные чеки"),
 		CanEdit:        canEdit,
@@ -389,6 +428,7 @@ func (a *App) ReceiptCard(w http.ResponseWriter, r *http.Request) {
 		CustomersJSON:  customersJSON,
 		ProductsJSON:   productsJSON,
 		Orgs:           organizationOptions,
+		Files:          fileViews,
 	}
 
 	pageFS, err := fs.Sub(receipts.Templates(), "card")

@@ -3,6 +3,7 @@ package receipts
 import (
 	"context"
 	"database/sql"
+	"strings"
 	"time"
 )
 
@@ -51,6 +52,49 @@ func (s *FileStore) ListByReceipt(ctx context.Context, receiptID int64) ([]*Rece
 		files = []*ReceiptFile{}
 	}
 	return files, nil
+}
+
+// CountByReceipts возвращает количество файлов для каждого документа из
+// списка. Выполняется одним запросом (files.db) — без N+1. Документы без
+// файлов и отсутствующие в списке в результат не попадают.
+func (s *FileStore) CountByReceipts(ctx context.Context, receiptIDs []int64) (map[int64]int, error) {
+	counts := make(map[int64]int, len(receiptIDs))
+	if len(receiptIDs) == 0 {
+		return counts, nil
+	}
+
+	placeholders := strings.Repeat("?,", len(receiptIDs))
+	placeholders = placeholders[:len(placeholders)-1]
+	args := make([]any, len(receiptIDs))
+	for i, id := range receiptIDs {
+		args[i] = id
+	}
+
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT receipt_id, COUNT(*)
+		FROM receipt_files
+		WHERE receipt_id IN (`+placeholders+`)
+		GROUP BY receipt_id
+	`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			receiptID int64
+			count     int
+		)
+		if err := rows.Scan(&receiptID, &count); err != nil {
+			return nil, err
+		}
+		counts[receiptID] = count
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return counts, nil
 }
 
 // GetByID возвращает файл вместе с содержимым. Оба идентификатора

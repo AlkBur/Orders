@@ -13,8 +13,10 @@ import (
 //	layout/*.html
 //	components/*.html
 //
-// pageFS must contain a single page.html. name selects the template to
-// execute (e.g. "base", "auth", "page_content", "dialog", ...).
+// pageFS must contain all template files of a component. Page templates
+// are not limited to a single page.html: fragments may live in dedicated
+// files (e.g. a modal template in modal.html). name selects the template
+// to execute (e.g. "base", "auth", "page_content", "dialog", ...).
 //
 // basePath — базовый префикс публикации приложения: передаётся в
 // Funcs и доступен шаблонам через {{ url "/..." }}.
@@ -30,7 +32,7 @@ func Render(w http.ResponseWriter, baseFS, pageFS fs.FS, basePath, name string, 
 	if err != nil {
 		return err
 	}
-	if tmpl, err = tmpl.ParseFS(pageFS, "page.html"); err != nil {
+	if tmpl, err = tmpl.ParseFS(pageFS, "*.html"); err != nil {
 		return err
 	}
 	return tmpl.ExecuteTemplate(w, name, data)

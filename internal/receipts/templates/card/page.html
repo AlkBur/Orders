@@ -420,6 +420,18 @@
 <h2>Позиции</h2>
 {{template "lines_view" .}}
 
+{{if .Files}}
+<h2>Файлы</h2>
+<ul class="receipts-file-list">
+  {{range .Files}}
+  <li class="receipts-file-item">
+    {{if .URL}}<a href="{{.URL}}" target="_blank" rel="noopener">{{icon .Icon}}<span>{{.Name}}</span></a>
+    {{else}}<span>{{icon .Icon}}<span>{{.Name}}</span></span>{{end}}
+  </li>
+  {{end}}
+</ul>
+{{end}}
+
 {{if .CanConfirmSend}}
 <form method="POST" action="{{ url (printf "/receipts/%d/send" $r.ID) }}" style="display:inline"
   data-confirm="Отправить документ в бухгалтерию?">
