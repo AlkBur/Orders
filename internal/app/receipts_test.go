@@ -4,14 +4,18 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"html"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"Orders/internal/customers"
 	"Orders/internal/organizations"
 	"Orders/internal/products"
 	"Orders/internal/receipts"
@@ -532,6 +536,296 @@ func TestReceiptsList_ActionsForThreeStates(t *testing.T) {
 	}
 }
 
+// ===========================================================================
+// keyset-пагинация списка чеков (lazy loading, sentinel)
+// ===========================================================================
+
+// insertReceiptRaw вставляет чек с заданным номером и датой напрямую в БД.
+func insertReceiptRaw(t *testing.T, db *sql.DB, orgID int64, number, date string) int64 {
+	t.Helper()
+	res, err := db.Exec(`
+		INSERT INTO receipts (uuid, exchange_id, number, date, organization_id,
+			user_id, customer_id, total, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, 1, 1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+	`, "uuid-"+number, "exch-"+number, number, date, orgID)
+	if err != nil {
+		t.Fatalf("insert receipt %s: %v", number, err)
+	}
+	id, _ := res.LastInsertId()
+	return id
+}
+
+// receiptEditURLs извлекает из тела ссылки «Редактировать» — по одной
+// на строку журнала. Уникальность URL используется как идентичность
+// документа при проверке отсутствия дублей между порциями.
+func receiptEditURLs(t *testing.T, body string) []string {
+	t.Helper()
+	re := regexp.MustCompile(`href="([^"]+)" title="Редактировать"`)
+	ms := re.FindAllStringSubmatch(body, -1)
+	urls := make([]string, 0, len(ms))
+	for _, m := range ms {
+		urls = append(urls, m[1])
+	}
+	return urls
+}
+
+// receiptLoadMoreURL извлекает URL следующей порции из sentinel
+// lazy loading. Возвращает пустую строку, если sentinel отсутствует.
+// URL в атрибуте HTML-экранирован (&amp;) — восстанавливаем символы.
+func receiptLoadMoreURL(t *testing.T, body string) string {
+	t.Helper()
+	re := regexp.MustCompile(`id="receipts-load-more" hx-get="([^"]+)"`)
+	m := re.FindStringSubmatch(body)
+	if m == nil {
+		return ""
+	}
+	return html.UnescapeString(m[1])
+}
+
+// receiptAfterFromLoadMoreURL извлекает из URL следующей порции параметр
+// after (непрозрачный курсор).
+func receiptAfterFromLoadMoreURL(t *testing.T, loadMoreURL string) string {
+	t.Helper()
+	u, err := url.Parse(loadMoreURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return u.Query().Get("after")
+}
+
+// TestReceiptsList_LimitDefaultsTo50 проверяет, что без параметра limit
+// выводится первая порция из 50 документов и sentinel для подгрузки.
+func TestReceiptsList_LimitDefaultsTo50(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	orgID, _ := insertOrg(t, db, "LimitOrg", "k_limit")
+	app := &App{receipts: receipts.NewStore(db)}
+	for i := 1; i <= 51; i++ {
+		insertReceiptRaw(t, db, orgID, "l"+strconv.Itoa(i), "2026-08-01")
+	}
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/receipts", nil)
+	app.ReceiptsPage(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, `id="receipts-load-more"`) {
+		t.Fatal("expected sentinel when there are more than 50 receipts")
+	}
+	if got := len(receiptEditURLs(t, body)); got != 50 {
+		t.Fatalf("expected 50 rows by default, got %d", got)
+	}
+}
+
+// TestReceiptsList_NoSentinelWhenRowsFitLimit проверяет, что sentinel не
+// выводится, когда все документы уместились в одной порции.
+func TestReceiptsList_NoSentinelWhenRowsFitLimit(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	orgID, _ := insertOrg(t, db, "SmallOrg", "k_small")
+	app := &App{receipts: receipts.NewStore(db)}
+	for i := 1; i <= 3; i++ {
+		insertReceiptRaw(t, db, orgID, "s"+strconv.Itoa(i), "2026-08-01")
+	}
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/receipts", nil)
+	app.ReceiptsPage(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	if strings.Contains(body, `id="receipts-load-more"`) {
+		t.Fatal("expected no sentinel when rows fit in one page")
+	}
+	if got := len(receiptEditURLs(t, body)); got != 3 {
+		t.Fatalf("expected 3 rows, got %d", got)
+	}
+}
+
+// TestReceiptsList_LimitParam проверяет разбор параметра limit: валидные
+// значения меняют размер порции, недопустимые значения дают 400.
+func TestReceiptsList_LimitParam(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	orgID, _ := insertOrg(t, db, "LimitParamOrg", "k_lp")
+	app := &App{receipts: receipts.NewStore(db)}
+	for i := 1; i <= 5; i++ {
+		insertReceiptRaw(t, db, orgID, "p"+strconv.Itoa(i), "2026-08-01")
+	}
+
+	w := httptest.NewRecorder()
+	app.ReceiptsPage(w, httptest.NewRequest(http.MethodGet, "/receipts?limit=1", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("limit=1: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if got := len(receiptEditURLs(t, w.Body.String())); got != 1 {
+		t.Fatalf("limit=1: expected 1 row, got %d", got)
+	}
+
+	w2 := httptest.NewRecorder()
+	app.ReceiptsPage(w2, httptest.NewRequest(http.MethodGet, "/receipts?limit=100", nil))
+	if w2.Code != http.StatusOK {
+		t.Fatalf("limit=100: expected 200, got %d: %s", w2.Code, w2.Body.String())
+	}
+	if got := len(receiptEditURLs(t, w2.Body.String())); got != 5 {
+		t.Fatalf("limit=100: expected 5 rows, got %d", got)
+	}
+
+	for _, bad := range []string{"0", "-1", "101", "abc"} {
+		w3 := httptest.NewRecorder()
+		app.ReceiptsPage(w3, httptest.NewRequest(http.MethodGet, "/receipts?limit="+bad, nil))
+		if w3.Code != http.StatusBadRequest {
+			t.Fatalf("limit=%q: expected 400, got %d", bad, w3.Code)
+		}
+	}
+}
+
+// TestReceiptsList_AfterCursor проверяет keyset-пагинацию end-to-end:
+// следующие порции подтягиваются через sentinel, документы не теряются
+// и не дублируются.
+func TestReceiptsList_AfterCursor(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	orgID, _ := insertOrg(t, db, "CursorOrg", "k_cursor")
+	app := &App{receipts: receipts.NewStore(db)}
+	for i := 1; i <= 7; i++ {
+		insertReceiptRaw(t, db, orgID, "c"+strconv.Itoa(i), "2026-08-01")
+	}
+
+	var collected []string
+	nextURL := "/receipts?limit=3"
+	for {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, nextURL, nil)
+		if strings.Contains(nextURL, "part=rows") {
+			r.Header.Set("HX-Request", "true")
+		}
+		app.ReceiptsPage(w, r)
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+		body := w.Body.String()
+		collected = append(collected, receiptEditURLs(t, body)...)
+
+		next := receiptLoadMoreURL(t, body)
+		if next == "" {
+			break
+		}
+		nextURL = next
+	}
+
+	if len(collected) != 7 {
+		t.Fatalf("expected 7 rows across pages, got %d", len(collected))
+	}
+	seen := make(map[string]bool)
+	for _, u := range collected {
+		if seen[u] {
+			t.Fatalf("duplicate row across pages: %s", u)
+		}
+		seen[u] = true
+	}
+}
+
+// TestReceiptsList_FragmentRowsNoBrowser проверяет, что запрос порции
+// (part=rows) возвращает только строки и sentinel, без обёртки браузера.
+func TestReceiptsList_FragmentRowsNoBrowser(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	orgID, _ := insertOrg(t, db, "FragOrg", "k_frag")
+	app := &App{receipts: receipts.NewStore(db)}
+	for i := 1; i <= 2; i++ {
+		insertReceiptRaw(t, db, orgID, "f"+strconv.Itoa(i), "2026-08-01")
+	}
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/receipts?part=rows&limit=2", nil)
+	r.Header.Set("HX-Request", "true")
+	app.ReceiptsPage(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "receipts-row") {
+		t.Fatal("expected rows fragment")
+	}
+	if strings.Contains(body, "receipts-browser") {
+		t.Fatal("rows fragment must not include the browser container")
+	}
+}
+
+// TestReceiptsList_InvalidCursor проверяет, что повреждённый или поддельный
+// курсор after возвращает 400, а не молчаливую перезагрузку первой порции.
+func TestReceiptsList_InvalidCursor(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	orgID, _ := insertOrg(t, db, "BadCursorOrg", "k_bad")
+	app := &App{receipts: receipts.NewStore(db)}
+	insertReceiptRaw(t, db, orgID, "b1", "2026-08-01")
+
+	for _, after := range []string{
+		"garbage",
+		"###",
+		encodeReceiptCursor(receipts.Cursor{ID: 0}),
+	} {
+		w := httptest.NewRecorder()
+		app.ReceiptsPage(w, httptest.NewRequest(http.MethodGet, "/receipts?after="+after, nil))
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("after=%q: expected 400, got %d", after, w.Code)
+		}
+	}
+}
+
+// TestReceiptsList_AfterFromDifferentQuery проверяет, что курсор одной
+// выборки безопасно применять к другой: WHERE (поиск и фильтры)
+// применяется до курсорного предиката.
+func TestReceiptsList_AfterFromDifferentQuery(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	orgID, _ := insertOrg(t, db, "QueryOrg", "k_query")
+	app := &App{receipts: receipts.NewStore(db)}
+
+	for _, n := range []string{"alpha-1", "beta-1", "alpha-2", "beta-2", "alpha-3", "beta-3"} {
+		insertReceiptRaw(t, db, orgID, n, "2026-08-01")
+	}
+
+	// Первая порция по alpha: две самых новых (id DESC) строки alpha.
+	w := httptest.NewRecorder()
+	app.ReceiptsPage(w, httptest.NewRequest(http.MethodGet, "/receipts?q=alpha&limit=2", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	alphaBody := w.Body.String()
+	if got := len(receiptEditURLs(t, alphaBody)); got != 2 {
+		t.Fatalf("expected 2 alpha rows, got %d", got)
+	}
+	loadMore := receiptLoadMoreURL(t, alphaBody)
+	if loadMore == "" {
+		t.Fatal("expected sentinel on alpha page")
+	}
+	after := receiptAfterFromLoadMoreURL(t, loadMore)
+	if after == "" {
+		t.Fatal("expected after param in load-more URL")
+	}
+
+	// Применяем курсор alpha к выборке beta: оставшиеся после позиции
+	// документы обязаны быть beta.
+	w2 := httptest.NewRecorder()
+	r2 := httptest.NewRequest(http.MethodGet, "/receipts?q=beta&limit=10&after="+after, nil)
+	r2.Header.Set("HX-Request", "true")
+	app.ReceiptsPage(w2, r2)
+	if w2.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w2.Code, w2.Body.String())
+	}
+	betaBody := w2.Body.String()
+	if strings.Contains(betaBody, "alpha") {
+		t.Fatalf("alpha document leaked into beta page: %s", betaBody)
+	}
+	// Номер выводится с подсветкой совпадений поиска (<mark>beta</mark>-1).
+	urls := receiptEditURLs(t, betaBody)
+	if len(urls) != 1 || urls[0] != "/receipts/2" {
+		t.Fatalf("expected single beta-1 row, got %v:\n%s", urls, betaBody)
+	}
+}
+
 // TestReceiptsList_StatusCell — порядок ячеек журнала и семантический
 // класс статуса. Проверяется структура целиком: Номер → Дата → Организация →
 // Контрагент → Сумма → Статус → Действия. Статус передаётся как
@@ -911,4 +1205,366 @@ func insertProduct(t *testing.T, dbt *sql.DB, orgID int64, name, unit string) (i
 	}
 	id, _ := res.LastInsertId()
 	return id, name
+}
+
+// saveCustomer создаёт контрагента в организации и возвращает его ID.
+func saveCustomer(t *testing.T, db *sql.DB, orgID int64, name string) int64 {
+	t.Helper()
+	store := customers.NewStore(db)
+	c := store.New()
+	c.UUID = "uuid-" + name
+	c.Name = name
+	c.OrganizationID = orgID
+	if err := store.Save(context.Background(), c); err != nil {
+		t.Fatal(err)
+	}
+	return c.ID
+}
+
+// TestReceiptsList_FilterParams — расширенный отбор применён: список
+// сужается по периоду, сумме, организации, контрагенту и статусу;
+// панель открыта, кнопка «Фильтр» активна, значения попадают в payload.
+func TestReceiptsList_FilterParams(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	orgID, _ := insertOrg(t, db, "FilterOrg", "kf")
+	custID := saveCustomer(t, db, orgID, "Filter Customer")
+
+	app := &App{
+		receipts:      receipts.NewStore(db),
+		organizations: organizations.NewStore(db),
+		customers:     customers.NewStore(db),
+	}
+
+	rec := &receipts.Receipt{
+		Number:         "F001",
+		Date:           time.Date(2026, 5, 10, 12, 0, 0, 0, time.Local),
+		OrganizationID: orgID,
+		UserID:         1,
+		CustomerID:     custID,
+		Total:          777,
+	}
+	if err := app.receipts.Save(context.Background(), &receipts.Document{Receipt: rec}); err != nil {
+		t.Fatal(err)
+	}
+
+	params := url.Values{}
+	params.Set("date_from", "2026-05-01")
+	params.Set("date_to", "2026-05-31")
+	params.Set("amount_from", "700")
+	params.Set("amount_to", "800")
+	params.Set("organization_id", strconv.FormatInt(orgID, 10))
+	params.Set("customer_id", strconv.FormatInt(custID, 10))
+	params.Set("status", receipts.StatusCreated)
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/receipts?"+params.Encode(), nil)
+	app.ReceiptsPage(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+
+	if !strings.Contains(body, "F001") {
+		t.Fatalf("expected receipt in filtered list:\n%s", body)
+	}
+	if !strings.Contains(body, `class="button filter-toggle is-info"`) {
+		t.Fatal("expected filter toggle button to be active")
+	}
+	if !strings.Contains(body, `&#34;open&#34;:true`) {
+		t.Fatal("expected filter panel payload to be open")
+	}
+	if !strings.Contains(body, `class="filter-panel"`) {
+		t.Fatal("expected filter panel markup")
+	}
+	if !strings.Contains(body, `<option value="`+receipts.StatusCreated+`" selected>`+receipts.StatusCreated) {
+		t.Fatal("expected created status option selected")
+	}
+	// Серверное имя выбранного контрагента попадает в payload справочника.
+	if !strings.Contains(body, "Filter Customer") {
+		t.Fatal("expected customer dictionary in filter payload")
+	}
+	// Выбранный контрагент попадает в payload.
+	if !strings.Contains(body, "&#34;customerId&#34;:"+strconv.FormatInt(custID, 10)) {
+		t.Fatal("expected selected customerId in filter payload")
+	}
+}
+
+// TestReceiptsList_FilterCustomerPicker — контрагент в панели фильтра
+// выбирается поисковым picker (модальное окно), а не <select>: панель
+// содержит поле отображения, кнопки «Выбрать»/«Очистить», скрытый input
+// customer_id и модалку с поиском и списком.
+func TestReceiptsList_FilterCustomerPicker(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	orgID, _ := insertOrg(t, db, "FilterOrg", "kf")
+	saveCustomer(t, db, orgID, "Иванов ООО")
+	saveCustomer(t, db, orgID, "Альфа ООО")
+
+	app := &App{
+		receipts:      receipts.NewStore(db),
+		organizations: organizations.NewStore(db),
+		customers:     customers.NewStore(db),
+	}
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/receipts", nil)
+	app.ReceiptsPage(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+
+	// Справочник контрагентов приходит целиком в payload.
+	if !strings.Contains(body, "Иванов ООО") || !strings.Contains(body, "Альфа ООО") {
+		t.Fatal("expected customers dictionary in filter payload")
+	}
+
+	// UI: поисковый picker вместо <select>.
+	if strings.Contains(body, `<select name="customer_id"`) {
+		t.Fatal("expected customer picker to replace <select>")
+	}
+	if !strings.Contains(body, `name="customer_id"`) {
+		t.Fatal("expected hidden customer_id input")
+	}
+	if !strings.Contains(body, `@click="openCustomerPicker()"`) {
+		t.Fatal("expected customer picker open button")
+	}
+	if !strings.Contains(body, `@click="clearCustomer()"`) {
+		t.Fatal("expected customer clear button")
+	}
+	if !strings.Contains(body, "Выбор контрагента") {
+		t.Fatal("expected customer picker modal")
+	}
+	if !strings.Contains(body, `placeholder="Поиск контрагентов..."`) {
+		t.Fatal("expected search field in customer picker modal")
+	}
+}
+
+// TestReceiptsList_FilterExcludes — чек вне заданного периода отсеивается.
+func TestReceiptsList_FilterExcludes(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	orgID, _ := insertOrg(t, db, "FilterOrg", "kf")
+	app := &App{
+		receipts:      receipts.NewStore(db),
+		organizations: organizations.NewStore(db),
+	}
+
+	rec := &receipts.Receipt{
+		Number:         "F002",
+		Date:           time.Date(2026, 1, 1, 12, 0, 0, 0, time.Local),
+		OrganizationID: orgID,
+		UserID:         1,
+		CustomerID:     1,
+		Total:          50,
+	}
+	if err := app.receipts.Save(context.Background(), &receipts.Document{Receipt: rec}); err != nil {
+		t.Fatal(err)
+	}
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/receipts?date_from=2026-06-01", nil)
+	app.ReceiptsPage(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if strings.Contains(w.Body.String(), "F002") {
+		t.Fatal("expected receipt to be excluded by date filter")
+	}
+}
+
+// TestReceiptsList_FilterPairValidation — контрагент, принадлежащий другой
+// организации, чем выбранная, отбрасывается на сервере (не только в UI):
+// фильтр по контрагенту не применяется, список не сужается.
+func TestReceiptsList_FilterPairValidation(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	orgID, _ := insertOrg(t, db, "OrgA", "ka")
+	orgBID, _ := insertOrg(t, db, "OrgB", "kb")
+	foreignCust := saveCustomer(t, db, orgBID, "Foreign Customer")
+
+	app := &App{
+		receipts:      receipts.NewStore(db),
+		organizations: organizations.NewStore(db),
+		customers:     customers.NewStore(db),
+	}
+
+	// Чек в OrgA.
+	rec := &receipts.Receipt{
+		Number:         "F003",
+		Date:           time.Date(2026, 5, 10, 12, 0, 0, 0, time.Local),
+		OrganizationID: orgID,
+		UserID:         1,
+		CustomerID:     1,
+		Total:          100,
+	}
+	if err := app.receipts.Save(context.Background(), &receipts.Document{Receipt: rec}); err != nil {
+		t.Fatal(err)
+	}
+
+	// customer_id принадлежит OrgB, но organization_id = OrgA — пара
+	// невалидна, контрагент должен быть сброшен и фильтр не сузить список.
+	params := url.Values{}
+	params.Set("organization_id", strconv.FormatInt(orgID, 10))
+	params.Set("customer_id", strconv.FormatInt(foreignCust, 10))
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/receipts?"+params.Encode(), nil)
+	app.ReceiptsPage(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "F003") {
+		t.Fatalf("expected receipt to remain after dropping invalid customer:\n%s", body)
+	}
+	// В payload customerId сброшен в 0.
+	if !strings.Contains(body, `&#34;customerId&#34;:0`) {
+		t.Fatal("expected invalid customer to be dropped from filter payload")
+	}
+}
+
+// TestReceiptsList_FragmentRendersBrowser — фрагмент-ответ (живой поиск /
+// применение фильтра) перерисовывает обёртку receipts-browser целиком.
+func TestReceiptsList_FragmentRendersBrowser(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	insertOrg(t, db, "FilterOrg", "kf")
+	app := &App{
+		receipts:      receipts.NewStore(db),
+		organizations: organizations.NewStore(db),
+	}
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/receipts", nil)
+	r.Header.Set("HX-Request", "true")
+	app.ReceiptsPage(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, `<div id="receipts-browser"`) {
+		t.Fatal("expected fragment to render the receipts-browser wrapper")
+	}
+	if strings.Contains(body, "/static/favicon.ico") {
+		t.Fatal("expected fragment without the base layout")
+	}
+}
+
+// TestReceiptsList_MarkMatches — найденные слова подсвечиваются тегом
+// <mark> в ячейках текстового поиска.
+func TestReceiptsList_MarkMatches(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	orgID, _ := insertOrg(t, db, "Ромашка", "kf")
+	app := &App{
+		receipts:      receipts.NewStore(db),
+		organizations: organizations.NewStore(db),
+	}
+
+	rec := &receipts.Receipt{
+		Number:         "F004",
+		Date:           time.Date(2026, 5, 10, 12, 0, 0, 0, time.Local),
+		OrganizationID: orgID,
+		UserID:         1,
+		CustomerID:     1,
+		Total:          100,
+	}
+	if err := app.receipts.Save(context.Background(), &receipts.Document{Receipt: rec}); err != nil {
+		t.Fatal(err)
+	}
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/receipts?q=ромашка", nil)
+	app.ReceiptsPage(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "<mark>Ромашка</mark>") {
+		t.Fatalf("expected highlighted match in organization cell:\n%s", body)
+	}
+}
+
+// TestParseReceiptFilter — разбор параметров расширенного отбора:
+// невалидные значения отбрасываются, валидные проходят.
+func TestParseReceiptFilter(t *testing.T) {
+	cases := []struct {
+		name   string
+		params map[string]string
+		check  func(t *testing.T, f receiptFilter)
+	}{
+		{
+			name: "valid all",
+			params: map[string]string{
+				"date_from":       "2026-05-01",
+				"date_to":         "2026-05-31",
+				"amount_from":     "100.5",
+				"amount_to":       "900",
+				"organization_id": "7",
+				"customer_id":     "9",
+				"status":          receipts.StatusAccepted,
+			},
+			check: func(t *testing.T, f receiptFilter) {
+				if f.dateFrom != "2026-05-01" || f.dateTo != "2026-05-31" {
+					t.Error("expected dates parsed")
+				}
+				if f.amountFrom == nil || *f.amountFrom != 100.5 || f.amountTo == nil || *f.amountTo != 900 {
+					t.Error("expected amounts parsed")
+				}
+				if f.orgID != 7 || f.custID != 9 || f.status != receipts.StatusAccepted {
+					t.Error("expected ids and status parsed")
+				}
+				if !f.active() {
+					t.Error("expected filter active")
+				}
+			},
+		},
+		{
+			name: "invalid dropped",
+			params: map[string]string{
+				"date_from":   "01.05.2026",
+				"amount_from": "abc",
+				"amount_to":   "-5",
+				"org":         "x",
+			},
+			check: func(t *testing.T, f receiptFilter) {
+				if f.dateFrom != "" {
+					t.Error("expected invalid date dropped")
+				}
+				if f.amountFrom != nil || f.amountTo != nil {
+					t.Error("expected invalid amounts dropped")
+				}
+				if f.orgID != 0 || f.custID != 0 {
+					t.Error("expected invalid ids dropped")
+				}
+				if f.active() {
+					t.Error("expected inactive filter for all-invalid params")
+				}
+			},
+		},
+		{
+			name:   "unknown status dropped",
+			params: map[string]string{"status": "Неизвестный"},
+			check: func(t *testing.T, f receiptFilter) {
+				if f.status != "" {
+					t.Error("expected unknown status dropped")
+				}
+			},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			target := "/receipts"
+			first := true
+			for k, v := range c.params {
+				if first {
+					target += "?"
+					first = false
+				} else {
+					target += "&"
+				}
+				target += url.QueryEscape(k) + "=" + url.QueryEscape(v)
+			}
+			r := httptest.NewRequest(http.MethodGet, target, nil)
+			c.check(t, parseReceiptFilter(r))
+		})
+	}
 }

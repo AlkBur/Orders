@@ -13,6 +13,7 @@ import (
 	"Orders/internal/app/pages"
 	"Orders/internal/common"
 	"Orders/internal/customers"
+	"Orders/internal/database/search"
 	"Orders/internal/entity"
 	"Orders/internal/organizations"
 	"Orders/internal/products"
@@ -166,37 +167,153 @@ func buildReceiptSendConfirmPage(header ui.HeaderData, doc *receipts.Document, f
 func (a *App) ReceiptsPage(w http.ResponseWriter, r *http.Request) {
 	NoCache(w)
 
+	limit, err := receiptListLimit(r)
+	if err != nil {
+		a.BadRequest(w, err.Error())
+		return
+	}
+	after, err := parseReceiptAfter(r.URL.Query().Get("after"))
+	if err != nil {
+		a.BadRequest(w, err.Error())
+		return
+	}
+
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	filter := parseReceiptFilter(r)
 
 	fields := receipts.Descriptor.ListFields()
 	visibleFields := entity.Names(fields)
 
-	list, err := a.receipts.List(r.Context(), receipts.ListOptions{Query: query}, visibleFields)
+	// Справочники для пикеров панели фильтра: один запрос на справочник
+	// (без N+1). Те же данные используются для валидации связи
+	// организация → контрагент и для имён выбранных значений.
+	var orgs []*organizations.Organization
+	if a.organizations != nil {
+		var err error
+		orgs, err = a.organizations.List(r.Context(), organizations.ListOptions{}, nil)
+		if err != nil {
+			a.InternalError(w, r, err)
+			return
+		}
+	}
+	var custs []*customers.Customer
+	if a.customers != nil {
+		var err error
+		custs, err = a.customers.List(r.Context(), 0, customers.ListOptions{}, nil)
+		if err != nil {
+			a.InternalError(w, r, err)
+			return
+		}
+	}
+	filter = validateReceiptFilterPair(filter, custs)
+
+	// Только одна порция (keyset-пагинация). Поиск и фильтры применяются
+	// в SQL до LIMIT; связанные данные считаются только для этой порции.
+	listPage, err := a.receipts.ListPage(r.Context(), receipts.ListOptions{
+		Query:  query,
+		Limit:  limit,
+		After:  after,
+		Filter: filter.storeFilter(),
+	}, visibleFields)
 	if err != nil {
 		a.InternalError(w, r, err)
 		return
 	}
 
-	// Наличие файлов у документов — одним запросом к files.db (без N+1).
-	var fileCounts map[int64]int
-	if a.receiptFiles != nil && len(list) > 0 {
-		ids := make([]int64, len(list))
-		for i, rec := range list {
-			ids[i] = rec.ID
-		}
-		fileCounts, err = a.receiptFiles.CountByReceipts(r.Context(), ids)
-		if err != nil {
+	words := search.NormalizeQuery(query).Words
+
+	rows, err := a.buildReceiptListRows(r.Context(), listPage.Items, words)
+	if err != nil {
+		a.InternalError(w, r, err)
+		return
+	}
+
+	searchData := &ui.SearchData{
+		URL:         a.URL(RouteReceipts),
+		Placeholder: "Поиск чеков...",
+		Query:       query,
+		Mode:        ui.SearchLive,
+		TargetID:    "#receipts-browser",
+	}
+	if a.organizations != nil || a.customers != nil {
+		searchData.Filter = buildFilterData(filter, orgs, custs)
+	}
+
+	page := pages.ReceiptsListPage{
+		Page:   pages.Page{Title: "Товарные чеки"},
+		Header: a.pageHeader(r, "Товарные чеки"),
+		Toolbar: &ui.ToolbarData{
+			Buttons: []ui.Button{
+				{Style: ui.ButtonPrimary, Text: "Добавить", URL: a.URL("/receipts/new"), Icon: "plus"},
+			},
+		},
+		Search: searchData,
+		Rows:   rows,
+		NewURL: a.URL("/receipts/new"),
+	}
+	if listPage.HasMore {
+		page.HasMore = true
+		page.LoadMoreURL = a.receiptListLoadMoreURL(query, filter, limit, *listPage.Next)
+	}
+
+	if flash, err := a.consumeFlash(r); err != nil {
+		a.InternalError(w, r, err)
+		return
+	} else if flash != nil {
+		page.Alert = FlashToAlert(*flash)
+	}
+
+	pageFS, err := fs.Sub(receipts.Templates(), "list")
+	if err != nil {
+		a.InternalError(w, r, err)
+		return
+	}
+
+	if ResponseModeFromRequest(r) == Fragment && r.URL.Query().Get("part") == "rows" {
+		if err := ui.Render(w, TemplateFS(), pageFS, a.basePath(), "receipts_rows", page); err != nil {
 			a.InternalError(w, r, err)
-			return
+		}
+		return
+	}
+	if ResponseModeFromRequest(r) == Fragment {
+		if err := ui.Render(w, TemplateFS(), pageFS, a.basePath(), "receipts_browser", page); err != nil {
+			a.InternalError(w, r, err)
+		}
+		return
+	}
+	if err := ui.RenderPage(w, TemplateFS(), pageFS, a.basePath(), page); err != nil {
+		a.InternalError(w, r, err)
+	}
+}
+
+// buildReceiptListRows собирает готовые строки списка чеков. Связанные
+// данные (fileCounts из отдельной базы files.db) вычисляются одним запросом
+// строго для переданной порции документов, без N+1 и без выборок для
+// всей таблицы.
+func (a *App) buildReceiptListRows(ctx context.Context, list []*receipts.Receipt, words []string) ([]pages.ReceiptListRow, error) {
+	rows := make([]pages.ReceiptListRow, 0, len(list))
+	if len(list) == 0 {
+		return rows, nil
+	}
+
+	ids := make([]int64, len(list))
+	for i, rec := range list {
+		ids[i] = rec.ID
+	}
+
+	var fileCounts map[int64]int
+	if a.receiptFiles != nil {
+		var err error
+		fileCounts, err = a.receiptFiles.CountByReceipts(ctx, ids)
+		if err != nil {
+			return nil, err
 		}
 	}
 
-	rows := make([]pages.ReceiptListRow, 0, len(list))
 	for _, rec := range list {
 		total, err := rec.DisplayValue("Total")
 		if err != nil {
-			a.InternalError(w, r, err)
-			return
+			return nil, err
 		}
 
 		presentation := statusPresentation(rec.Status, rec.CreatedAt, rec.SentAt)
@@ -205,10 +322,10 @@ func (a *App) ReceiptsPage(w http.ResponseWriter, r *http.Request) {
 		idStr := strconv.FormatInt(rec.ID, 10)
 
 		rows = append(rows, pages.ReceiptListRow{
-			Number:       rec.Number,
+			Number:       ui.MarkMatches(rec.Number, words),
 			Date:         rec.Date.Format("02.01.2006"),
-			Organization: rec.OrganizationName,
-			Customer:     rec.CustomerName,
+			Organization: ui.MarkMatches(rec.OrganizationName, words),
+			Customer:     ui.MarkMatches(rec.CustomerName, words),
 			Total:        total,
 			Status:       presentation.Display,
 			StatusKey:    string(presentation.StatusKey),
@@ -225,42 +342,7 @@ func (a *App) ReceiptsPage(w http.ResponseWriter, r *http.Request) {
 			EditURL:  base,
 		})
 	}
-
-	page := pages.ReceiptsListPage{
-		Page:   pages.Page{Title: "Товарные чеки"},
-		Header: a.pageHeader(r, "Товарные чеки"),
-		Toolbar: &ui.ToolbarData{
-			Buttons: []ui.Button{
-				{Style: ui.ButtonPrimary, Text: "Добавить", URL: a.URL("/receipts/new"), Icon: "plus"},
-			},
-		},
-		Search: &ui.SearchData{URL: a.URL(RouteReceipts), Placeholder: "Поиск чеков...", Query: query, Mode: ui.SearchLive},
-		Rows:   rows,
-		NewURL: a.URL("/receipts/new"),
-	}
-
-	if flash, err := a.consumeFlash(r); err != nil {
-		a.InternalError(w, r, err)
-		return
-	} else if flash != nil {
-		page.Alert = FlashToAlert(*flash)
-	}
-
-	pageFS, err := fs.Sub(receipts.Templates(), "list")
-	if err != nil {
-		a.InternalError(w, r, err)
-		return
-	}
-
-	if ResponseModeFromRequest(r) == Fragment {
-		if err := ui.Render(w, TemplateFS(), pageFS, a.basePath(), "receipts_list", page); err != nil {
-			a.InternalError(w, r, err)
-		}
-		return
-	}
-	if err := ui.RenderPage(w, TemplateFS(), pageFS, a.basePath(), page); err != nil {
-		a.InternalError(w, r, err)
-	}
+	return rows, nil
 }
 
 func (a *App) ReceiptCard(w http.ResponseWriter, r *http.Request) {

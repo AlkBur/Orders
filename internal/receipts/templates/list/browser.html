@@ -1,0 +1,17 @@
+{{define "receipts_browser"}}
+<div id="receipts-browser" class="receipts-browser"
+     x-data="receiptsFilter($el)"
+     data-filter="{{with .Search.Filter}}{{.PayloadJSON}}{{end}}">
+  <div class="level mb-3">
+    {{if .Toolbar}}<div class="level-left">
+      <div class="level-item">{{template "toolbar" .Toolbar}}</div>
+    </div>{{end}}
+    <div class="level-right">
+      {{if .Search}}<div class="level-item">{{template "search" .Search}}</div>{{end}}
+      {{if .Search.Filter}}<div class="level-item">{{template "receipts_filter_toggle" .Search.Filter}}</div>{{end}}
+    </div>
+  </div>
+  {{if .Search.Filter}}{{template "receipts_filter" .}}{{end}}
+  {{template "receipts_list" .}}
+</div>
+{{end}}

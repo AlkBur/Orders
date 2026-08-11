@@ -1,19 +1,42 @@
 {{define "page_content"}}
 {{if .Alert}}{{template "alert" .Alert}}{{end}}
-<div class="level mb-3">
-  {{if .Toolbar}}<div class="level-left">
-    <div class="level-item">{{template "toolbar" .Toolbar}}</div>
-  </div>{{end}}
-  {{if .Search}}<div class="level-right">
-    <div class="level-item">{{template "search" .Search}}</div>
-  </div>{{end}}
-</div>
-{{template "receipts_list" .}}
+{{template "receipts_browser" .}}
 {{template "receipts_files_host" .}}
 {{end}}
 
 {{define "page_scripts"}}
 <script src="{{ url "/static/js/receipts.js" }}"></script>
+<script src="{{ url "/static/js/filter.js" }}"></script>
+{{end}}
+
+{{define "receipts_rows"}}
+{{range .Rows}}
+<div class="receipts-row">
+  <div class="receipts-cell">{{.Number}}</div>
+  <div class="receipts-cell">{{.Date}}</div>
+  <div class="receipts-cell"><span class="receipts-cell-value">{{.Organization}}</span></div>
+  <div class="receipts-cell"><span class="receipts-cell-value">{{.Customer}}</span></div>
+  <div class="receipts-cell">{{.Total}}</div>
+  <div class="receipts-cell"><span class="receipts-status is-{{.StatusKey}}">{{.Status}}</span></div>
+  <div class="receipts-cell is-actions">
+    <div class="receipts-actions">
+      {{if .HasFiles}}<a class="button is-primary is-small" href="{{.FilesURL}}" data-dialog-url="{{.FilesURL}}" title="Файлы">{{icon
+        "paperclip"}}<span class="receipts-action-label">Файлы</span></a>{{end}}
+      <a class="button is-info is-small" href="{{.CopyURL}}" title="Копировать">{{icon "file-plus"}}<span
+          class="receipts-action-label">Копировать</span></a>
+      {{if .CanSend}}<a class="button is-success is-small" href="{{.SendURL}}" title="Отправить">{{icon "send"}}<span
+          class="receipts-action-label">Отправить</span></a>{{end}}
+      <a class="button is-link is-small" href="{{.ViewURL}}" title="Просмотр">{{icon "file-search"}}<span
+          class="receipts-action-label">Просмотр</span></a>
+      {{if .CanEdit}}<a class="button is-warning is-small" href="{{.EditURL}}" title="Редактировать">{{icon
+        "file-pen"}}<span class="receipts-action-label">Изменить</span></a>{{end}}
+    </div>
+  </div>
+</div>
+{{end}}
+{{if .HasMore}}
+<div id="receipts-load-more" hx-get="{{.LoadMoreURL}}" hx-trigger="revealed" hx-swap="outerHTML"></div>
+{{end}}
 {{end}}
 
 {{define "receipts_list"}}
@@ -27,30 +50,7 @@
     <div class="receipts-cell">Статус</div>
     <div class="receipts-cell is-actions"></div>
   </div>
-  {{range .Rows}}
-  <div class="receipts-row">
-    <div class="receipts-cell">{{.Number}}</div>
-    <div class="receipts-cell">{{.Date}}</div>
-    <div class="receipts-cell"><span class="receipts-cell-value">{{.Organization}}</span></div>
-    <div class="receipts-cell"><span class="receipts-cell-value">{{.Customer}}</span></div>
-    <div class="receipts-cell">{{.Total}}</div>
-    <div class="receipts-cell"><span class="receipts-status is-{{.StatusKey}}">{{.Status}}</span></div>
-    <div class="receipts-cell is-actions">
-      <div class="receipts-actions">
-        {{if .HasFiles}}<a class="button is-primary is-small" href="{{.FilesURL}}" data-dialog-url="{{.FilesURL}}" title="Файлы">{{icon
-          "paperclip"}}<span class="receipts-action-label">Файлы</span></a>{{end}}
-        <a class="button is-info is-small" href="{{.CopyURL}}" title="Копировать">{{icon "file-plus"}}<span
-            class="receipts-action-label">Копировать</span></a>
-        {{if .CanSend}}<a class="button is-success is-small" href="{{.SendURL}}" title="Отправить">{{icon "send"}}<span
-            class="receipts-action-label">Отправить</span></a>{{end}}
-        <a class="button is-link is-small" href="{{.ViewURL}}" title="Просмотр">{{icon "file-search"}}<span
-            class="receipts-action-label">Просмотр</span></a>
-        {{if .CanEdit}}<a class="button is-warning is-small" href="{{.EditURL}}" title="Редактировать">{{icon
-          "file-pen"}}<span class="receipts-action-label">Изменить</span></a>{{end}}
-      </div>
-    </div>
-  </div>
-  {{end}}
+  {{template "receipts_rows" .}}
   {{if eq (len .Rows) 0}}
   <div class="receipts-row is-empty">
     <div class="receipts-cell">Нет данных</div>

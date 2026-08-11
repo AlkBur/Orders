@@ -8,6 +8,7 @@ import (
 
 	"Orders/internal/customers"
 	"Orders/internal/database"
+	"Orders/internal/entity"
 	"Orders/internal/organizations"
 	"Orders/internal/products"
 	"Orders/internal/testutil"
@@ -236,6 +237,232 @@ func TestStore_DeleteByID(t *testing.T) {
 	_, err := store.GetByID(ctx, rec.ID)
 	if err != ErrNotFound {
 		t.Fatalf("expected ErrNotFound, got %v", err)
+	}
+}
+
+func saveReceiptOnDate(t *testing.T, store *Store, ctx context.Context, orgID int64, date, number string) *Receipt {
+	t.Helper()
+	d, err := time.Parse("2006-01-02", date)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := &Receipt{
+		Number:         number,
+		Date:           d,
+		OrganizationID: orgID,
+		UserID:         1,
+		CustomerID:     1,
+		Total:          100,
+		Status:         "",
+	}
+	if err := store.Save(ctx, &Document{Receipt: rec}); err != nil {
+		t.Fatal(err)
+	}
+	return rec
+}
+
+// TestStore_ListPage_PagesMatchFullList проверяет, что keyset-пагинация
+// не теряет и не дублирует документы: последовательность порций должна
+// совпадать с полной выборкой List (эталон). Порядок — id DESC.
+func TestStore_ListPage_PagesMatchFullList(t *testing.T) {
+	ctx, store, orgID, _ := setupTestData(t)
+
+	dates := []string{"2026-08-05", "2026-08-04", "2026-08-03", "2026-08-02", "2026-08-01"}
+	for i, d := range dates {
+		saveReceiptOnDate(t, store, ctx, orgID, d, "p"+itoa(i))
+	}
+
+	all, err := store.List(ctx, ListOptions{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 5 {
+		t.Fatalf("expected 5 receipts, got %d", len(all))
+	}
+
+	var collected []*Receipt
+	var after *Cursor
+	for {
+		page, err := store.ListPage(ctx, ListOptions{Limit: 2, After: after}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(page.Items) == 0 {
+			t.Fatal("page returned no items before HasMore=false")
+		}
+		if len(page.Items) > 2 {
+			t.Fatalf("page larger than limit: %d", len(page.Items))
+		}
+		collected = append(collected, page.Items...)
+		if !page.HasMore {
+			if page.Next != nil {
+				t.Fatal("Next must be nil when HasMore is false")
+			}
+			break
+		}
+		if page.Next == nil {
+			t.Fatal("Next must be set when HasMore is true")
+		}
+		after = page.Next
+	}
+
+	if len(collected) != len(all) {
+		t.Fatalf("expected %d collected, got %d", len(all), len(collected))
+	}
+	for i := range all {
+		if collected[i].ID != all[i].ID {
+			t.Fatalf("mismatch at %d: got id %d, want id %d", i, collected[i].ID, all[i].ID)
+		}
+	}
+}
+
+// TestStore_ListPage_IDCursor проверяет курсор по id: порции разбивают
+// выборку по убыванию id, одинаковые даты не влияют на порядок.
+func TestStore_ListPage_IDCursor(t *testing.T) {
+	ctx, store, orgID, _ := setupTestData(t)
+
+	for i := 1; i <= 5; i++ {
+		saveReceiptOnDate(t, store, ctx, orgID, "2026-08-01", "d"+itoa(i))
+	}
+
+	var ids []int64
+	var after *Cursor
+	for {
+		page, err := store.ListPage(ctx, ListOptions{Limit: 2, After: after}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, r := range page.Items {
+			ids = append(ids, r.ID)
+		}
+		if !page.HasMore {
+			break
+		}
+		after = page.Next
+	}
+
+	want := []int64{5, 4, 3, 2, 1}
+	if len(ids) != len(want) {
+		t.Fatalf("expected %d ids, got %d", len(want), len(ids))
+	}
+	for i, id := range want {
+		if ids[i] != id {
+			t.Fatalf("position %d: got id %d, want %d", i, ids[i], id)
+		}
+	}
+}
+
+// TestStore_ListPage_LastPageHasNoNext проверяет, что последняя порция
+// помечается HasMore=false и не порождает следующий запрос.
+func TestStore_ListPage_LastPageHasNoNext(t *testing.T) {
+	ctx, store, orgID, _ := setupTestData(t)
+	for i := 1; i <= 3; i++ {
+		saveReceiptOnDate(t, store, ctx, orgID, "2026-08-0"+itoa(i), "n"+itoa(i))
+	}
+
+	first, err := store.ListPage(ctx, ListOptions{Limit: 2}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !first.HasMore {
+		t.Fatal("expected HasMore on non-last page")
+	}
+
+	last, err := store.ListPage(ctx, ListOptions{Limit: 2, After: first.Next}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if last.HasMore {
+		t.Fatal("expected HasMore=false on last page")
+	}
+	if last.Next != nil {
+		t.Fatal("expected Next=nil on last page")
+	}
+}
+
+// TestStore_ListPage_LimitOne проверяет граничное значение limit=1.
+func TestStore_ListPage_LimitOne(t *testing.T) {
+	ctx, store, orgID, _ := setupTestData(t)
+	for i := 1; i <= 3; i++ {
+		saveReceiptOnDate(t, store, ctx, orgID, "2026-08-0"+itoa(i), "m"+itoa(i))
+	}
+
+	page, err := store.ListPage(ctx, ListOptions{Limit: 1}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(page.Items))
+	}
+	if !page.HasMore {
+		t.Fatal("expected HasMore with limit=1 and more rows")
+	}
+}
+
+// TestStore_ListPage_QueryAppliedPerPage проверяет, что текстовый поиск
+// применяется к каждой порции, в том числе вместе с курсором, взятым
+// из другой выборки: чужие документы не просачиваются.
+func TestStore_ListPage_QueryAppliedPerPage(t *testing.T) {
+	ctx, store, orgID, _ := setupTestData(t)
+
+	// Перемешиваем даты и номера: alpha/beta на одних и тех же датах.
+	rows := []struct{ date, number string }{
+		{"2026-08-05", "alpha-1"},
+		{"2026-08-05", "beta-1"},
+		{"2026-08-04", "alpha-2"},
+		{"2026-08-04", "beta-2"},
+		{"2026-08-03", "alpha-3"},
+		{"2026-08-03", "beta-3"},
+	}
+	for _, r := range rows {
+		saveReceiptOnDate(t, store, ctx, orgID, r.date, r.number)
+	}
+
+	visible := entity.Names(Descriptor.ListFields())
+
+	alpha, err := store.ListPage(ctx, ListOptions{Limit: 2, Query: "alpha", Filter: Filter{}}, visible)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if alpha.Next == nil {
+		t.Fatal("expected alpha page to have a next cursor")
+	}
+
+	// Курсор из выборки alpha применяется к выборке beta: возвращённые
+	// документы обязаны быть beta (WHERE применяется до курсора).
+	beta, err := store.ListPage(ctx, ListOptions{Limit: 10, Query: "beta", After: alpha.Next}, visible)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(beta.Items) == 0 {
+		t.Fatal("expected beta rows after alpha cursor")
+	}
+	for _, r := range beta.Items {
+		if len(r.Number) < 5 || r.Number[:4] != "beta" {
+			t.Fatalf("foreign document leaked into beta selection: %q", r.Number)
+		}
+	}
+}
+
+// TestStore_ListPage_LastPageDoesNotProduceNextQuery — результат последней
+// порции не создаёт следующий запрос (HasMore=false → сервер не выводит
+// sentinel). Дублируется в app-тестах; здесь проверяется контракт хранилища.
+func TestStore_ListPage_SinglePageNoHasMore(t *testing.T) {
+	ctx, store, orgID, _ := setupTestData(t)
+	saveReceiptOnDate(t, store, ctx, orgID, "2026-08-01", "solo")
+
+	page, err := store.ListPage(ctx, ListOptions{Limit: 50}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(page.Items))
+	}
+	if page.HasMore {
+		t.Fatal("expected HasMore=false when rows <= limit")
+	}
+	if page.Next != nil {
+		t.Fatal("expected Next=nil when rows <= limit")
 	}
 }
 
@@ -628,5 +855,143 @@ func TestStore_UpdateByExternal_CrossOrgNotFound(t *testing.T) {
 	status := "test"
 	if err := store.UpdateByExternal(ctx, 999, uuid, &status); err != ErrNotFound {
 		t.Fatalf("expected ErrNotFound for other org, got %v", err)
+	}
+}
+
+// saveReceiptWith создаёт чек с управляемыми полями для тестов фильтра.
+func saveReceiptWith(t *testing.T, store *Store, ctx context.Context, number string, date time.Time, total float64, orgID, custID int64, status string, sent bool) *Receipt {
+	t.Helper()
+	rec := &Receipt{
+		Number:         number,
+		Date:           date,
+		OrganizationID: orgID,
+		UserID:         1,
+		CustomerID:     custID,
+		Total:          total,
+		Status:         status,
+	}
+	if sent {
+		now := time.Now()
+		rec.SentAt = &now
+	}
+	if err := store.Save(ctx, &Document{Receipt: rec}); err != nil {
+		t.Fatal(err)
+	}
+	return rec
+}
+
+func fptr(v float64) *float64 { return &v }
+
+func TestStore_List_FilterByDateAndAmount(t *testing.T) {
+	ctx, store, orgID, custID := setupTestData(t)
+
+	saveReceiptWith(t, store, ctx, "100101", time.Date(2026, 1, 5, 12, 0, 0, 0, time.Local), 100, orgID, custID, "", false)
+	saveReceiptWith(t, store, ctx, "100102", time.Date(2026, 2, 10, 12, 0, 0, 0, time.Local), 250, orgID, custID, "", false)
+	saveReceiptWith(t, store, ctx, "100103", time.Date(2026, 3, 15, 12, 0, 0, 0, time.Local), 400, orgID, custID, "", false)
+
+	cases := []struct {
+		name string
+		f    Filter
+		want int
+	}{
+		{"no filter", Filter{}, 3},
+		{"date_from", Filter{DateFrom: "2026-02-01"}, 2},
+		{"date_to", Filter{DateTo: "2026-02-28"}, 2},
+		{"date_from_and_to", Filter{DateFrom: "2026-02-01", DateTo: "2026-02-28"}, 1},
+		{"amount_from", Filter{AmountFrom: fptr(150)}, 2},
+		{"amount_to", Filter{AmountTo: fptr(250)}, 2},
+		{"amount_range", Filter{AmountFrom: fptr(100), AmountTo: fptr(250)}, 2},
+		{"date_and_amount", Filter{DateFrom: "2026-02-01", AmountTo: fptr(250)}, 1},
+	}
+	for _, c := range cases {
+		list, err := store.List(ctx, ListOptions{Filter: c.f}, nil)
+		if err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		if len(list) != c.want {
+			t.Errorf("%s: got %d receipts, want %d", c.name, len(list), c.want)
+		}
+	}
+}
+
+func TestStore_List_FilterByOrgAndCustomer(t *testing.T) {
+	ctx, store, orgID, custID := setupTestData(t)
+
+	orgStore := organizations.NewStore(store.db)
+	org2 := orgStore.New()
+	org2.UUID = "rec-filter-org2"
+	org2.Name = "Filter Org 2"
+	org2.APIKey = "rec-filter-key2"
+	if err := orgStore.Save(ctx, org2); err != nil {
+		t.Fatal(err)
+	}
+
+	custStore := customers.NewStore(store.db)
+	cust2 := custStore.New()
+	cust2.UUID = "rec-filter-cust2"
+	cust2.Name = "Filter Customer 2"
+	cust2.OrganizationID = org2.ID
+	if err := custStore.Save(ctx, cust2); err != nil {
+		t.Fatal(err)
+	}
+
+	saveReceiptWith(t, store, ctx, "100201", time.Date(2026, 1, 5, 12, 0, 0, 0, time.Local), 100, orgID, custID, "", false)
+	saveReceiptWith(t, store, ctx, "100202", time.Date(2026, 2, 10, 12, 0, 0, 0, time.Local), 250, org2.ID, cust2.ID, "", false)
+	saveReceiptWith(t, store, ctx, "100203", time.Date(2026, 3, 15, 12, 0, 0, 0, time.Local), 400, orgID, cust2.ID, "", false)
+
+	cases := []struct {
+		name string
+		f    Filter
+		want int
+	}{
+		{"org", Filter{OrganizationID: org2.ID}, 1},
+		{"customer", Filter{CustomerID: cust2.ID}, 2},
+		{"org_and_customer", Filter{OrganizationID: org2.ID, CustomerID: cust2.ID}, 1},
+	}
+	for _, c := range cases {
+		list, err := store.List(ctx, ListOptions{Filter: c.f}, nil)
+		if err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		if len(list) != c.want {
+			t.Errorf("%s: got %d receipts, want %d", c.name, len(list), c.want)
+		}
+	}
+}
+
+func TestStore_List_FilterByStatus(t *testing.T) {
+	ctx, store, orgID, custID := setupTestData(t)
+
+	// Свежий «Создан» (пустой статус, created_at = now).
+	saveReceiptWith(t, store, ctx, "100301", time.Date(2026, 1, 5, 12, 0, 0, 0, time.Local), 100, orgID, custID, "", false)
+	// «Создан», но просрочен: created_at старится вручную.
+	overdue := saveReceiptWith(t, store, ctx, "100302", time.Date(2026, 1, 6, 12, 0, 0, 0, time.Local), 200, orgID, custID, "", false)
+	if _, err := store.db.Exec(`UPDATE receipts SET created_at = datetime('now', '-2 days') WHERE id = ?`, overdue.ID); err != nil {
+		t.Fatal(err)
+	}
+	// «Отправлен» (пустой статус + sent_at).
+	saveReceiptWith(t, store, ctx, "100303", time.Date(2026, 1, 7, 12, 0, 0, 0, time.Local), 300, orgID, custID, "", true)
+	// «Принят» (статус пришёл из 1С).
+	saveReceiptWith(t, store, ctx, "100304", time.Date(2026, 1, 8, 12, 0, 0, 0, time.Local), 400, orgID, custID, StatusAccepted, false)
+
+	cases := []struct {
+		name string
+		f    Filter
+		want int
+	}{
+		{"created excludes overdue", Filter{Status: StatusCreated}, 1},
+		{"overdue", Filter{Status: OverdueStatus}, 1},
+		{"sent", Filter{Status: StatusSent}, 1},
+		{"accepted", Filter{Status: StatusAccepted}, 1},
+		{"unknown status is ignored", Filter{Status: "Неизвестный"}, 4},
+	}
+	for _, c := range cases {
+		list, err := store.List(ctx, ListOptions{Filter: c.f}, nil)
+		if err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		if len(list) != c.want {
+			t.Errorf("%s: got %d receipts, want %d", c.name, len(list), c.want)
+		}
 	}
 }

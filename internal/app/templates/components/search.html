@@ -1,6 +1,7 @@
 {{define "search"}}
+{{$target := "#list"}}{{if .TargetID}}{{$target = .TargetID}}{{end}}
 <form class="search-form" method="get" action="{{.URL}}"
-      hx-get="{{.URL}}" hx-target="#list" hx-swap="outerHTML" hx-push-url="true">
+      hx-get="{{.URL}}" hx-target="{{$target}}" hx-swap="outerHTML" hx-push-url="true">
   <div class="field has-addons">
     <div class="control has-icons-left">
       <input class="input" type="search" name="q" value="{{.Query}}"

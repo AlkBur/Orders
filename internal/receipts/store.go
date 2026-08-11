@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"Orders/internal/common"
@@ -91,12 +92,53 @@ func (s *Store) Count(ctx context.Context) (int64, error) {
 	return n, err
 }
 
+// Filter — условия расширенного отбора списка чеков.
+// Нулевые значения полей не фильтруют.
+//
+// DateFrom/DateTo — границы периода в формате YYYY-MM-DD (колонка date —
+// TEXT фиксированной ширины, сравнение строк включительно).
+// AmountFrom/AmountTo — границы суммы (колонка total, REAL).
+// OrganizationID / CustomerID — точный отбор по организации и контрагенту.
+// Status — отображаемый статус: один из Status* или OverdueStatus;
+// пустое значение — без фильтра по статусу. «Просрочен» — производное
+// состояние, в базе не существует: вычисляется как StatusCreated,
+// у которого с момента создания прошло не менее 24 часов (тот же
+// механизм, что и statusPresentation в приложении).
+type Filter struct {
+	DateFrom       string
+	DateTo         string
+	AmountFrom     *float64
+	AmountTo       *float64
+	OrganizationID int64
+	CustomerID     int64
+	Status         string
+}
+
+// Cursor — позиция keyset-пагинации списка чеков. Так как id —
+// автоинкрементный идентификатор и монотонно растёт с созданием
+// документа, он достаточен как признак порядка: следующая порция
+// начинается строго после (ID).
+type Cursor struct {
+	ID int64
+}
+
 // ListOptions управляет выборкой списка чеков.
 type ListOptions struct {
-	Query   string
-	Limit   int
-	Offset  int
-	OrderBy string
+	Query  string
+	Limit  int
+	After  *Cursor
+	Filter Filter
+}
+
+// ListPage — результат постраничной выборки списка чеков.
+//
+// HasMore сообщает, есть ли документы после текущей порции (определяется
+// по факту получения limit+1 строки, без отдельного COUNT).
+// Next — позиция следующей порции; не nil только при HasMore.
+type ListPage struct {
+	Items   []*Receipt
+	HasMore bool
+	Next    *Cursor
 }
 
 // receiptSearchColumns — поисковые колонки списка чеков.
@@ -111,9 +153,31 @@ func (s *Store) searchableColumns() []search.MappedColumn {
 	return receiptSearchColumns
 }
 
-// List возвращает чеки. visibleFields — поля, отображаемые в списке:
-// поиск выполняется только по ним.
+// List возвращает все чеки без ограничения порции. visibleFields — поля,
+// отображаемые в списке: поиск выполняется только по ним.
 func (s *Store) List(ctx context.Context, opts ListOptions, visibleFields []entity.FieldName) ([]*Receipt, error) {
+	page, err := s.listPage(ctx, opts, visibleFields, 0)
+	if err != nil {
+		return nil, err
+	}
+	return page.Items, nil
+}
+
+// ListPage возвращает одну порцию списка чеков (keyset-пагинация).
+//
+// Порядок — id DESC (id растёт вместе с созданием документа). Если задан
+// opts.After, возвращаются только документы строго после позиции курсора.
+// Поиск и фильтры применяются до LIMIT; дополнительных данных (fileCounts
+// и т.п.) метод не загружает — это ответственность приложения для текущей
+// порции.
+//
+// limit должен быть >= 1; HasMore определяется по факту получения limit+1
+// строки (без отдельного COUNT).
+func (s *Store) ListPage(ctx context.Context, opts ListOptions, visibleFields []entity.FieldName) (*ListPage, error) {
+	return s.listPage(ctx, opts, visibleFields, opts.Limit)
+}
+
+func (s *Store) listPage(ctx context.Context, opts ListOptions, visibleFields []entity.FieldName, limit int) (*ListPage, error) {
 	query := `
 		SELECT
 			r.id, r.uuid, r.exchange_id, r.number, r.date,
@@ -128,14 +192,40 @@ func (s *Store) List(ctx context.Context, opts ListOptions, visibleFields []enti
 		LEFT JOIN customers c ON c.id = r.customer_id
 	`
 
-	where, args := search.BuildWhere(
+	searchWhere, searchArgs := search.BuildWhere(
 		search.VisibleColumns(s.searchableColumns(), visibleFields),
 		search.NormalizeQuery(opts.Query),
 	)
-	if where != "" {
-		query += ` WHERE ` + where
+	filterWhere, filterArgs := buildFilterWhere(opts.Filter)
+
+	// Порядок кондиций определяет порядок плейсхолдеров: поиск, фильтр,
+	// затем курсор.
+	var conds []string
+	if searchWhere != "" {
+		conds = append(conds, searchWhere)
 	}
-	query += ` ORDER BY r.date DESC, r.id DESC`
+	if filterWhere != "" {
+		conds = append(conds, filterWhere)
+	}
+	if opts.After != nil {
+		conds = append(conds, `r.id < ?`)
+		filterArgs = append(filterArgs, opts.After.ID)
+	}
+	if len(conds) > 0 {
+		query += ` WHERE ` + strings.Join(conds, ` AND `)
+	}
+	args := append(searchArgs, filterArgs...)
+
+	query += ` ORDER BY r.id DESC`
+
+	fetch := limit
+	if fetch > 0 {
+		// Фетчим на одну строку больше, чтобы узнать о наличии следующей
+		// порции без отдельного запроса COUNT.
+		fetch++
+		query += ` LIMIT ?`
+		args = append(args, fetch)
+	}
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -158,7 +248,92 @@ func (s *Store) List(ctx context.Context, opts ListOptions, visibleFields []enti
 	if list == nil {
 		list = []*Receipt{}
 	}
-	return list, nil
+
+	page := &ListPage{Items: list}
+	if limit > 0 && len(list) > limit {
+		page.Items = list[:limit]
+		page.HasMore = true
+		last := page.Items[len(page.Items)-1]
+		page.Next = &Cursor{ID: last.ID}
+	}
+	return page, nil
+}
+
+// buildFilterWhere собирает условие WHERE расширенного отбора.
+// Чистая функция: возвращает пустую строку без аргументов, если
+// ни один параметр не задан. Соединение с поиском по тексту — AND
+// (выполняется в List).
+func buildFilterWhere(f Filter) (string, []any) {
+	var conds []string
+	var args []any
+
+	if f.DateFrom != "" {
+		conds = append(conds, "r.date >= ?")
+		args = append(args, f.DateFrom)
+	}
+	if f.DateTo != "" {
+		conds = append(conds, "r.date <= ?")
+		args = append(args, f.DateTo)
+	}
+	if f.AmountFrom != nil {
+		conds = append(conds, "r.total >= ?")
+		args = append(args, *f.AmountFrom)
+	}
+	if f.AmountTo != nil {
+		conds = append(conds, "r.total <= ?")
+		args = append(args, *f.AmountTo)
+	}
+	if f.OrganizationID > 0 {
+		conds = append(conds, "r.organization_id = ?")
+		args = append(args, f.OrganizationID)
+	}
+	if f.CustomerID > 0 {
+		conds = append(conds, "r.customer_id = ?")
+		args = append(args, f.CustomerID)
+	}
+
+	if cond, cargs := statusFilterWhere(f.Status); cond != "" {
+		conds = append(conds, cond)
+		args = append(args, cargs...)
+	}
+
+	if len(conds) == 0 {
+		return "", nil
+	}
+	return "(" + strings.Join(conds, " AND ") + ")", args
+}
+
+// statusFilterWhere возвращает условие отбора по отображаемому статусу.
+//
+// Зеркалит statusPresentation: пустой статус (legacy-данные) трактуется
+// как «Создан» при отсутствии sent_at и как «Отправлен» при наличии.
+// «Просрочен» — производное состояние StatusCreated старше 24 часов:
+//
+//	norm = 'Создан' AND datetime(created_at) <= datetime('now', '-24 hours')
+//
+// Неизвестные значения игнорируются (условие не добавляется).
+func statusFilterWhere(status string) (string, []any) {
+	switch status {
+	case "":
+		return "", nil
+	case StatusCreated, OverdueStatus:
+		created := receiptStatusNorm() + ` = '` + StatusCreated + `'`
+		overdue := `datetime(r.created_at) <= datetime('now', '-24 hours')`
+		if status == OverdueStatus {
+			return `(` + created + ` AND ` + overdue + `)`, nil
+		}
+		return `(` + created + ` AND NOT (` + overdue + `))`, nil
+	case StatusSent, StatusAccepted, StatusCancelled, StatusProcessed, StatusFinished:
+		return receiptStatusNorm() + ` = '` + status + `'`, nil
+	default:
+		return "", nil
+	}
+}
+
+// receiptStatusNorm — SQL-выражение нормализации статуса к отображаемому
+// значению: пустой статус (legacy) зависит от sent_at.
+func receiptStatusNorm() string {
+	return `CASE WHEN r.status = '' THEN CASE WHEN r.sent_at IS NULL THEN '` + StatusCreated + `' ELSE '` + StatusSent + `' END ELSE r.status END`
 }
 
 func (s *Store) Save(ctx context.Context, doc *Document) error {

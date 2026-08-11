@@ -1,6 +1,8 @@
 package pages
 
 import (
+	"html/template"
+
 	"Orders/internal/receipts"
 	"Orders/internal/ui"
 )
@@ -15,10 +17,13 @@ type ReceiptOrganizationOption struct {
 // нижняя — доступные действия (URL и флаги готовности шаблона).
 // Шаблон только выводит эти значения и не строит URL.
 type ReceiptListRow struct {
-	Number       string
+	// Number, Organization, Customer — поля текстового поиска: сервер
+	// подсвечивает совпадения (ui.MarkMatches) и передаёт готовый HTML.
+	// Шаблон выводит их без дополнительного экранирования.
+	Number       template.HTML
 	Date         string
-	Organization string
-	Customer     string
+	Organization template.HTML
+	Customer     template.HTML
 	Total        string
 	Status       string
 
@@ -52,6 +57,12 @@ type ReceiptsListPage struct {
 	Search  *ui.SearchData
 	Rows    []ReceiptListRow
 	NewURL  string
+
+	// HasMore / LoadMoreURL — keyset-пагинация списка. HasMore сообщает,
+	// есть ли документы после текущей порции; LoadMoreURL — URL следующей
+	// порции, который сервер встраивает в sentinel lazy loading.
+	HasMore      bool
+	LoadMoreURL  string
 }
 
 func (p ReceiptsListPage) FAB() *ui.FAB {
