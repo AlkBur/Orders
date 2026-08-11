@@ -1527,6 +1527,25 @@ html.js .app-menu.is-open .app-menu-panel {
   }
 }
 
+/* На ПК фильтр — строго две колонки по 50%. Пары «от/до» остаются внутри
+   своих полей (.filter-pair), но каждая пара занимает одну колонку. */
+@media (min-width: 769px) {
+  .filter-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .filter-pair input[type="date"],
+  .filter-pair input[type="number"] {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .filter-actions {
+    grid-column: 1 / -1;
+  }
+}
+
 /* --- Search highlight (server-side <mark>) --- */
 mark {
   background: #ffe08a;
