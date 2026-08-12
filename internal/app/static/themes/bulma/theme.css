@@ -1082,6 +1082,22 @@ html.js .app-menu.is-open .app-menu-panel {
   outline-offset: 2px;
 }
 
+.search-submit {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.search-submit-icon {
+  display: inline-flex;
+  align-items: center;
+}
+
+.search-submit-icon svg {
+  width: 1rem;
+  height: 1rem;
+}
+
 @media (max-width: 768px) {
   .has-fab .toolbar-actions {
     display: none;
@@ -1099,6 +1115,10 @@ html.js .app-menu.is-open .app-menu-panel {
 }
 
 /* --- Receipts: specialized list (independent of dictionary .list) --- */
+.receipts-browser .search-form .field {
+  margin-bottom: 0;
+}
+
 .receipts-list {
   background: var(--bulma-scheme-main);
   border-radius: var(--bulma-radius);
@@ -1307,6 +1327,91 @@ html.js .app-menu.is-open .app-menu-panel {
 }
 
 @media (max-width: 768px) {
+  .receipts-browser>.level {
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 0.35rem;
+  }
+
+  .has-fab .receipts-browser>.level .level-left {
+    display: none;
+  }
+
+  .receipts-browser>.level .level-right {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    flex: 1 1 auto;
+    justify-content: flex-end;
+    min-width: 0;
+    width: 100%;
+    gap: 0.35rem;
+    margin-top: 0;
+  }
+
+  .receipts-browser>.level .level-right .level-item {
+    flex: 0 0 auto;
+    min-width: 0;
+    margin: 0;
+  }
+
+  .receipts-browser>.level .level-right .level-item:first-child {
+    flex: 1 1 0;
+    width: 100%;
+  }
+
+  .receipts-browser .search-form {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
+  }
+
+  .receipts-browser .search-form .field {
+    display: flex;
+    flex-wrap: nowrap;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .receipts-browser .search-form .control {
+    flex: 0 0 auto;
+  }
+
+  .receipts-browser .search-form .control.has-icons-left {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .receipts-browser .search-form .input {
+    min-width: 0;
+  }
+
+  .receipts-browser .search-submit-label,
+  .receipts-browser .filter-toggle span {
+    display: none;
+  }
+
+  .receipts-browser .search-submit,
+  .receipts-browser .filter-toggle {
+    justify-content: center;
+    width: 2.5rem;
+    min-width: 2.5rem;
+    height: 2.5rem;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .receipts-browser .search-submit {
+    gap: 0;
+  }
+
+  .receipts-browser .filter-toggle svg {
+    margin-right: 0;
+  }
+
   .receipts-row.is-header {
     display: none;
   }

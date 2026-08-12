@@ -1,6 +1,5 @@
 /tmp
 data/*
-config.agent.json
 tools/agent/
 orders
 *.exe

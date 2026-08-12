@@ -435,6 +435,10 @@ testing (separate from `config.json` used by `air`/`dev`):
 make run-agent
 ```
 
+If `config.agent.json` is missing, create it from
+`config.agent.json.example` before running automated tests. Do not use
+`config.json` for agent testing.
+
 The agent database lives at `tools/agent/temp/test.db` and does not
 touch `data/base.db` (the dev database).
 
