@@ -36,6 +36,14 @@ type ReceiptListRow struct {
 	CanEdit bool
 	CanSend bool
 
+	// CanMarkDeleted — доступна ли пометка документа на удаление
+	// (только администратор и только для разрешённых статусов).
+	// DeleteURL — целевой адрес POST-формы пометки; DeleteConfirm —
+	// текст подтверждения (data-confirm) с номером документа.
+	CanMarkDeleted bool
+	DeleteURL      string
+	DeleteConfirm  string
+
 	// HasFiles — булев признак наличия прикреплённых файлов у документа.
 	// Журналу требуется только факт существования файлов (показать кнопку
 	// «Файлы»), а не их количество.
@@ -61,8 +69,8 @@ type ReceiptsListPage struct {
 	// HasMore / LoadMoreURL — keyset-пагинация списка. HasMore сообщает,
 	// есть ли документы после текущей порции; LoadMoreURL — URL следующей
 	// порции, который сервер встраивает в sentinel lazy loading.
-	HasMore      bool
-	LoadMoreURL  string
+	HasMore     bool
+	LoadMoreURL string
 }
 
 func (p ReceiptsListPage) FAB() *ui.FAB {

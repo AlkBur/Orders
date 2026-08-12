@@ -27,3 +27,17 @@ func ValidStatus(status string) bool {
 		return false
 	}
 }
+
+// ReceiptDeletable определяет, можно ли пометить документ на удаление
+// в заданном хранимом статусе. «Просрочен» — производное состояние
+// StatusCreated, поэтому отдельной проверки не требует. Пустой статус —
+// legacy-данные (Создан/Отправлен без фиксированного значения),
+// разрешён.
+func ReceiptDeletable(status string) bool {
+	switch status {
+	case "", StatusCreated, StatusSent, StatusCancelled:
+		return true
+	default:
+		return false
+	}
+}

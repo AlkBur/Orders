@@ -30,6 +30,12 @@
           class="receipts-action-label">Просмотр</span></a>
       {{if .CanEdit}}<a class="button is-warning is-small" href="{{.EditURL}}" title="Редактировать">{{icon
         "file-pen"}}<span class="receipts-action-label">Изменить</span></a>{{end}}
+      {{if .CanMarkDeleted}}
+      <form method="POST" action="{{.DeleteURL}}" data-confirm="{{.DeleteConfirm}}">
+        <button type="submit" class="button is-danger is-small" title="Удалить">{{icon "trash"}}<span
+            class="receipts-action-label">Удалить</span></button>
+      </form>
+      {{end}}
     </div>
   </div>
 </div>

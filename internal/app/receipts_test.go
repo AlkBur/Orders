@@ -20,6 +20,7 @@ import (
 	"Orders/internal/products"
 	"Orders/internal/receipts"
 	"Orders/internal/testutil"
+	"Orders/internal/users"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -151,25 +152,21 @@ func TestReceiptSubmit_FullCycle(t *testing.T) {
 		t.Fatalf("step 6: expected 400, got %d: %s", w.Code, w.Body.String())
 	}
 
-	// 7. POST /receipts/{id}/delete — should fail
+	// 7. POST /receipts/{id}/delete — mark for deletion (admin op, status Отправлен allowed)
 	w = httptest.NewRecorder()
 	r = httptest.NewRequest(http.MethodPost, "/receipts/"+idStr+"/delete", nil)
 	rctx = chi.NewRouteContext()
 	rctx.URLParams.Add("id", idStr)
 	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
-	app.ReceiptDelete(w, r)
+	app.ReceiptMarkDeleted(w, r)
 
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("step 7: expected 400, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("step 7: expected 303 after mark, got %d: %s", w.Code, w.Body.String())
 	}
 
-	// 8. Store-level: SentAt must be non-nil now
-	doc, err := app.receipts.GetByID(context.Background(), id)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if doc.Receipt.SentAt == nil {
-		t.Fatal("step 8: expected SentAt to be set after submit")
+	// 8. Marked document is hidden and no longer returned by business reads
+	if _, err := app.receipts.GetByID(context.Background(), id); err != receipts.ErrNotFound {
+		t.Fatalf("step 8: expected ErrNotFound for marked receipt, got %v", err)
 	}
 }
 
@@ -1566,5 +1563,157 @@ func TestParseReceiptFilter(t *testing.T) {
 			r := httptest.NewRequest(http.MethodGet, target, nil)
 			c.check(t, parseReceiptFilter(r))
 		})
+	}
+}
+
+// saveAppReceipt создаёт чек напрямую через Store с заданными полями.
+func saveAppReceipt(t *testing.T, app *App, orgID int64, number, status string, sent bool) *receipts.Receipt {
+	t.Helper()
+	now := time.Now()
+	rec := &receipts.Receipt{
+		Number:         number,
+		Date:           now,
+		OrganizationID: orgID,
+		UserID:         1,
+		CustomerID:     1,
+		Total:          10,
+		Status:         status,
+	}
+	if sent {
+		rec.SentAt = &now
+	}
+	if err := app.receipts.Save(context.Background(), &receipts.Document{Receipt: rec}); err != nil {
+		t.Fatal(err)
+	}
+	return rec
+}
+
+// markUserRequest возвращает POST-запрос пометки с установленным
+// URL-параметром id и идентичностью пользователя в контексте.
+func markUserRequest(t *testing.T, id string, u users.Identity) *http.Request {
+	t.Helper()
+	r := httptest.NewRequest(http.MethodPost, "/receipts/"+id+"/delete", nil)
+	r = r.WithContext(context.WithValue(r.Context(), userContextKey, u))
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", id)
+	return r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+}
+
+func TestReceiptMarkDeleted_RequiresAdmin(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	orgID, _ := insertOrg(t, db, "DelOrg", "kdel")
+	app := &App{receipts: receipts.NewStore(db)}
+	rec := saveAppReceipt(t, app, orgID, "MDROLE001", receipts.StatusCreated, false)
+	idStr := strconv.FormatInt(rec.ID, 10)
+
+	post := func(u users.Identity) *httptest.ResponseRecorder {
+		h := RequireAdmin(http.HandlerFunc(app.ReceiptMarkDeleted))
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, markUserRequest(t, idStr, u))
+		return w
+	}
+
+	if w := post(users.Identity{}); w.Code != http.StatusForbidden {
+		t.Fatalf("no user: expected 403, got %d", w.Code)
+	}
+	if w := post(users.Identity{ID: 1, Login: "op", IsAdmin: false}); w.Code != http.StatusForbidden {
+		t.Fatalf("non-admin: expected 403, got %d", w.Code)
+	}
+
+	w := post(users.Identity{ID: 2, Login: "admin", IsAdmin: true})
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("admin: expected 303, got %d: %s", w.Code, w.Body.String())
+	}
+	if loc := w.Header().Get("Location"); loc != RouteReceipts {
+		t.Fatalf("admin: expected redirect to %s, got %s", RouteReceipts, loc)
+	}
+	if _, err := app.receipts.GetByID(context.Background(), rec.ID); err != receipts.ErrNotFound {
+		t.Fatalf("admin: marked document should be hidden, got %v", err)
+	}
+}
+
+func TestReceiptMarkDeleted_StatusForbidden(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	orgID, _ := insertOrg(t, db, "DelOrg2", "kdel2")
+	app := &App{receipts: receipts.NewStore(db)}
+	admin := users.Identity{ID: 2, Login: "admin", IsAdmin: true}
+
+	for _, status := range []string{receipts.StatusAccepted, receipts.StatusProcessed, receipts.StatusFinished} {
+		rec := saveAppReceipt(t, app, orgID, "MDNF-"+status, status, true)
+		idStr := strconv.FormatInt(rec.ID, 10)
+
+		h := RequireAdmin(http.HandlerFunc(app.ReceiptMarkDeleted))
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, markUserRequest(t, idStr, admin))
+
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("status %q: expected 403, got %d", status, w.Code)
+		}
+		if _, err := app.receipts.GetByID(context.Background(), rec.ID); err != nil {
+			t.Fatalf("status %q: document should remain active, got %v", status, err)
+		}
+	}
+}
+
+func TestReceiptMarkDeleted_NotFound(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	orgID, _ := insertOrg(t, db, "DelOrg3", "kdel3")
+	app := &App{receipts: receipts.NewStore(db)}
+	admin := users.Identity{ID: 2, Login: "admin", IsAdmin: true}
+
+	post := func(id string) *httptest.ResponseRecorder {
+		h := RequireAdmin(http.HandlerFunc(app.ReceiptMarkDeleted))
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, markUserRequest(t, id, admin))
+		return w
+	}
+
+	if w := post("999999"); w.Code != http.StatusNotFound {
+		t.Fatalf("unknown id: expected 404, got %d", w.Code)
+	}
+
+	rec := saveAppReceipt(t, app, orgID, "MDNOT", receipts.StatusCreated, false)
+	idStr := strconv.FormatInt(rec.ID, 10)
+	if w := post(idStr); w.Code != http.StatusSeeOther {
+		t.Fatalf("first mark: expected 303, got %d: %s", w.Code, w.Body.String())
+	}
+	if w := post(idStr); w.Code != http.StatusNotFound {
+		t.Fatalf("repeat mark: expected 404, got %d", w.Code)
+	}
+}
+
+func TestReceiptsPage_DeleteButton_RoleAndStatus(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	orgID, _ := insertOrg(t, db, "DelOrg4", "kdel4")
+	app := &App{receipts: receipts.NewStore(db)}
+
+	created := saveAppReceipt(t, app, orgID, "MDUIP1", receipts.StatusCreated, false)
+	accepted := saveAppReceipt(t, app, orgID, "MDUIP2", receipts.StatusAccepted, true)
+
+	get := func(u users.Identity) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		r := markUserRequest(t, "", u)
+		r = httptest.NewRequest(http.MethodGet, RouteReceipts, nil)
+		r = r.WithContext(context.WithValue(r.Context(), userContextKey, u))
+		app.ReceiptsPage(w, r)
+		return w
+	}
+
+	bodyAdmin := get(users.Identity{ID: 2, Login: "admin", IsAdmin: true}).Body.String()
+	createdID := strconv.FormatInt(created.ID, 10)
+	acceptedID := strconv.FormatInt(accepted.ID, 10)
+	if !strings.Contains(bodyAdmin, `method="POST" action="/receipts/`+createdID+`/delete"`) {
+		t.Error("expected delete form for active receipt for admin")
+	}
+	if !strings.Contains(bodyAdmin, "Пометить товарный чек №"+created.Number+" на удаление?") {
+		t.Error("expected data-confirm text with receipt number")
+	}
+	if strings.Contains(bodyAdmin, `action="/receipts/`+acceptedID+`/delete"`) {
+		t.Error("expected no delete form for non-deletable status")
+	}
+
+	bodyNonAdmin := get(users.Identity{ID: 1, Login: "op", IsAdmin: false}).Body.String()
+	if strings.Contains(bodyNonAdmin, "/delete") {
+		t.Error("expected no delete form for non-admin")
 	}
 }

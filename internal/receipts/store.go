@@ -38,6 +38,7 @@ func (s *Store) GetByID(ctx context.Context, id int64) (*Document, error) {
 		LEFT JOIN users u ON u.id = r.user_id
 		LEFT JOIN customers c ON c.id = r.customer_id
 		WHERE r.id = ?
+		  AND r.deleted_at IS NULL
 	`, id))
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -70,6 +71,7 @@ func (s *Store) GetByExternal(ctx context.Context, externalUUID string) (*Docume
 		LEFT JOIN users u ON u.id = r.user_id
 		LEFT JOIN customers c ON c.id = r.customer_id
 		WHERE r.uuid = ?
+		  AND r.deleted_at IS NULL
 	`, externalUUID))
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -88,7 +90,7 @@ func (s *Store) GetByExternal(ctx context.Context, externalUUID string) (*Docume
 
 func (s *Store) Count(ctx context.Context) (int64, error) {
 	var n int64
-	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM receipts`).Scan(&n)
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM receipts WHERE deleted_at IS NULL`).Scan(&n)
 	return n, err
 }
 
@@ -198,9 +200,10 @@ func (s *Store) listPage(ctx context.Context, opts ListOptions, visibleFields []
 	)
 	filterWhere, filterArgs := buildFilterWhere(opts.Filter)
 
+	// Помеченные на удаление документы исключаются из списка безусловно.
 	// Порядок кондиций определяет порядок плейсхолдеров: поиск, фильтр,
 	// затем курсор.
-	var conds []string
+	conds := []string{`r.deleted_at IS NULL`}
 	if searchWhere != "" {
 		conds = append(conds, searchWhere)
 	}
@@ -211,9 +214,7 @@ func (s *Store) listPage(ctx context.Context, opts ListOptions, visibleFields []
 		conds = append(conds, `r.id < ?`)
 		filterArgs = append(filterArgs, opts.After.ID)
 	}
-	if len(conds) > 0 {
-		query += ` WHERE ` + strings.Join(conds, ` AND `)
-	}
+	query += ` WHERE ` + strings.Join(conds, ` AND `)
 	args := append(searchArgs, filterArgs...)
 
 	query += ` ORDER BY r.id DESC`
@@ -466,6 +467,70 @@ func (s *Store) DeleteByID(ctx context.Context, id int64) error {
 	return nil
 }
 
+// MarkDeleted помечает документ на удаление. В одной транзакции основной
+// БД устанавливается deleted_at, статус приводится к StatusCancelled,
+// а признак отправки снимается (sent_at = NULL). После commit документ
+// не участвует в бизнес-операциях, не попадает в очередь синхронизации
+// и не может быть изменён через Integration API. Физическое удаление
+// выполняется отдельным этапом и останавливается при ошибке, не откатывая
+// пометку.
+//
+// Транзакция берёт write-lock сразу (BEGIN IMMEDIATE), поэтому проверка
+// статуса и пометка атомарны: конкурентное интеграционное обновление не
+// может проскочить между чтением и записью и обойти ReceiptDeletable.
+//
+// Повторная пометка возвращает ErrNotFound: признак deleted_at имеет
+// приоритет над проверкой статуса (в том числе для документа со статусом
+// StatusCancelled).
+func (s *Store) MarkDeleted(ctx context.Context, id int64) error {
+	conn, err := s.db.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	if _, err := conn.ExecContext(ctx, `PRAGMA busy_timeout = 5000`); err != nil {
+		return err
+	}
+	if _, err := conn.ExecContext(ctx, `BEGIN IMMEDIATE`); err != nil {
+		return err
+	}
+	defer conn.ExecContext(context.Background(), `ROLLBACK`)
+
+	var status string
+	var deletedAt sql.NullTime
+	err = conn.QueryRowContext(ctx,
+		`SELECT status, deleted_at FROM receipts WHERE id = ?`, id).Scan(&status, &deletedAt)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return ErrNotFound
+		}
+		return err
+	}
+	if deletedAt.Valid {
+		return ErrNotFound
+	}
+	if !ReceiptDeletable(status) {
+		return ErrReceiptNotDeletable
+	}
+
+	if _, err := conn.ExecContext(ctx, `
+		UPDATE receipts
+		SET deleted_at = CURRENT_TIMESTAMP,
+		    status = ?,
+		    sent_at = NULL,
+		    updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`, StatusCancelled, id); err != nil {
+		return err
+	}
+
+	if _, err := conn.ExecContext(ctx, `COMMIT`); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (s *Store) Synchronize(ctx context.Context, updates []ReceiptUpdate) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -476,7 +541,7 @@ func (s *Store) Synchronize(ctx context.Context, updates []ReceiptUpdate) error 
 	for _, upd := range updates {
 		var currentUUID sql.NullString
 		err := tx.QueryRowContext(ctx,
-			`SELECT uuid FROM receipts WHERE exchange_id = ?`, upd.ExchangeID).Scan(&currentUUID)
+			`SELECT uuid FROM receipts WHERE exchange_id = ? AND deleted_at IS NULL`, upd.ExchangeID).Scan(&currentUUID)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				return ErrExchangeIDNotFound
@@ -517,7 +582,7 @@ func (s *Store) Synchronize(ctx context.Context, updates []ReceiptUpdate) error 
 			}
 			query += set
 		}
-		query += " WHERE exchange_id = ?"
+		query += " WHERE exchange_id = ? AND deleted_at IS NULL"
 
 		if _, err := tx.ExecContext(ctx, query, args...); err != nil {
 			return err
@@ -563,6 +628,7 @@ func (s *Store) ListAvailableForSync(ctx context.Context, orgID int64) ([]*Docum
 		WHERE r.organization_id = ?
 		  AND r.sent_at IS NOT NULL
 		  AND r.uuid IS NULL
+		  AND r.deleted_at IS NULL
 		ORDER BY r.date DESC, r.id DESC
 	`, orgID)
 	if err != nil {
@@ -613,7 +679,7 @@ func (s *Store) SynchronizeByID(ctx context.Context, orgID int64, updates []Sync
 	for _, upd := range updates {
 		var currentUUID sql.NullString
 		err := tx.QueryRowContext(ctx,
-			`SELECT uuid FROM receipts WHERE id = ? AND organization_id = ?`,
+			`SELECT uuid FROM receipts WHERE id = ? AND organization_id = ? AND deleted_at IS NULL`,
 			upd.ID, orgID).Scan(&currentUUID)
 		if err != nil {
 			if err == sql.ErrNoRows {
@@ -658,7 +724,7 @@ func (s *Store) SynchronizeByID(ctx context.Context, orgID int64, updates []Sync
 			}
 			query += set
 		}
-		query += " WHERE id = ? AND organization_id = ?"
+		query += " WHERE id = ? AND organization_id = ? AND deleted_at IS NULL"
 
 		if _, err := tx.ExecContext(ctx, query, args...); err != nil {
 			return SyncResult{}, err
@@ -695,7 +761,7 @@ func (s *Store) UpdateByExternal(ctx context.Context, orgID int64, externalUUID 
 		}
 		query += set
 	}
-	query += " WHERE organization_id = ? AND uuid = ?"
+	query += " WHERE organization_id = ? AND uuid = ? AND deleted_at IS NULL"
 
 	res, err := s.db.ExecContext(ctx, query, args...)
 	if err != nil {

@@ -123,4 +123,13 @@ func registerMigrations(s *database.Schema) {
 			return nil
 		},
 	})
+
+	s.AddMigration(database.Migration{
+		Version: 6,
+		Name:    "Add deleted_at to receipts (mark for deletion)",
+		Up: func(ctx context.Context, tx *sql.Tx) error {
+			_, err := tx.ExecContext(ctx, `ALTER TABLE receipts ADD COLUMN deleted_at DATETIME`)
+			return err
+		},
+	})
 }

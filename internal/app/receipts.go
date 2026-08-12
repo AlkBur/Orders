@@ -222,7 +222,7 @@ func (a *App) ReceiptsPage(w http.ResponseWriter, r *http.Request) {
 
 	words := search.NormalizeQuery(query).Words
 
-	rows, err := a.buildReceiptListRows(r.Context(), listPage.Items, words)
+	rows, err := a.buildReceiptListRows(r.Context(), listPage.Items, words, CurrentUser(r).IsAdmin)
 	if err != nil {
 		a.InternalError(w, r, err)
 		return
@@ -290,7 +290,7 @@ func (a *App) ReceiptsPage(w http.ResponseWriter, r *http.Request) {
 // данные (fileCounts из отдельной базы files.db) вычисляются одним запросом
 // строго для переданной порции документов, без N+1 и без выборок для
 // всей таблицы.
-func (a *App) buildReceiptListRows(ctx context.Context, list []*receipts.Receipt, words []string) ([]pages.ReceiptListRow, error) {
+func (a *App) buildReceiptListRows(ctx context.Context, list []*receipts.Receipt, words []string, isAdmin bool) ([]pages.ReceiptListRow, error) {
 	rows := make([]pages.ReceiptListRow, 0, len(list))
 	if len(list) == 0 {
 		return rows, nil
@@ -340,6 +340,10 @@ func (a *App) buildReceiptListRows(ctx context.Context, list []*receipts.Receipt
 			SendURL:  base + "?mode=send",
 			ViewURL:  base + "?mode=view",
 			EditURL:  base,
+
+			CanMarkDeleted: isAdmin && receipts.ReceiptDeletable(rec.Status),
+			DeleteURL:      a.URL("/receipts/" + idStr + "/delete"),
+			DeleteConfirm:  "Пометить товарный чек №" + rec.Number + " на удаление?",
 		})
 	}
 	return rows, nil
@@ -1009,7 +1013,13 @@ func (a *App) renderReceiptForm(w http.ResponseWriter, r *http.Request, ve *Vali
 	}
 }
 
-func (a *App) ReceiptDelete(w http.ResponseWriter, r *http.Request) {
+// ReceiptMarkDeleted помечает документ на удаление (этап 1 жизненного
+// цикла удаления). Маршрут покрыт RequireAdmin: обработчик доступен только
+// администратору. Пометка атомарно приводит статус к StatusCancelled,
+// снимает отправку (sent_at = NULL) и сохраняет признак deleted_at.
+// Физическое удаление документа и его файлов выполняется отдельными
+// этапами позже.
+func (a *App) ReceiptMarkDeleted(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
@@ -1017,21 +1027,20 @@ func (a *App) ReceiptDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	existing, err := a.receipts.GetByID(r.Context(), id)
+	err = a.receipts.MarkDeleted(r.Context(), id)
 	if err != nil {
-		if errors.Is(err, receipts.ErrNotFound) {
+		switch {
+		case errors.Is(err, receipts.ErrNotFound):
 			http.NotFound(w, r)
-			return
+		case errors.Is(err, receipts.ErrReceiptNotDeletable):
+			http.Error(w, err.Error(), http.StatusForbidden)
+		default:
+			a.InternalError(w, r, err)
 		}
-		a.InternalError(w, r, err)
-		return
-	}
-	if existing.Receipt.SentAt != nil {
-		a.BadRequest(w, receipts.ErrReceiptReadOnly.Error())
 		return
 	}
 
-	if err := a.receipts.DeleteByID(r.Context(), id); err != nil {
+	if err := a.SetFlash(r, sessions.FlashSuccess, "Документ помечен на удаление."); err != nil {
 		a.InternalError(w, r, err)
 		return
 	}

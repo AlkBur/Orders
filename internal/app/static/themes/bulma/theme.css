@@ -1108,7 +1108,7 @@ html.js .app-menu.is-open .app-menu-panel {
 .receipts-row {
   display: grid;
   grid-template-columns:
-    minmax(5.5rem, 1fr) minmax(6rem, 1fr) minmax(9rem, 1.6fr) minmax(9rem, 1.6fr) minmax(6rem, 1fr) minmax(6.5rem, 1fr) 11.5rem;
+    minmax(5.5rem, 1fr) minmax(6rem, 1fr) minmax(9rem, 1.6fr) minmax(9rem, 1.6fr) minmax(6rem, 1fr) minmax(6.5rem, 1fr) 13.5rem;
   align-items: center;
   padding: 0.75rem 0.75rem;
   border-bottom: 1px solid var(--bulma-border);
@@ -1159,6 +1159,13 @@ html.js .app-menu.is-open .app-menu-panel {
 .receipts-actions .button {
   width: 1.9rem;
   height: 1.9rem;
+  padding: 0;
+}
+
+.receipts-actions form {
+  display: inline-flex;
+  flex: none;
+  margin: 0;
   padding: 0;
 }
 
@@ -1387,6 +1394,11 @@ html.js .app-menu.is-open .app-menu-panel {
 
   .receipts-actions .receipts-action-label {
     display: inline;
+  }
+
+  .receipts-actions form {
+    flex: 1 1 auto;
+    min-width: max-content;
   }
 }
 

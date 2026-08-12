@@ -74,7 +74,7 @@ func (a *App) NewRouter() *chi.Mux {
 			r.Get("/receipts/{id}/files", a.ReceiptFiles)
 			r.Get("/receipts/{id}/files/{fileID}", a.ReceiptFileContent)
 			r.Post("/receipts/{id}/send", a.ReceiptSubmit)
-			r.Post("/receipts/{id}/delete", a.ReceiptDelete)
+			r.With(RequireAdmin).Post("/receipts/{id}/delete", a.ReceiptMarkDeleted)
 
 			// Customers
 			r.Get("/customers", a.CustomersPage)

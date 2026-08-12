@@ -2,6 +2,9 @@ package receipts
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"fmt"
 	"strconv"
 	"testing"
 	"time"
@@ -993,5 +996,190 @@ func TestStore_List_FilterByStatus(t *testing.T) {
 		if len(list) != c.want {
 			t.Errorf("%s: got %d receipts, want %d", c.name, len(list), c.want)
 		}
+	}
+}
+
+func TestReceiptDeletable(t *testing.T) {
+	tests := []struct {
+		status string
+		want   bool
+	}{
+		{"", true},
+		{StatusCreated, true},
+		{StatusSent, true},
+		{StatusCancelled, true},
+		{StatusAccepted, false},
+		{StatusProcessed, false},
+		{StatusFinished, false},
+		{OverdueStatus, false},
+	}
+	for _, tt := range tests {
+		if got := ReceiptDeletable(tt.status); got != tt.want {
+			t.Errorf("ReceiptDeletable(%q) = %v, want %v", tt.status, got, tt.want)
+		}
+	}
+}
+
+func TestStore_MarkDeleted_StatusMatrix(t *testing.T) {
+	ctx, store, orgID, custID := setupTestData(t)
+
+	tests := []struct {
+		status  string
+		sent    bool
+		wantErr error
+	}{
+		{"", false, nil},
+		{StatusCreated, false, nil},
+		{StatusSent, true, nil},
+		{StatusCancelled, false, nil},
+		{StatusAccepted, true, ErrReceiptNotDeletable},
+		{StatusProcessed, true, ErrReceiptNotDeletable},
+		{StatusFinished, true, ErrReceiptNotDeletable},
+	}
+	for i, tt := range tests {
+		num := fmt.Sprintf("MD%03d", i)
+		rec := saveReceiptWith(t, store, ctx, num, time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC), 100, orgID, custID, tt.status, tt.sent)
+
+		err := store.MarkDeleted(ctx, rec.ID)
+		if tt.wantErr == nil {
+			if err != nil {
+				t.Fatalf("status %q: MarkDeleted error = %v, want nil", tt.status, err)
+			}
+			// Помеченный документ должен исчезнуть из бизнес-чтений.
+			if _, err := store.GetByID(ctx, rec.ID); err != ErrNotFound {
+				t.Fatalf("status %q: GetByID after mark = %v, want ErrNotFound", tt.status, err)
+			}
+		} else {
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("status %q: MarkDeleted error = %v, want %v", tt.status, err, tt.wantErr)
+			}
+		}
+	}
+}
+
+func TestStore_MarkDeleted_NotFound(t *testing.T) {
+	ctx, store, _, _ := setupTestData(t)
+	if err := store.MarkDeleted(ctx, 99999); err != ErrNotFound {
+		t.Fatalf("expected ErrNotFound, got %v", err)
+	}
+}
+
+func TestStore_MarkDeleted_Repeat(t *testing.T) {
+	ctx, store, orgID, custID := setupTestData(t)
+	rec := saveReceiptWith(t, store, ctx, "MDREP", time.Now(), 100, orgID, custID, StatusCreated, false)
+
+	if err := store.MarkDeleted(ctx, rec.ID); err != nil {
+		t.Fatal(err)
+	}
+	// После пометки у документа статус StatusCancelled. Приоритет имеет
+	// признак deleted_at: повторная пометка возвращает ErrNotFound.
+	if err := store.MarkDeleted(ctx, rec.ID); err != ErrNotFound {
+		t.Fatalf("expected ErrNotFound on repeat mark, got %v", err)
+	}
+}
+
+func TestStore_MarkDeleted_SetsFields(t *testing.T) {
+	ctx, store, orgID, custID := setupTestData(t)
+	rec := saveReceiptWith(t, store, ctx, "MDFIELDS", time.Now(), 100, orgID, custID, StatusSent, true)
+
+	if err := store.MarkDeleted(ctx, rec.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	var deletedAt sql.NullTime
+	var status string
+	var sentAt sql.NullTime
+	err := store.db.QueryRowContext(ctx,
+		`SELECT deleted_at, status, sent_at FROM receipts WHERE id = ?`, rec.ID).
+		Scan(&deletedAt, &status, &sentAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !deletedAt.Valid {
+		t.Fatal("expected deleted_at to be set after mark")
+	}
+	if status != StatusCancelled {
+		t.Fatalf("expected status %q, got %q", StatusCancelled, status)
+	}
+	if sentAt.Valid {
+		t.Fatal("expected sent_at to be NULL after mark")
+	}
+}
+
+func TestStore_MarkDeleted_HidesDocument(t *testing.T) {
+	ctx, store, orgID, custID := setupTestData(t)
+	active := saveReceiptWith(t, store, ctx, "MDACTIVE", time.Now(), 100, orgID, custID, StatusCreated, false)
+	sent := saveReceiptWith(t, store, ctx, "MDSENT", time.Now(), 100, orgID, custID, StatusSent, true)
+	extUUID := "ext-1c"
+	if _, err := store.SynchronizeByID(ctx, orgID, []SyncUpdate{{ID: sent.ID, UUID: &extUUID}}); err != nil {
+		t.Fatal(err)
+	}
+
+	before, err := store.Count(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.MarkDeleted(ctx, sent.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	if got, err := store.Count(ctx); err != nil || got != before-1 {
+		t.Fatalf("Count() = %d, want %d (%v)", got, before-1, err)
+	}
+	if _, err := store.GetByID(ctx, sent.ID); err != ErrNotFound {
+		t.Fatalf("GetByID marked: got %v, want ErrNotFound", err)
+	}
+	if _, err := store.GetByExternal(ctx, extUUID); err != ErrNotFound {
+		t.Fatalf("GetByExternal marked: got %v, want ErrNotFound", err)
+	}
+
+	all, err := store.List(ctx, ListOptions{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range all {
+		if r.ID == sent.ID {
+			t.Fatal("marked receipt still present in List")
+		}
+	}
+
+	queue, err := store.ListAvailableForSync(ctx, orgID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range queue {
+		if d.Receipt.ID == sent.ID {
+			t.Fatal("marked receipt still present in sync queue")
+		}
+	}
+
+	// Непомеченный документ остаётся видимым.
+	if _, err := store.GetByID(ctx, active.ID); err != nil {
+		t.Fatalf("active receipt unexpectedly hidden: %v", err)
+	}
+}
+
+func TestStore_MarkDeleted_BlocksIntegration(t *testing.T) {
+	ctx, store, orgID, custID := setupTestData(t)
+	rec := saveReceiptWith(t, store, ctx, "MDBLOCK", time.Now(), 100, orgID, custID, StatusCreated, false)
+	extUUID := "ext-block"
+	if _, err := store.SynchronizeByID(ctx, orgID, []SyncUpdate{{ID: rec.ID, UUID: &extUUID}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.MarkDeleted(ctx, rec.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	status := StatusAccepted
+	if _, err := store.SynchronizeByID(ctx, orgID, []SyncUpdate{{ID: rec.ID, Status: &status}}); err != ErrNotFound {
+		t.Fatalf("SynchronizeByID marked: got %v, want ErrNotFound", err)
+	}
+	if err := store.UpdateByExternal(ctx, orgID, extUUID, &status); err != ErrNotFound {
+		t.Fatalf("UpdateByExternal marked: got %v, want ErrNotFound", err)
+	}
+	// Legacy-путь обновления по exchange_id также отсекает помеченные.
+	legacyUUID := "legacy-uuid"
+	if err := store.Synchronize(ctx, []ReceiptUpdate{{ExchangeID: rec.ExchangeID, UUID: &legacyUUID}}); err != ErrExchangeIDNotFound {
+		t.Fatalf("Synchronize marked: got %v, want ErrExchangeIDNotFound", err)
 	}
 }

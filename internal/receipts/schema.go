@@ -17,6 +17,10 @@ var Table = database.Must(database.NewTable("receipts",
 	database.String("status_color").NotNull().Default(""),
 	database.DateTime("created_at").NotNull().Default("CURRENT_TIMESTAMP"),
 	database.DateTime("updated_at").NotNull().Default("CURRENT_TIMESTAMP"),
+	// deleted_at — момент пометки документа на удаление. NULL — документ
+	// активен; не NULL — помечен и исключён из бизнес-операций (журнал,
+	// очереди, интеграция). Физическое удаление выполняется отдельным этапом.
+	database.DateTime("deleted_at"),
 )).AddUniqueConstraint("organization_id", "number")
 
 var ItemsTable = database.Must(database.NewTable("receipt_items",
