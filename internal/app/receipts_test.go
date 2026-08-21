@@ -1717,3 +1717,86 @@ func TestReceiptsPage_DeleteButton_RoleAndStatus(t *testing.T) {
 		t.Error("expected no delete form for non-admin")
 	}
 }
+
+func TestReceiptSave_RoundsToTwoDecimals(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	orgID, _ := insertOrg(t, db, "RoundOrg", "kround")
+	prodStore := products.NewStore(db)
+	app := &App{
+		receipts:      receipts.NewStore(db),
+		organizations: organizations.NewStore(db),
+		products:      prodStore,
+	}
+	prod1, _ := insertProduct(t, db, orgID, "Product R1", "pcs")
+	prod2, _ := insertProduct(t, db, orgID, "Product R2", "pcs")
+
+	// Строка i: {product, quantity, price, amount}. amount — доверенное
+	// значение; пустое amount даёт legacy-фолбэк round2(qty*price).
+	line := func(i int64, product int64, quantity, price, value string, valueSet bool) string {
+		parts := "items[" + strconv.FormatInt(i, 10) + "][product_id]=" + strconv.FormatInt(product, 10) +
+			"&items[" + strconv.FormatInt(i, 10) + "][quantity]=" + quantity +
+			"&items[" + strconv.FormatInt(i, 10) + "][price]=" + price
+		if valueSet {
+			parts += "&items[" + strconv.FormatInt(i, 10) + "][amount]=" + value
+		}
+		return parts
+	}
+
+	var body strings.Builder
+	body.WriteString("number=900&organization_id=" + strconv.FormatInt(orgID, 10))
+	body.WriteString("&user_id=1&customer_id=1&date=2026-07-30")
+	body.WriteString("&" + line(0, prod1, "1.999", "1", "", false))
+	body.WriteString("&" + line(1, prod1, "3", "10", "10.00", true))
+	body.WriteString("&" + line(2, prod2, "5", "2", "0.00", true))
+	body.WriteString("&" + line(3, prod2, "1.2345", "2.3456", "3.4567", true))
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPost, "/receipts", strings.NewReader(body.String()))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	app.ReceiptSave(w, r)
+
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d: %s", w.Code, w.Body.String())
+	}
+
+	list, err := app.receipts.List(context.Background(), receipts.ListOptions{}, nil)
+	if err != nil || len(list) != 1 {
+		t.Fatalf("expected one receipt, got %d: %v", len(list), err)
+	}
+	doc, err := app.receipts.GetByID(context.Background(), list[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(doc.Items) != 4 {
+		t.Fatalf("expected 4 items, got %d", len(doc.Items))
+	}
+
+	// Строка 0: legacy-пустое amount → round2(qty × price). Количество
+	// сохраняет 3 знака (round3), цена и сумма — 2 знака.
+	q0, p0, a0 := doc.Items[0].Quantity, doc.Items[0].Price, doc.Items[0].Amount
+	if q0 != 1.999 || p0 != 1.00 || a0 != 2.00 {
+		t.Fatalf("line 0: got qty=%v price=%v amount=%v, want 1.999/1/2", q0, p0, a0)
+	}
+	// Строка 1: amount=10.00 доверенное — НЕ заменяется qty*price (30).
+	if doc.Items[1].Amount != 10.00 {
+		t.Fatalf("line 1: trusted amount should stay 10.00, got %v", doc.Items[1].Amount)
+	}
+	// Строка 2: amount="0.00" — не пересчитывается.
+	if doc.Items[2].Amount != 0 {
+		t.Fatalf("line 2: zero amount should stay 0, got %v", doc.Items[2].Amount)
+	}
+	// Строка 3: количество round3(1.2345)=1.235; цена round2(2.3456)=2.35;
+	// amount — доверенное round2(3.4567)=3.46.
+	if q3, p3 := doc.Items[3].Quantity, doc.Items[3].Price; q3 != 1.235 || p3 != 2.35 {
+		t.Fatalf("line 3: got qty=%v price=%v, want 1.235/2.35", q3, p3)
+	}
+	if doc.Items[3].Amount != 3.46 {
+		t.Fatalf("line 3: normalized amount = %v, want 3.46", doc.Items[3].Amount)
+	}
+
+	// total = сумма округлённых amount строк: 2 + 10 + 0 + 3.46.
+	if doc.Receipt.Total != 15.46 {
+		t.Fatalf("total = %v, want 15.46", doc.Receipt.Total)
+	}
+}

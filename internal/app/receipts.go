@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io/fs"
+	"math"
 	"mime"
 	"net/http"
 	"strconv"
@@ -812,9 +813,17 @@ func (a *App) ReceiptSave(w http.ResponseWriter, r *http.Request) {
 			a.RenderReceiptValidationError(w, r, ve, items)
 			return
 		}
-		quantity := parseFloat(r.FormValue("items[" + strconv.Itoa(i) + "][quantity]"))
-		price := parseFloat(r.FormValue("items[" + strconv.Itoa(i) + "][price]"))
-		amount := quantity * price
+		quantity := round3(parseFloat(r.FormValue("items[" + strconv.Itoa(i) + "][quantity]")))
+		price := round2(parseFloat(r.FormValue("items[" + strconv.Itoa(i) + "][price]")))
+		// amount — самостоятельное вводимое значение: переданная сумма
+		// сохраняется (после округления), а не заменяется расчётным
+		// quantity × price. Фолбэк round2(quantity * price) применяется
+		// только для legacy-запросов без поля amount.
+		amountStr := r.FormValue("items[" + strconv.Itoa(i) + "][amount]")
+		amount := round2(parseFloat(amountStr))
+		if amountStr == "" {
+			amount = round2(quantity * price)
+		}
 		items = append(items, receipts.ReceiptItem{
 			LineNum:   i + 1,
 			ProductID: productID,
@@ -1112,4 +1121,14 @@ func parseInt64(s string) int64 {
 func parseFloat(s string) float64 {
 	v, _ := strconv.ParseFloat(s, 64)
 	return v
+}
+
+// round2 округляет значение до двух знаков после запятой.
+func round2(v float64) float64 {
+	return math.Round(v*100) / 100
+}
+
+// round3 округляет значение до трёх знаков после запятой (количество).
+func round3(v float64) float64 {
+	return math.Round(v*1000) / 1000
 }
