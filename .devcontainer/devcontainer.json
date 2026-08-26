@@ -1,0 +1,15 @@
+{
+  "name": "Orders",
+
+  "image": "mcr.microsoft.com/devcontainers/go:1.26-bookworm",
+
+  "remoteUser": "vscode",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "golang.go"
+      ]
+    }
+  }
+}

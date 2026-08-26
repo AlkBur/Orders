@@ -378,6 +378,29 @@ Never run `go clean` automatically.
 The project must be built and tested using the existing Go build cache.
 Assume the cache is valid unless the user explicitly requests a clean build.
 
+### Проверки только в контейнере
+
+Сборка и проверка Go-проекта выполняются **только** внутри контейнера
+из `.devcontainer/devcontainer.json`. Устанавливать Go-инструменты
+(go, make, gofmt) в хост-среду запрещено.
+
+Единственные допустимые способы проверки:
+
+```bash
+make test-container    # go test ./... -count=1
+make check-container   # gofmt (только обнаружение) + go vet ./...
+```
+
+- Образ: `mcr.microsoft.com/devcontainers/go:1.26-bookworm`.
+- Go-кэш хранится в именованном volume `orders-go-cache` (монтируется в `/go`).
+  Правила про `go clean` и валидность кэша действуют и внутри контейнера.
+- `check-container` не форматирует файлы, а только обнаруживает нарушения
+  (`test -z "$(gofmt -l .)"`). Форматирование выполняется отдельной командой
+  `gofmt -l -w .` внутри контейнера — до `check-container`.
+- Если `make` недоступен в хост-среде, разрешается запустить эквивалентную
+  `docker run` команду из цели Makefile. Запрещается устанавливать `make`
+  или Go-инструменты ради запуска проверок.
+
 ### Temporary files
 
 Запрещено использовать:
@@ -449,6 +472,15 @@ touch `data/base.db` (the dev database).
 Если необходимой цели нет, агент может использовать
 соответствующий инструмент Go, но обязан предложить
 добавить цель в Makefile.
+
+Сборка, тестирование и проверка форматирования выполняются
+только через контейнерные цели:
+
+- `make test-container` — `go test ./... -count=1`;
+- `make check-container` — `gofmt -l .` (обнаружение) + `go vet ./...`.
+
+Запуск `go build`, `go test`, `go vet`, `gofmt` напрямую в хост-среде
+запрещён.
 
 ---
 
