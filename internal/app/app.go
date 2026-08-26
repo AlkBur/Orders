@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"Orders/internal/customers"
 	"Orders/internal/database"
@@ -40,6 +41,15 @@ type App struct {
 	orgKeys   map[string]string
 	orgKeysMu sync.RWMutex
 }
+
+// Server hardening: таймауты защищают от Slowloris и зависших операций ввода-вывода.
+const (
+	serverReadHeaderTimeout = 5 * time.Second
+	serverReadTimeout       = 120 * time.Second
+	serverWriteTimeout      = 120 * time.Second
+	serverIdleTimeout       = 60 * time.Second
+	serverMaxHeaderBytes    = 1 << 20
+)
 
 func New(configPath string) (*App, error) {
 	config, err := LoadConfig(configPath)
@@ -110,8 +120,13 @@ func New(configPath string) (*App, error) {
 	app.router = app.NewRouter()
 
 	app.server = &http.Server{
-		Addr:    config.HTTPAddress,
-		Handler: app.Handler(),
+		Addr:              config.HTTPAddress,
+		Handler:           app.Handler(),
+		ReadHeaderTimeout: serverReadHeaderTimeout,
+		ReadTimeout:       serverReadTimeout,
+		WriteTimeout:      serverWriteTimeout,
+		IdleTimeout:       serverIdleTimeout,
+		MaxHeaderBytes:    serverMaxHeaderBytes,
 	}
 
 	return app, nil
