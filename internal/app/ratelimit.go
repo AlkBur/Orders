@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/httprate"
 
@@ -13,6 +14,9 @@ import (
 
 // msgLoginRateLimited — сообщение при превышении лимита попыток входа.
 const msgLoginRateLimited = "Too many attempts. Try again later."
+
+// msgAPIRateLimited — сообщение при превышении лимита Integration API.
+const msgAPIRateLimited = "Too many requests"
 
 // loginRateLimiter ограничивает попытки входа по IP и по аккаунту.
 // Лимитеры независимы: атакующий не исчерпывает IP-лимит чужим аккаунтом
@@ -67,4 +71,30 @@ func (a *App) loginAccountKey(r *http.Request) (string, error) {
 		return clientIPKey(r)
 	}
 	return login, nil
+}
+
+// integrationAPIRateLimiter ограничивает частоту обращений к Integration API
+// (/api/integration/organizations/{oid}/*) в расчёте на организацию. Ключ — {oid}
+// из URL: у каждой организации свой независимый бюджет, совпадающий с её
+// API-ключом. Превышение лимита — HTTP 429.
+func (a *App) integrationAPIRateLimiter() func(http.Handler) http.Handler {
+	onRateLimited := func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, msgAPIRateLimited, http.StatusTooManyRequests)
+	}
+
+	return httprate.LimitBy(
+		a.config.RateLimit.IntegrationAPI.Requests,
+		time.Duration(a.config.RateLimit.IntegrationAPI.WindowSec)*time.Second,
+		a.integrationAPIKey,
+		httprate.WithLimitHandler(onRateLimited),
+	)
+}
+
+// integrationAPIKey строит ключ лимита: {oid} из URL, с запасным вариантом на
+// IP клиента при пустом oid (маршрут вне контекста организации).
+func (a *App) integrationAPIKey(r *http.Request) (string, error) {
+	if oid := chi.URLParam(r, "oid"); oid != "" {
+		return oid, nil
+	}
+	return clientIPKey(r)
 }

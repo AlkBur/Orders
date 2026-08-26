@@ -18,10 +18,11 @@ type LimitConfig struct {
 	WindowSec int `json:"window_sec"`
 }
 
-// RateLimitConfig — настройки rate limiter'а для входа.
+// RateLimitConfig — настройки rate limiter'ов.
 type RateLimitConfig struct {
 	LoginByIP      LimitConfig `json:"login_by_ip"`
 	LoginByAccount LimitConfig `json:"login_by_account"`
+	IntegrationAPI LimitConfig `json:"integration_api"`
 }
 
 type Config struct {
@@ -39,6 +40,7 @@ type Config struct {
 var defaultRateLimit = RateLimitConfig{
 	LoginByIP:      LimitConfig{Requests: 10, WindowSec: 60},
 	LoginByAccount: LimitConfig{Requests: 5, WindowSec: 600},
+	IntegrationAPI: LimitConfig{Requests: 120, WindowSec: 60},
 }
 
 func LoadConfig(filename string) (*Config, error) {
@@ -104,5 +106,8 @@ func (c *Config) applyRateLimitDefaults() {
 	}
 	if c.RateLimit.LoginByAccount.Requests <= 0 || c.RateLimit.LoginByAccount.WindowSec <= 0 {
 		c.RateLimit.LoginByAccount = defaultRateLimit.LoginByAccount
+	}
+	if c.RateLimit.IntegrationAPI.Requests <= 0 || c.RateLimit.IntegrationAPI.WindowSec <= 0 {
+		c.RateLimit.IntegrationAPI = defaultRateLimit.IntegrationAPI
 	}
 }

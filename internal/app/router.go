@@ -40,6 +40,7 @@ func (a *App) NewRouter() *chi.Mux {
 
 	// Integration API — обмен между системами (UUID-based)
 	r.Route("/api/integration/organizations/{oid}", func(r chi.Router) {
+		r.Use(a.integrationAPIRateLimiter())
 		r.Use(a.RequireOrganizationAPIKey)
 		r.Put("/customers", a.HandlePutCustomers)
 		r.Put("/products", a.HandlePutProducts)
