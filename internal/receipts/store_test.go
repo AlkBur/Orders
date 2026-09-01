@@ -39,6 +39,9 @@ func testDB(t *testing.T) *database.Schema {
 	if err := schema.Register(ItemsTable); err != nil {
 		t.Fatal(err)
 	}
+	if err := schema.Register(ActionsTable); err != nil {
+		t.Fatal(err)
+	}
 	return schema
 }
 
@@ -1181,5 +1184,234 @@ func TestStore_MarkDeleted_BlocksIntegration(t *testing.T) {
 	legacyUUID := "legacy-uuid"
 	if err := store.Synchronize(ctx, []ReceiptUpdate{{ExchangeID: rec.ExchangeID, UUID: &legacyUUID}}); err != ErrExchangeIDNotFound {
 		t.Fatalf("Synchronize marked: got %v, want ErrExchangeIDNotFound", err)
+	}
+}
+
+func assignUUID(t *testing.T, store *Store, ctx context.Context, orgID int64, rec *Receipt, uuid string) {
+	t.Helper()
+	if _, err := store.SynchronizeByID(ctx, orgID, []SyncUpdate{{ID: rec.ID, UUID: &uuid}}); err != nil {
+		t.Fatal(err)
+	}
+	rec.UUID = uuid
+}
+
+func TestStore_SetAction_Upsert(t *testing.T) {
+	ctx, store, orgID, custID := setupTestData(t)
+	rec := saveReceiptWith(t, store, ctx, "ACT001", time.Now(), 100, orgID, custID, StatusCreated, false)
+
+	if err := store.SetAction(ctx, rec.ID, ActionDelete); err != nil {
+		t.Fatal(err)
+	}
+	action, receivedAt, err := store.GetAction(ctx, rec.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if action != ActionDelete {
+		t.Fatalf("expected action %q, got %q", ActionDelete, action)
+	}
+	if receivedAt != nil {
+		t.Fatal("expected action_received_at to be nil after set")
+	}
+
+	// Повторный выбор меняет действие и сбрасывает дату получения.
+	if err := store.SetAction(ctx, rec.ID, ActionChange); err != nil {
+		t.Fatal(err)
+	}
+	action, receivedAt, err = store.GetAction(ctx, rec.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if action != ActionChange {
+		t.Fatalf("expected action %q, got %q", ActionChange, action)
+	}
+	if receivedAt != nil {
+		t.Fatal("expected action_received_at to be nil after re-set")
+	}
+}
+
+func TestStore_SetAction_Clear(t *testing.T) {
+	ctx, store, orgID, custID := setupTestData(t)
+	rec := saveReceiptWith(t, store, ctx, "ACT002", time.Now(), 100, orgID, custID, StatusCreated, false)
+
+	if err := store.SetAction(ctx, rec.ID, ActionDelete); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetAction(ctx, rec.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+	action, receivedAt, err := store.GetAction(ctx, rec.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if action != "" {
+		t.Fatalf("expected empty action after clear, got %q", action)
+	}
+	if receivedAt != nil {
+		t.Fatal("expected nil receivedAt after clear")
+	}
+}
+
+func TestStore_GetAction_None(t *testing.T) {
+	ctx, store, orgID, custID := setupTestData(t)
+	rec := saveReceiptWith(t, store, ctx, "ACT003", time.Now(), 100, orgID, custID, StatusCreated, false)
+
+	action, receivedAt, err := store.GetAction(ctx, rec.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if action != "" || receivedAt != nil {
+		t.Fatalf("expected no action, got %q / %v", action, receivedAt)
+	}
+}
+
+func TestStore_ListActionsForSync(t *testing.T) {
+	ctx, store, orgID, custID := setupTestData(t)
+	rec1 := saveReceiptWith(t, store, ctx, "ACT004", time.Now(), 100, orgID, custID, StatusCreated, false)
+	rec2 := saveReceiptWith(t, store, ctx, "ACT005", time.Now(), 100, orgID, custID, StatusCreated, false)
+	assignUUID(t, store, ctx, orgID, rec1, "act-004")
+	assignUUID(t, store, ctx, orgID, rec2, "act-005")
+
+	if err := store.SetAction(ctx, rec1.ID, ActionChange); err != nil {
+		t.Fatal(err)
+	}
+
+	actions, err := store.ListActionsForSync(ctx, orgID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(actions) != 1 {
+		t.Fatalf("expected 1 pending action, got %d", len(actions))
+	}
+	if actions[0].UUID != "act-004" || actions[0].Action != ActionChange {
+		t.Fatalf("unexpected action item: %+v", actions[0])
+	}
+}
+
+func TestStore_ListActionsForSync_Empty(t *testing.T) {
+	ctx, store, orgID, _ := setupTestData(t)
+
+	actions, err := store.ListActionsForSync(ctx, orgID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(actions) != 0 {
+		t.Fatalf("expected empty actions, got %d", len(actions))
+	}
+}
+
+func TestStore_ConfirmActions(t *testing.T) {
+	ctx, store, orgID, custID := setupTestData(t)
+	rec := saveReceiptWith(t, store, ctx, "ACT006", time.Now(), 100, orgID, custID, StatusCreated, false)
+	assignUUID(t, store, ctx, orgID, rec, "act-006")
+
+	if err := store.SetAction(ctx, rec.ID, ActionDelete); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := store.ConfirmActions(ctx, orgID, []string{"act-006"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Updated != 1 {
+		t.Fatalf("expected 1 updated, got %d", result.Updated)
+	}
+
+	_, receivedAt, err := store.GetAction(ctx, rec.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if receivedAt == nil {
+		t.Fatal("expected action_received_at to be set after confirm")
+	}
+
+	// Повторное подтверждение идемпотентно.
+	result, err = store.ConfirmActions(ctx, orgID, []string{"act-006"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Updated != 0 {
+		t.Fatalf("expected 0 updated on repeat, got %d", result.Updated)
+	}
+}
+
+func TestStore_ConfirmActions_NotFound(t *testing.T) {
+	ctx, store, orgID, _ := setupTestData(t)
+
+	if _, err := store.ConfirmActions(ctx, orgID, []string{"missing-uuid"}); err != ErrNotFound {
+		t.Fatalf("expected ErrNotFound, got %v", err)
+	}
+}
+
+func TestStore_MarkDeleted_RemovesAction(t *testing.T) {
+	ctx, store, orgID, custID := setupTestData(t)
+	rec := saveReceiptWith(t, store, ctx, "ACT007", time.Now(), 100, orgID, custID, StatusSent, true)
+	assignUUID(t, store, ctx, orgID, rec, "act-007")
+
+	if err := store.SetAction(ctx, rec.ID, ActionDelete); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.MarkDeleted(ctx, rec.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	var n int
+	if err := store.db.QueryRow(`SELECT COUNT(*) FROM receipt_actions WHERE receipt_id = ?`, rec.ID).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Fatalf("expected action row removed on soft delete, got %d", n)
+	}
+}
+
+func TestStore_DeleteByID_RemovesAction(t *testing.T) {
+	ctx, store, orgID, custID := setupTestData(t)
+	rec := saveReceiptWith(t, store, ctx, "ACT008", time.Now(), 100, orgID, custID, StatusCreated, false)
+
+	if err := store.SetAction(ctx, rec.ID, ActionChange); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.DeleteByID(ctx, rec.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	var n int
+	if err := store.db.QueryRow(`SELECT COUNT(*) FROM receipt_actions WHERE receipt_id = ?`, rec.ID).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Fatalf("expected action row removed on physical delete, got %d", n)
+	}
+}
+
+func TestStore_List_FilterByActionSetAt(t *testing.T) {
+	ctx, store, orgID, custID := setupTestData(t)
+	rec := saveReceiptWith(t, store, ctx, "ACT009", time.Now(), 100, orgID, custID, StatusCreated, false)
+	if err := store.SetAction(ctx, rec.ID, ActionDelete); err != nil {
+		t.Fatal(err)
+	}
+	// Фиксируем дату установки для детерминированного отбора.
+	if _, err := store.db.Exec(`UPDATE receipt_actions SET action_set_at = '2026-05-15 10:00:00' WHERE receipt_id = ?`, rec.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	cases := []struct {
+		name string
+		f    Filter
+		want int
+	}{
+		{"no filter", Filter{}, 1},
+		{"from_in_range", Filter{ActionSetFrom: "2026-05-15"}, 1},
+		{"to_in_range", Filter{ActionSetTo: "2026-05-15"}, 1},
+		{"from_after", Filter{ActionSetFrom: "2026-05-16"}, 0},
+		{"to_before", Filter{ActionSetTo: "2026-05-14"}, 0},
+	}
+	for _, c := range cases {
+		list, err := store.List(ctx, ListOptions{Filter: c.f}, nil)
+		if err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		if len(list) != c.want {
+			t.Errorf("%s: got %d receipts, want %d", c.name, len(list), c.want)
+		}
 	}
 }

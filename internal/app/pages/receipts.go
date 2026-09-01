@@ -33,8 +33,18 @@ type ReceiptListRow struct {
 	// receipts-status is-<StatusKey> и одинаков для обеих тем.
 	StatusKey string
 
+	// Info — текст колонки «Инфо»: текущее действие (Удалить/Изменить),
+	// когда оно установлено и ещё не получено 1С; иначе пустая строка.
+	Info string
+
 	CanEdit bool
 	CanSend bool
+
+	// CanSendAction — доступна ли кнопка «Действие» (только для
+	// синхронизированных в 1С документов, uuid != "").
+	// ActionURL — адрес модалки действия (data-dialog-url).
+	CanSendAction bool
+	ActionURL     string
 
 	// CanMarkDeleted — доступна ли пометка документа на удаление
 	// (только администратор и только для разрешённых статусов).
@@ -150,4 +160,14 @@ type ReceiptHeader struct {
 	Date         string
 	Organization string
 	Total        string
+}
+
+// ReceiptActionPage — модель модального окна «Действие» для документа.
+// Три варианта (Удалить / Изменить / Отмена) отправляются формой
+// POST /receipts/{id}/action; CurrentAction показывает уже установленное
+// действие (пустая строка — действия нет).
+type ReceiptActionPage struct {
+	Number        string
+	CurrentAction string
+	FormAction    string
 }

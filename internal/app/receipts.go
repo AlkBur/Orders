@@ -322,6 +322,11 @@ func (a *App) buildReceiptListRows(ctx context.Context, list []*receipts.Receipt
 		base := a.URL(rec.URL())
 		idStr := strconv.FormatInt(rec.ID, 10)
 
+		info := ""
+		if rec.Action != "" && rec.ActionReceivedAt == nil {
+			info = rec.Action
+		}
+
 		rows = append(rows, pages.ReceiptListRow{
 			Number:       ui.MarkMatches(rec.Number, words),
 			Date:         rec.Date.Format("02.01.2006"),
@@ -330,6 +335,8 @@ func (a *App) buildReceiptListRows(ctx context.Context, list []*receipts.Receipt
 			Total:        total,
 			Status:       presentation.Display,
 			StatusKey:    string(presentation.StatusKey),
+
+			Info: info,
 
 			CanEdit: !sent,
 			CanSend: !sent,
@@ -341,6 +348,9 @@ func (a *App) buildReceiptListRows(ctx context.Context, list []*receipts.Receipt
 			SendURL:  base + "?mode=send",
 			ViewURL:  base + "?mode=view",
 			EditURL:  base,
+
+			CanSendAction: rec.UUID != "",
+			ActionURL:     a.URL("/receipts/" + idStr + "/action"),
 
 			CanMarkDeleted: isAdmin && receipts.ReceiptDeletable(rec.Status),
 			DeleteURL:      a.URL("/receipts/" + idStr + "/delete"),
@@ -1050,6 +1060,106 @@ func (a *App) ReceiptMarkDeleted(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := a.SetFlash(r, sessions.FlashSuccess, "Документ помечен на удаление."); err != nil {
+		a.InternalError(w, r, err)
+		return
+	}
+
+	http.Redirect(w, r, a.URL(RouteReceipts), http.StatusSeeOther)
+}
+
+// ReceiptActionDialog отображает модальное окно «Действие» документа
+// (фрагмент для data-dialog-url). Доступно только для синхронизированных
+// в 1С документов (uuid != "").
+func (a *App) ReceiptActionDialog(w http.ResponseWriter, r *http.Request) {
+	NoCache(w)
+
+	id := receiptIDFromURL(r)
+	if id == 0 {
+		http.NotFound(w, r)
+		return
+	}
+
+	doc, err := a.receipts.GetByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, receipts.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		a.InternalError(w, r, err)
+		return
+	}
+	if doc.Receipt.UUID == "" {
+		http.NotFound(w, r)
+		return
+	}
+
+	currentAction, _, err := a.receipts.GetAction(r.Context(), id)
+	if err != nil {
+		a.InternalError(w, r, err)
+		return
+	}
+
+	page := pages.ReceiptActionPage{
+		Number:        doc.Receipt.Number,
+		CurrentAction: currentAction,
+		FormAction:    a.URL("/receipts/" + strconv.FormatInt(id, 10) + "/action"),
+	}
+
+	pageFS, err := fs.Sub(receipts.Templates(), "action")
+	if err != nil {
+		a.InternalError(w, r, err)
+		return
+	}
+	if err := ui.Render(w, TemplateFS(), pageFS, a.basePath(), "receipts_action_modal", page); err != nil {
+		a.InternalError(w, r, err)
+	}
+}
+
+// ReceiptActionSave устанавливает или очищает действие документа.
+// Доступно только для синхронизированных документов. Пустое значение
+// (кнопка «Отмена») удаляет запись действия.
+func (a *App) ReceiptActionSave(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		a.BadRequest(w, "Invalid request")
+		return
+	}
+
+	id := receiptIDFromURL(r)
+	if id == 0 {
+		http.NotFound(w, r)
+		return
+	}
+
+	doc, err := a.receipts.GetByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, receipts.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		a.InternalError(w, r, err)
+		return
+	}
+	if doc.Receipt.UUID == "" {
+		http.NotFound(w, r)
+		return
+	}
+
+	action := r.FormValue("action")
+	if action != "" && !receipts.ValidAction(action) {
+		a.BadRequest(w, "invalid action")
+		return
+	}
+
+	if err := a.receipts.SetAction(r.Context(), id, action); err != nil {
+		a.InternalError(w, r, err)
+		return
+	}
+
+	message := "Действие отменено."
+	if action != "" {
+		message = "Действие установлено: " + action + "."
+	}
+	if err := a.SetFlash(r, sessions.FlashSuccess, message); err != nil {
 		a.InternalError(w, r, err)
 		return
 	}

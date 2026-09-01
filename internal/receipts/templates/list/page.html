@@ -18,6 +18,7 @@
   <div class="receipts-cell"><span class="receipts-cell-value">{{.Customer}}</span></div>
   <div class="receipts-cell">{{.Total}}</div>
   <div class="receipts-cell"><span class="receipts-status is-{{.StatusKey}}">{{.Status}}</span></div>
+  <div class="receipts-cell is-info">{{if .Info}}<span class="receipts-info">{{.Info}}</span>{{end}}</div>
   <div class="receipts-cell is-actions">
     <div class="receipts-actions">
       {{if .HasFiles}}<a class="button is-primary is-small" href="{{.FilesURL}}" data-dialog-url="{{.FilesURL}}" title="Файлы">{{icon
@@ -26,6 +27,8 @@
           class="receipts-action-label">Копировать</span></a>
       {{if .CanSend}}<a class="button is-success is-small" href="{{.SendURL}}" title="Отправить">{{icon "send"}}<span
           class="receipts-action-label">Отправить</span></a>{{end}}
+      {{if .CanSendAction}}<a class="button is-primary is-small" href="{{.ActionURL}}" data-dialog-url="{{.ActionURL}}"
+        title="Действие">{{icon "at-sign"}}<span class="receipts-action-label">Действие</span></a>{{end}}
       <a class="button is-link is-small" href="{{.ViewURL}}" title="Просмотр">{{icon "file-search"}}<span
           class="receipts-action-label">Просмотр</span></a>
       {{if .CanEdit}}<a class="button is-warning is-small" href="{{.EditURL}}" title="Редактировать">{{icon
@@ -54,6 +57,7 @@
     <div class="receipts-cell">Клиент</div>
     <div class="receipts-cell">Сумма</div>
     <div class="receipts-cell">Статус</div>
+    <div class="receipts-cell">Инфо</div>
     <div class="receipts-cell is-actions"></div>
   </div>
   {{template "receipts_rows" .}}

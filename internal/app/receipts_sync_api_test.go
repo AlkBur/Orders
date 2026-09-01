@@ -380,3 +380,130 @@ func TestSyncAPI_OtherOrgNotFound(t *testing.T) {
 		t.Fatalf("expected 404 for foreign org, got %d: %s", w2.Code, w2.Body.String())
 	}
 }
+
+// actionReceipt создаёт синхронизированный чек (uuid назначен) с текущим
+// действием и возвращает его.
+func actionReceipt(t *testing.T, app *App, orgID int64, action string) *receipts.Receipt {
+	t.Helper()
+	rec := insertQueuedReceipt(t, app, orgID)
+	uuid := "1c-act-" + uniqueSuffix()
+	if _, err := app.receipts.SynchronizeByID(context.Background(), orgID, []receipts.SyncUpdate{{ID: rec.ID, UUID: &uuid}}); err != nil {
+		t.Fatal(err)
+	}
+	rec.UUID = uuid
+	if err := app.receipts.SetAction(context.Background(), rec.ID, action); err != nil {
+		t.Fatal(err)
+	}
+	return rec
+}
+
+func TestSyncAPI_GetActions(t *testing.T) {
+	app, orgID, orgUUID := setupSyncApp(t)
+	rec := actionReceipt(t, app, orgID, receipts.ActionChange)
+
+	w := httptest.NewRecorder()
+	r := syncRequest(t, http.MethodGet, "/api/integration/organizations/"+orgUUID+"/receipts/actions", orgUUID, "", "k1", nil)
+	app.RequireOrganizationAPIKey(http.HandlerFunc(app.HandleGetReceiptActions)).ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var got []receipts.Action
+	if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("expected 1 action, got %d", len(got))
+	}
+	if got[0].UUID != rec.UUID || got[0].Action != receipts.ActionChange {
+		t.Fatalf("unexpected action item: %+v", got[0])
+	}
+}
+
+func TestSyncAPI_GetActions_Empty(t *testing.T) {
+	app, _, orgUUID := setupSyncApp(t)
+
+	w := httptest.NewRecorder()
+	r := syncRequest(t, http.MethodGet, "/api/integration/organizations/"+orgUUID+"/receipts/actions", orgUUID, "", "k1", nil)
+	app.RequireOrganizationAPIKey(http.HandlerFunc(app.HandleGetReceiptActions)).ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var got []receipts.Action
+	if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got == nil || len(got) != 0 {
+		t.Fatalf("expected empty array, got %#v", got)
+	}
+}
+
+func TestSyncAPI_ConfirmActions(t *testing.T) {
+	app, orgID, orgUUID := setupSyncApp(t)
+	rec := actionReceipt(t, app, orgID, receipts.ActionDelete)
+
+	body, _ := json.Marshal([]receiptActionConfirm{{UUID: rec.UUID}})
+	w := httptest.NewRecorder()
+	r := syncRequest(t, http.MethodPut, "/api/integration/organizations/"+orgUUID+"/receipts/actions", orgUUID, "", "k1", body)
+	app.RequireOrganizationAPIKey(http.HandlerFunc(app.HandleConfirmReceiptActions)).ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var res receipts.SyncResult
+	if err := json.NewDecoder(w.Body).Decode(&res); err != nil {
+		t.Fatal(err)
+	}
+	if res.Updated != 1 {
+		t.Fatalf("expected updated 1, got %+v", res)
+	}
+
+	// Действие больше не в очереди (дата получения установлена).
+	w2 := httptest.NewRecorder()
+	r2 := syncRequest(t, http.MethodGet, "/api/integration/organizations/"+orgUUID+"/receipts/actions", orgUUID, "", "k1", nil)
+	app.RequireOrganizationAPIKey(http.HandlerFunc(app.HandleGetReceiptActions)).ServeHTTP(w2, r2)
+	var remaining []receipts.Action
+	json.NewDecoder(w2.Body).Decode(&remaining)
+	if len(remaining) != 0 {
+		t.Fatalf("expected empty actions after confirm, got %d", len(remaining))
+	}
+}
+
+func TestSyncAPI_ConfirmActions_NotFound(t *testing.T) {
+	app, _, orgUUID := setupSyncApp(t)
+
+	body, _ := json.Marshal([]receiptActionConfirm{{UUID: "missing"}})
+	w := httptest.NewRecorder()
+	r := syncRequest(t, http.MethodPut, "/api/integration/organizations/"+orgUUID+"/receipts/actions", orgUUID, "", "k1", body)
+	app.RequireOrganizationAPIKey(http.HandlerFunc(app.HandleConfirmReceiptActions)).ServeHTTP(w, r)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestSyncAPI_ConfirmActions_BadJSON(t *testing.T) {
+	app, _, orgUUID := setupSyncApp(t)
+
+	w := httptest.NewRecorder()
+	r := syncRequest(t, http.MethodPut, "/api/integration/organizations/"+orgUUID+"/receipts/actions", orgUUID, "", "k1", []byte(`{not json`))
+	app.RequireOrganizationAPIKey(http.HandlerFunc(app.HandleConfirmReceiptActions)).ServeHTTP(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestSyncAPI_ConfirmActions_EmptyUUID(t *testing.T) {
+	app, _, orgUUID := setupSyncApp(t)
+
+	body, _ := json.Marshal([]receiptActionConfirm{{UUID: ""}})
+	w := httptest.NewRecorder()
+	r := syncRequest(t, http.MethodPut, "/api/integration/organizations/"+orgUUID+"/receipts/actions", orgUUID, "", "k1", body)
+	app.RequireOrganizationAPIKey(http.HandlerFunc(app.HandleConfirmReceiptActions)).ServeHTTP(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+}

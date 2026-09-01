@@ -89,6 +89,8 @@ type FilterData struct {
 	CustomerName     string
 	Status           string
 	Statuses         []StatusOption
+	ActionSetFrom    string
+	ActionSetTo      string
 	OrgsJSON         string
 	CustomersJSON    string
 	PayloadJSON      string

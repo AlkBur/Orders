@@ -31,13 +31,15 @@ var receiptFilterStatuses = []string{
 // receiptFilter — результат разбора query parameters панели расширенного
 // отбора списка чеков. Пустые значения полей означают отсутствие отбора.
 type receiptFilter struct {
-	dateFrom   string
-	dateTo     string
-	amountFrom *float64
-	amountTo   *float64
-	orgID      int64
-	custID     int64
-	status     string
+	dateFrom      string
+	dateTo        string
+	amountFrom    *float64
+	amountTo      *float64
+	orgID         int64
+	custID        int64
+	status        string
+	actionSetFrom string
+	actionSetTo   string
 }
 
 // active сообщает, установлен ли хотя бы один параметр расширенного
@@ -45,7 +47,8 @@ type receiptFilter struct {
 func (f receiptFilter) active() bool {
 	return f.dateFrom != "" || f.dateTo != "" ||
 		f.amountFrom != nil || f.amountTo != nil ||
-		f.orgID > 0 || f.custID > 0 || f.status != ""
+		f.orgID > 0 || f.custID > 0 || f.status != "" ||
+		f.actionSetFrom != "" || f.actionSetTo != ""
 }
 
 // storeFilter преобразует разобранный фильтр в условия хранилища.
@@ -58,6 +61,8 @@ func (f receiptFilter) storeFilter() receipts.Filter {
 		OrganizationID: f.orgID,
 		CustomerID:     f.custID,
 		Status:         f.status,
+		ActionSetFrom:  f.actionSetFrom,
+		ActionSetTo:    f.actionSetTo,
 	}
 }
 
@@ -75,6 +80,8 @@ func parseReceiptFilter(r *http.Request) receiptFilter {
 	f.amountTo = parseAmountParam(q.Get("amount_to"))
 	f.orgID = parseIDParam(q.Get("organization_id"))
 	f.custID = parseIDParam(q.Get("customer_id"))
+	f.actionSetFrom = parseDateParam(q.Get("action_set_from"))
+	f.actionSetTo = parseDateParam(q.Get("action_set_to"))
 
 	if status := q.Get("status"); status != "" && validReceiptFilterStatus(status) {
 		f.status = status
@@ -120,6 +127,8 @@ func buildFilterData(f receiptFilter, orgs []*organizations.Organization, custs 
 		Statuses:       filterStatusOptions(),
 		OrganizationID: f.orgID,
 		CustomerID:     f.custID,
+		ActionSetFrom:  f.actionSetFrom,
+		ActionSetTo:    f.actionSetTo,
 	}
 	if f.amountFrom != nil {
 		fd.AmountFrom = strconv.FormatFloat(*f.amountFrom, 'f', -1, 64)

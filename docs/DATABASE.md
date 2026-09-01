@@ -36,8 +36,16 @@
 
 - используется SQLite;
 - используется режим WAL;
-- включены внешние ключи (`PRAGMA foreign_keys = ON`);
+- внешние ключи декларируются в схеме (`REFERENCES ... ON DELETE CASCADE`);
 - таблицы создаются автоматически при запуске приложения.
+
+> **Технический долг.** `PRAGMA foreign_keys = ON` в коде не выполняется —
+> ни в `database.OpenPath`, ни в `app.New`, ни в `testutil.NewTestDB`.
+> SQLite по умолчанию держит внешние ключи выключенными, поэтому
+> `ON DELETE CASCADE` фактически не срабатывает. Требуется аудит всех
+> соединений SQLite и включение foreign keys на каждом соединении.
+> До этого связанные записи удаляются явно (например, `receipt_actions`
+> очищается в `MarkDeleted` и `DeleteByID`).
 
 ---
 
@@ -346,6 +354,34 @@ Descriptor предоставляет:
 
 ---
 
+## Таблица ReceiptActions
+
+Назначение: текущее запрошенное действие по документу для 1С. Одна
+актуальная запись на документ (`receipt_id` — первичный ключ); история
+действий не хранится.
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| receipt_id | INTEGER PK | FK → receipts.id |
+| action | TEXT NOT NULL | Действие: `Удалить` или `Изменить` |
+| action_set_at | DATETIME NOT NULL | Дата установки действия (UTC) |
+| action_received_at | DATETIME | Дата получения действия 1С; NULL — ещё не получено |
+
+Правила:
+
+- Действия нет — строки нет.
+- Установка/изменение действия — `action`, `action_set_at=now()`,
+  `action_received_at=NULL`.
+- Подтверждение получения 1С — только `action_received_at=now()`
+  (действие не меняется), идемпотентно.
+- «Отмена» — строка удаляется.
+- Действие доступно только для синхронизированных документов
+  (`receipts.uuid IS NOT NULL`).
+- При удалении документа (soft delete через `deleted_at` или физическое
+  удаление) связанная запись удаляется явно в той же транзакции.
+
+---
+
 # 7. Статусы документов
 
 `Status` — открытая строка (TEXT). Значение полностью управляется 1С
@@ -493,3 +529,14 @@ PDF-файлы сохраняются только в базе данных `fil
 - **Название:** Add receipts tables
 - **Операция:** CREATE TABLE IF NOT EXISTS receipts, CREATE TABLE IF NOT EXISTS receipt_items.
 - Без DROP — идемпотентно, безопасно для существующих данных.
+
+## Версия 6
+
+- **Название:** Add deleted_at to receipts (mark for deletion)
+- **Операция:** ALTER TABLE receipts ADD COLUMN deleted_at DATETIME.
+
+## Версия 7
+
+- **Название:** Add receipt_actions table (current requested action)
+- **Операция:** CREATE TABLE IF NOT EXISTS receipt_actions.
+- Без DROP — идемпотентно, существующие документы не изменяются.

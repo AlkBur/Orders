@@ -1,0 +1,24 @@
+{{define "receipts_action_modal"}}
+<div class="modal" id="receipts-modal" role="dialog" aria-modal="true" aria-labelledby="receipts-action-title">
+  <div class="modal-background receipts-modal-background" data-modal-close></div>
+  <div class="modal-card">
+    <header class="modal-card-head">
+      <p id="receipts-action-title" class="modal-card-title">Действие для чека № {{.Number}}</p>
+      <button type="button" class="delete" data-modal-close aria-label="Закрыть"></button>
+    </header>
+    <form method="POST" action="{{.FormAction}}">
+      <section class="modal-card-body">
+        {{if .CurrentAction}}
+        <p class="receipts-action-current">Текущее действие: <strong>{{.CurrentAction}}</strong></p>
+        {{end}}
+        <p class="receipts-action-hint">Выберите действие, которое передаётся в 1С:</p>
+      </section>
+      <footer class="modal-card-foot is-justify-content-flex-end">
+        <button type="submit" name="action" value="Изменить" class="button is-warning">{{icon "file-pen"}}<span>Изменить</span></button>
+        <button type="submit" name="action" value="Удалить" class="button is-danger">{{icon "trash"}}<span>Удалить</span></button>
+        <button type="submit" name="action" value="" class="button">Отмена</button>
+      </footer>
+    </form>
+  </div>
+</div>
+{{end}}

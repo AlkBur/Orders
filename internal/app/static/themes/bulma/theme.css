@@ -1128,7 +1128,7 @@ html.js .app-menu.is-open .app-menu-panel {
 .receipts-row {
   display: grid;
   grid-template-columns:
-    minmax(5.5rem, 1fr) minmax(6rem, 1fr) minmax(9rem, 1.6fr) minmax(9rem, 1.6fr) minmax(6rem, 1fr) minmax(6.5rem, 1fr) 13.5rem;
+    minmax(5.5rem, 1fr) minmax(6rem, 1fr) minmax(9rem, 1.6fr) minmax(9rem, 1.6fr) minmax(6rem, 1fr) minmax(6.5rem, 1fr) minmax(5rem, 0.9fr) 13.5rem;
   align-items: center;
   padding: 0.75rem 0.75rem;
   border-bottom: 1px solid var(--bulma-border);
@@ -1250,6 +1250,18 @@ html.js .app-menu.is-open .app-menu-panel {
 
 .receipts-status.is-finished {
   color: var(--status-finished);
+}
+
+/* --- Receipts: «Инфо» — текущее действие (красным, пока не получено) --- */
+.receipts-cell.is-info .receipts-info {
+  color: var(--status-cancelled);
+  font-weight: 600;
+}
+
+/* --- Receipts: action dialog --- */
+.receipts-action-current,
+.receipts-action-hint {
+  margin: 0 0 0.75rem;
 }
 
 /* --- Receipts: files dialog --- */
@@ -1425,6 +1437,7 @@ html.js .app-menu.is-open .app-menu-panel {
 
   .receipts-cell:nth-child(3),
   .receipts-cell:nth-child(4),
+  .receipts-cell.is-info,
   .receipts-cell.is-actions {
     grid-column: 1 / -1;
   }
@@ -1472,6 +1485,10 @@ html.js .app-menu.is-open .app-menu-panel {
 
   .receipts-cell:nth-child(6)::before {
     content: "Статус";
+  }
+
+  .receipts-cell.is-info::before {
+    content: "Инфо";
   }
 
   .receipts-cell.is-actions::before {

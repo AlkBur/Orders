@@ -37,6 +37,9 @@ func NewSchema() *database.Schema {
 	if err := s.Register(receipts.ItemsTable); err != nil {
 		panic(err)
 	}
+	if err := s.Register(receipts.ActionsTable); err != nil {
+		panic(err)
+	}
 
 	registerMigrations(s)
 
@@ -129,6 +132,15 @@ func registerMigrations(s *database.Schema) {
 		Name:    "Add deleted_at to receipts (mark for deletion)",
 		Up: func(ctx context.Context, tx *sql.Tx) error {
 			_, err := tx.ExecContext(ctx, `ALTER TABLE receipts ADD COLUMN deleted_at DATETIME`)
+			return err
+		},
+	})
+
+	s.AddMigration(database.Migration{
+		Version: 7,
+		Name:    "Add receipt_actions table (current requested action)",
+		Up: func(ctx context.Context, tx *sql.Tx) error {
+			_, err := tx.ExecContext(ctx, receipts.ActionsTable.CreateSQLIfNotExists())
 			return err
 		},
 	})

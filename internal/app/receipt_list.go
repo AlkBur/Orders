@@ -101,6 +101,12 @@ func (a *App) receiptListLoadMoreURL(query string, filter receiptFilter, limit i
 	if filter.status != "" {
 		q.Set("status", filter.status)
 	}
+	if filter.actionSetFrom != "" {
+		q.Set("action_set_from", filter.actionSetFrom)
+	}
+	if filter.actionSetTo != "" {
+		q.Set("action_set_to", filter.actionSetTo)
+	}
 	q.Set("limit", strconv.Itoa(limit))
 	q.Set("part", "rows")
 	q.Set("after", encodeReceiptCursor(after))

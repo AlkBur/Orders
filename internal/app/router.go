@@ -46,6 +46,8 @@ func (a *App) NewRouter() *chi.Mux {
 		r.Put("/products", a.HandlePutProducts)
 		r.Get("/receipts", a.HandleGetReceiptsQueue)
 		r.Put("/receipts", a.HandleSyncReceipts)
+		r.Get("/receipts/actions", a.HandleGetReceiptActions)
+		r.Put("/receipts/actions", a.HandleConfirmReceiptActions)
 		r.Put("/receipts/{ruuid}", a.HandleUpdateReceiptStatus)
 		r.Put("/receipts/{ruuid}/files", a.HandlePutReceiptFile)
 	})
@@ -75,6 +77,8 @@ func (a *App) NewRouter() *chi.Mux {
 			r.Get("/receipts/{id}/files", a.ReceiptFiles)
 			r.Get("/receipts/{id}/files/{fileID}", a.ReceiptFileContent)
 			r.Post("/receipts/{id}/send", a.ReceiptSubmit)
+			r.Get("/receipts/{id}/action", a.ReceiptActionDialog)
+			r.Post("/receipts/{id}/action", a.ReceiptActionSave)
 			r.With(RequireAdmin).Post("/receipts/{id}/delete", a.ReceiptMarkDeleted)
 
 			// Customers

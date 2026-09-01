@@ -47,6 +47,13 @@ type receiptStatusRequest struct {
 	Status *string `json:"status"`
 }
 
+// receiptActionConfirm — элемент подтверждения получения действия:
+// только внешний uuid документа (подтверждается факт получения информации,
+// а не конкретное действие).
+type receiptActionConfirm struct {
+	UUID string `json:"uuid"`
+}
+
 // getOrgFromURL извлекает организацию из {oid} в URL. Используется всеми
 // хендлерами Integration API после RequireOrganizationAPIKey.
 func (a *App) getOrgFromURL(w http.ResponseWriter, r *http.Request) (int64, bool) {
@@ -207,4 +214,70 @@ func (a *App) HandleUpdateReceiptStatus(w http.ResponseWriter, r *http.Request) 
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(receipts.SyncResult{Updated: 1})
+}
+
+// HandleGetReceiptActions возвращает ожидающие действия организации:
+// документы, у которых есть запись в receipt_actions с незаполненной
+// датой получения (action_received_at IS NULL).
+func (a *App) HandleGetReceiptActions(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := a.getOrgFromURL(w, r)
+	if !ok {
+		return
+	}
+
+	actions, err := a.receipts.ListActionsForSync(r.Context(), orgID)
+	if err != nil {
+		a.InternalError(w, r, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(actions)
+}
+
+// HandleConfirmReceiptActions подтверждает получение действий 1С по
+// внешнему uuid: устанавливает action_received_at=now(). Атомарно для
+// всего массива; идемпотентно для уже подтверждённых.
+func (a *App) HandleConfirmReceiptActions(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := a.getOrgFromURL(w, r)
+	if !ok {
+		return
+	}
+
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+
+	var requests []receiptActionConfirm
+	if err := dec.Decode(&requests); err != nil {
+		a.BadRequest(w, "Invalid JSON")
+		return
+	}
+
+	var extra any
+	if err := dec.Decode(&extra); err != io.EOF {
+		a.BadRequest(w, "Unexpected data after JSON body")
+		return
+	}
+
+	uuids := make([]string, 0, len(requests))
+	for _, item := range requests {
+		if item.UUID == "" {
+			a.BadRequest(w, "uuid is required")
+			return
+		}
+		uuids = append(uuids, item.UUID)
+	}
+
+	result, err := a.receipts.ConfirmActions(r.Context(), orgID, uuids)
+	if err != nil {
+		if errors.Is(err, receipts.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		a.InternalError(w, r, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(result)
 }

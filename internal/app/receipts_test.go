@@ -1800,3 +1800,132 @@ func TestReceiptSave_RoundsToTwoDecimals(t *testing.T) {
 		t.Fatalf("total = %v, want 15.46", doc.Receipt.Total)
 	}
 }
+
+// saveSyncedAppReceipt создаёт чек с назначенным внешним UUID (т.е.
+// синхронизированный в 1С) и возвращает его.
+func saveSyncedAppReceipt(t *testing.T, app *App, orgID int64, number string) *receipts.Receipt {
+	t.Helper()
+	rec := saveAppReceipt(t, app, orgID, number, receipts.StatusSent, true)
+	uuid := "act-" + uniqueSuffix()
+	if _, err := app.receipts.SynchronizeByID(context.Background(), orgID, []receipts.SyncUpdate{{ID: rec.ID, UUID: &uuid}}); err != nil {
+		t.Fatal(err)
+	}
+	rec.UUID = uuid
+	return rec
+}
+
+// actionRequest возвращает GET/POST-запрос модалки/сохранения действия с
+// URL-параметром id.
+func actionRequest(t *testing.T, method, id string, formAction string) *http.Request {
+	t.Helper()
+	path := "/receipts/" + id + "/action"
+	r := httptest.NewRequest(method, path, nil)
+	if method == http.MethodPost {
+		r = httptest.NewRequest(method, path, strings.NewReader("action="+url.QueryEscape(formAction)))
+		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	}
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", id)
+	return r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+}
+
+func TestReceiptActionSave_SetAndClear(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	orgID, _ := insertOrg(t, db, "ActOrg", "kact")
+	app := &App{receipts: receipts.NewStore(db)}
+	rec := saveSyncedAppReceipt(t, app, orgID, "ACT1001")
+	idStr := strconv.FormatInt(rec.ID, 10)
+
+	w := httptest.NewRecorder()
+	app.ReceiptActionSave(w, actionRequest(t, http.MethodPost, idStr, receipts.ActionDelete))
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("set: expected 303, got %d: %s", w.Code, w.Body.String())
+	}
+	action, receivedAt, err := app.receipts.GetAction(context.Background(), rec.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if action != receipts.ActionDelete || receivedAt != nil {
+		t.Fatalf("set: got action %q / receivedAt %v", action, receivedAt)
+	}
+
+	w = httptest.NewRecorder()
+	app.ReceiptActionSave(w, actionRequest(t, http.MethodPost, idStr, ""))
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("clear: expected 303, got %d: %s", w.Code, w.Body.String())
+	}
+	action, receivedAt, err = app.receipts.GetAction(context.Background(), rec.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if action != "" || receivedAt != nil {
+		t.Fatalf("clear: got action %q / receivedAt %v", action, receivedAt)
+	}
+}
+
+func TestReceiptActionSave_NotSynced(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	orgID, _ := insertOrg(t, db, "ActOrg2", "kact2")
+	app := &App{receipts: receipts.NewStore(db)}
+	rec := saveAppReceipt(t, app, orgID, "ACT1002", receipts.StatusCreated, false)
+	idStr := strconv.FormatInt(rec.ID, 10)
+
+	w := httptest.NewRecorder()
+	app.ReceiptActionSave(w, actionRequest(t, http.MethodPost, idStr, receipts.ActionDelete))
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for non-synced, got %d", w.Code)
+	}
+}
+
+func TestReceiptActionSave_InvalidAction(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	orgID, _ := insertOrg(t, db, "ActOrg3", "kact3")
+	app := &App{receipts: receipts.NewStore(db)}
+	rec := saveSyncedAppReceipt(t, app, orgID, "ACT1003")
+	idStr := strconv.FormatInt(rec.ID, 10)
+
+	w := httptest.NewRecorder()
+	app.ReceiptActionSave(w, actionRequest(t, http.MethodPost, idStr, "Взорвать"))
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid action, got %d", w.Code)
+	}
+}
+
+func TestReceiptActionDialog(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	orgID, _ := insertOrg(t, db, "ActOrg4", "kact4")
+	app := &App{receipts: receipts.NewStore(db)}
+	rec := saveSyncedAppReceipt(t, app, orgID, "ACT1004")
+	idStr := strconv.FormatInt(rec.ID, 10)
+
+	if err := app.receipts.SetAction(context.Background(), rec.ID, receipts.ActionChange); err != nil {
+		t.Fatal(err)
+	}
+
+	w := httptest.NewRecorder()
+	app.ReceiptActionDialog(w, actionRequest(t, http.MethodGet, idStr, ""))
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "Действие для чека № "+rec.Number) {
+		t.Errorf("expected dialog title with number, got: %s", body)
+	}
+	if !strings.Contains(body, "Текущее действие: <strong>"+receipts.ActionChange+"</strong>") {
+		t.Errorf("expected current action, got: %s", body)
+	}
+}
+
+func TestReceiptActionDialog_NotSynced(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	orgID, _ := insertOrg(t, db, "ActOrg5", "kact5")
+	app := &App{receipts: receipts.NewStore(db)}
+	rec := saveAppReceipt(t, app, orgID, "ACT1005", receipts.StatusCreated, false)
+	idStr := strconv.FormatInt(rec.ID, 10)
+
+	w := httptest.NewRecorder()
+	app.ReceiptActionDialog(w, actionRequest(t, http.MethodGet, idStr, ""))
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for non-synced, got %d", w.Code)
+	}
+}

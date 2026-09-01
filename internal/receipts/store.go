@@ -106,6 +106,8 @@ func (s *Store) Count(ctx context.Context) (int64, error) {
 // состояние, в базе не существует: вычисляется как StatusCreated,
 // у которого с момента создания прошло не менее 24 часов (тот же
 // механизм, что и statusPresentation в приложении).
+// ActionSetFrom/ActionSetTo — границы даты установки действия
+// (receipt_actions.action_set_at). Значения — даты YYYY-MM-DD.
 type Filter struct {
 	DateFrom       string
 	DateTo         string
@@ -114,6 +116,8 @@ type Filter struct {
 	OrganizationID int64
 	CustomerID     int64
 	Status         string
+	ActionSetFrom  string
+	ActionSetTo    string
 }
 
 // Cursor — позиция keyset-пагинации списка чеков. Так как id —
@@ -187,11 +191,13 @@ func (s *Store) listPage(ctx context.Context, opts ListOptions, visibleFields []
 			r.user_id, COALESCE(u.login, '') AS user_login,
 			r.customer_id, COALESCE(c.name, '') AS customer_name,
 			r.total, r.sent_at, r.status,
+			COALESCE(ra.action, '') AS action, ra.action_received_at,
 			r.created_at, r.updated_at
 		FROM receipts r
 		LEFT JOIN organizations o ON o.id = r.organization_id
 		LEFT JOIN users u ON u.id = r.user_id
 		LEFT JOIN customers c ON c.id = r.customer_id
+		LEFT JOIN receipt_actions ra ON ra.receipt_id = r.id
 	`
 
 	searchWhere, searchArgs := search.BuildWhere(
@@ -236,7 +242,7 @@ func (s *Store) listPage(ctx context.Context, opts ListOptions, visibleFields []
 
 	var list []*Receipt
 	for rows.Next() {
-		r, err := scanReceipt(rows)
+		r, err := scanReceiptWithAction(rows)
 		if err != nil {
 			return nil, err
 		}
@@ -298,10 +304,30 @@ func buildFilterWhere(f Filter) (string, []any) {
 		args = append(args, cargs...)
 	}
 
+	if f.ActionSetFrom != "" {
+		conds = append(conds, "ra.action_set_at >= ?")
+		args = append(args, f.ActionSetFrom+" 00:00:00")
+	}
+	if f.ActionSetTo != "" {
+		conds = append(conds, "ra.action_set_at < ?")
+		args = append(args, actionSetToUpperBound(f.ActionSetTo))
+	}
+
 	if len(conds) == 0 {
 		return "", nil
 	}
 	return "(" + strings.Join(conds, " AND ") + ")", args
+}
+
+// actionSetToUpperBound возвращает верхнюю исключающую границу даты
+// установки действия: следующий день после переданной даты в 00:00:00.
+// Индекс-friendly: сравнение по диапазону без SQL-функции date().
+func actionSetToUpperBound(date string) string {
+	t, err := time.Parse("2006-01-02", date)
+	if err != nil {
+		return date
+	}
+	return t.AddDate(0, 0, 1).Format("2006-01-02") + " 00:00:00"
 }
 
 // statusFilterWhere возвращает условие отбора по отображаемому статусу.
@@ -456,7 +482,19 @@ func saveItemsTx(tx *sql.Tx, receiptID int64, items []ReceiptItem) error {
 }
 
 func (s *Store) DeleteByID(ctx context.Context, id int64) error {
-	result, err := s.db.ExecContext(ctx, `DELETE FROM receipts WHERE id = ?`, id)
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// FK с ON DELETE CASCADE не задействован (PRAGMA foreign_keys не
+	// включается в проекте), поэтому связанное действие удаляется явно.
+	if _, err := tx.ExecContext(ctx, `DELETE FROM receipt_actions WHERE receipt_id = ?`, id); err != nil {
+		return err
+	}
+
+	result, err := tx.ExecContext(ctx, `DELETE FROM receipts WHERE id = ?`, id)
 	if err != nil {
 		return err
 	}
@@ -464,7 +502,7 @@ func (s *Store) DeleteByID(ctx context.Context, id int64) error {
 	if n == 0 {
 		return ErrNotFound
 	}
-	return nil
+	return tx.Commit()
 }
 
 // MarkDeleted помечает документ на удаление. В одной транзакции основной
@@ -522,6 +560,12 @@ func (s *Store) MarkDeleted(ctx context.Context, id int64) error {
 		    updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
 	`, StatusCancelled, id); err != nil {
+		return err
+	}
+
+	// Связанное действие исчезает вместе с документом (soft delete):
+	// FK-каскад не срабатывает, поэтому удаляем явно в той же транзакции.
+	if _, err := conn.ExecContext(ctx, `DELETE FROM receipt_actions WHERE receipt_id = ?`, id); err != nil {
 		return err
 	}
 
@@ -777,6 +821,137 @@ func (s *Store) UpdateByExternal(ctx context.Context, orgID int64, externalUUID 
 	return nil
 }
 
+// SetAction устанавливает текущее действие документа для 1С. Пустое
+// значение удаляет запись (действия нет); иначе — upsert единственной
+// записи с новым action, action_set_at=now() и action_received_at=NULL.
+func (s *Store) SetAction(ctx context.Context, id int64, action string) error {
+	if action == "" {
+		_, err := s.db.ExecContext(ctx, `DELETE FROM receipt_actions WHERE receipt_id = ?`, id)
+		return err
+	}
+
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO receipt_actions (receipt_id, action, action_set_at, action_received_at)
+		VALUES (?, ?, ?, NULL)
+		ON CONFLICT(receipt_id) DO UPDATE SET
+			action = excluded.action,
+			action_set_at = excluded.action_set_at,
+			action_received_at = NULL
+	`, id, action, time.Now().UTC().Format("2006-01-02 15:04:05"))
+	return err
+}
+
+// GetAction возвращает текущее действие документа и дату получения.
+// action пустой — действия нет; receivedAt nil — ещё не получено 1С.
+func (s *Store) GetAction(ctx context.Context, id int64) (string, *time.Time, error) {
+	var action sql.NullString
+	var receivedAt sql.NullTime
+	err := s.db.QueryRowContext(ctx, `
+		SELECT action, action_received_at
+		FROM receipt_actions
+		WHERE receipt_id = ?
+	`, id).Scan(&action, &receivedAt)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return "", nil, nil
+		}
+		return "", nil, err
+	}
+	var recv *time.Time
+	if receivedAt.Valid {
+		recv = &receivedAt.Time
+	}
+	return action.String, recv, nil
+}
+
+// Action — текущее действие документа для Integration API.
+type Action struct {
+	UUID   string `json:"uuid"`
+	Number string `json:"number"`
+	Date   string `json:"date"`
+	Action string `json:"action"`
+}
+
+// ListActionsForSync возвращает ожидающие действия организации: есть
+// запись в receipt_actions и action_received_at IS NULL.
+func (s *Store) ListActionsForSync(ctx context.Context, orgID int64) ([]Action, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT r.uuid, r.number, r.date, ra.action
+		FROM receipts r
+		JOIN receipt_actions ra ON ra.receipt_id = r.id
+		WHERE r.organization_id = ?
+		  AND r.deleted_at IS NULL
+		  AND ra.action_received_at IS NULL
+		ORDER BY r.id DESC
+	`, orgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var actions []Action
+	for rows.Next() {
+		var a Action
+		if err := rows.Scan(&a.UUID, &a.Number, &a.Date, &a.Action); err != nil {
+			return nil, err
+		}
+		actions = append(actions, a)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if actions == nil {
+		actions = []Action{}
+	}
+	return actions, nil
+}
+
+// ConfirmActions подтверждает получение действий 1С по внешнему uuid
+// документа: устанавливает action_received_at=now() на текущей записи.
+// Идемпотентно: уже полученное или отсутствующее действие пропускается.
+// Документ не найден в организации (или удалён) — ErrNotFound. Операция
+// атомарна для всего массива.
+func (s *Store) ConfirmActions(ctx context.Context, orgID int64, uuids []string) (SyncResult, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return SyncResult{}, err
+	}
+	defer tx.Rollback()
+
+	var result SyncResult
+	for _, uuid := range uuids {
+		var receiptID int64
+		err := tx.QueryRowContext(ctx, `
+			SELECT id FROM receipts
+			WHERE organization_id = ? AND uuid = ? AND deleted_at IS NULL
+		`, orgID, uuid).Scan(&receiptID)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return SyncResult{}, ErrNotFound
+			}
+			return SyncResult{}, err
+		}
+
+		res, err := tx.ExecContext(ctx, `
+			UPDATE receipt_actions
+			SET action_received_at = ?
+			WHERE receipt_id = ? AND action_received_at IS NULL
+		`, time.Now().UTC().Format("2006-01-02 15:04:05"), receiptID)
+		if err != nil {
+			return SyncResult{}, err
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return SyncResult{}, err
+		}
+		if n > 0 {
+			result.Updated++
+		}
+	}
+
+	return result, tx.Commit()
+}
+
 func (s *Store) listItems(ctx context.Context, receiptID int64) ([]ReceiptItem, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT
@@ -841,6 +1016,53 @@ func scanReceipt(row interface {
 	}
 	if sentAt.Valid {
 		r.SentAt = &sentAt.Time
+	}
+	if dateStr != "" {
+		r.Date, _ = time.Parse("2006-01-02", dateStr[:10])
+	}
+	r.CreatedAt, _ = parseReceiptTime(createdAt)
+	r.UpdatedAt, _ = parseReceiptTime(updatedAt)
+
+	return r, nil
+}
+
+// scanReceiptWithAction — как scanReceipt, но дополнительно читает текущее
+// действие документа (receipt_actions.action, action_received_at) для списка.
+func scanReceiptWithAction(row interface {
+	Scan(dest ...any) error
+}) (*Receipt, error) {
+	r := &Receipt{}
+
+	var uuid sql.NullString
+	var sentAt sql.NullTime
+	var action sql.NullString
+	var actionReceivedAt sql.NullTime
+	var dateStr, createdAt, updatedAt string
+
+	err := row.Scan(
+		&r.ID, &uuid, &r.ExchangeID, &r.Number, &dateStr,
+		&r.OrganizationID, &r.OrganizationName,
+		&r.UserID, &r.UserLogin,
+		&r.CustomerID, &r.CustomerName,
+		&r.Total, &sentAt, &r.Status,
+		&action, &actionReceivedAt,
+		&createdAt, &updatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if uuid.Valid {
+		r.UUID = uuid.String
+	}
+	if sentAt.Valid {
+		r.SentAt = &sentAt.Time
+	}
+	if action.Valid {
+		r.Action = action.String
+	}
+	if actionReceivedAt.Valid {
+		r.ActionReceivedAt = &actionReceivedAt.Time
 	}
 	if dateStr != "" {
 		r.Date, _ = time.Parse("2006-01-02", dateStr[:10])

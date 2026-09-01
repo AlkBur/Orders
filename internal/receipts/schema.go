@@ -23,6 +23,16 @@ var Table = database.Must(database.NewTable("receipts",
 	database.DateTime("deleted_at"),
 )).AddUniqueConstraint("organization_id", "number")
 
+// ActionsTable хранит текущее запрошенное действие по документу для 1С.
+// Одна актуальная запись на документ (receipt_id — первичный ключ),
+// история не хранится. action_received_at NULL — действие ещё не получено.
+var ActionsTable = database.Must(database.NewTable("receipt_actions",
+	database.Int("receipt_id").PrimaryKey().References("receipts", "id").OnDelete("CASCADE"),
+	database.String("action").NotNull(),
+	database.DateTime("action_set_at").NotNull(),
+	database.DateTime("action_received_at"),
+))
+
 var ItemsTable = database.Must(database.NewTable("receipt_items",
 	database.Int("id").PrimaryKey().AutoIncrement(),
 	database.Int("receipt_id").NotNull().References("receipts", "id").OnDelete("CASCADE"),

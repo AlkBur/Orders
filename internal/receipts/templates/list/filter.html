@@ -63,6 +63,13 @@
           </select>
         </div>
       </div>
+      <div class="filter-field">
+        <span class="filter-label">Действие установлено</span>
+        <div class="filter-pair">
+          <input class="input" type="date" name="action_set_from" value="{{.Search.Filter.ActionSetFrom}}">
+          <input class="input" type="date" name="action_set_to" value="{{.Search.Filter.ActionSetTo}}">
+        </div>
+      </div>
       <div class="filter-actions">
         <button class="button is-primary" type="submit">Применить</button>
         <a class="button" href="{{.Search.URL}}">Сбросить</a>

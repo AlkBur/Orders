@@ -24,6 +24,8 @@ type Receipt struct {
 	Total            float64    `db:"total" label:"Сумма" order:"40" list:"true"`
 	SentAt           *time.Time `db:"sent_at" order:"42"`
 	Status           string     `db:"status" label:"Статус" order:"45" list:"true"`
+	Action           string     `readonly:"true" order:"46"`
+	ActionReceivedAt *time.Time `readonly:"true" order:"47"`
 	CreatedAt        time.Time  `order:"98"`
 	UpdatedAt        time.Time  `order:"99"`
 }
