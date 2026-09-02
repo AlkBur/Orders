@@ -439,6 +439,51 @@ func TestSyncAPI_GetActions_Empty(t *testing.T) {
 	}
 }
 
+func TestSyncAPI_GetActions_Cancelled(t *testing.T) {
+	app, orgID, orgUUID := setupSyncApp(t)
+	rec := actionReceipt(t, app, orgID, receipts.ActionDelete)
+	if err := app.receipts.SetAction(context.Background(), rec.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	// Отмена уходит в API как пустой action.
+	w := httptest.NewRecorder()
+	r := syncRequest(t, http.MethodGet, "/api/integration/organizations/"+orgUUID+"/receipts/actions", orgUUID, "", "k1", nil)
+	app.RequireOrganizationAPIKey(http.HandlerFunc(app.HandleGetReceiptActions)).ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var got []receipts.Action
+	if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("expected 1 cancelled action, got %d", len(got))
+	}
+	if got[0].UUID != rec.UUID || got[0].Action != "" {
+		t.Fatalf("unexpected cancelled action item: %+v", got[0])
+	}
+
+	// После подтверждения исчезает из очереди.
+	body, _ := json.Marshal([]receiptActionConfirm{{UUID: rec.UUID}})
+	w2 := httptest.NewRecorder()
+	r2 := syncRequest(t, http.MethodPut, "/api/integration/organizations/"+orgUUID+"/receipts/actions", orgUUID, "", "k1", body)
+	app.RequireOrganizationAPIKey(http.HandlerFunc(app.HandleConfirmReceiptActions)).ServeHTTP(w2, r2)
+	if w2.Code != http.StatusOK {
+		t.Fatalf("expected 200 on confirm, got %d: %s", w2.Code, w2.Body.String())
+	}
+
+	w3 := httptest.NewRecorder()
+	r3 := syncRequest(t, http.MethodGet, "/api/integration/organizations/"+orgUUID+"/receipts/actions", orgUUID, "", "k1", nil)
+	app.RequireOrganizationAPIKey(http.HandlerFunc(app.HandleGetReceiptActions)).ServeHTTP(w3, r3)
+	var remaining []receipts.Action
+	json.NewDecoder(w3.Body).Decode(&remaining)
+	if len(remaining) != 0 {
+		t.Fatalf("expected empty queue after confirm, got %d", len(remaining))
+	}
+}
+
 func TestSyncAPI_ConfirmActions(t *testing.T) {
 	app, orgID, orgUUID := setupSyncApp(t)
 	rec := actionReceipt(t, app, orgID, receipts.ActionDelete)

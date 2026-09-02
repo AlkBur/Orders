@@ -1117,7 +1117,7 @@ func (a *App) ReceiptActionDialog(w http.ResponseWriter, r *http.Request) {
 
 // ReceiptActionSave устанавливает или очищает действие документа.
 // Доступно только для синхронизированных документов. Пустое значение
-// (кнопка «Отмена») удаляет запись действия.
+// (кнопка «Отмена») очищает ранее установленное действие (если оно было).
 func (a *App) ReceiptActionSave(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		a.BadRequest(w, "Invalid request")

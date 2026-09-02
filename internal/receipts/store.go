@@ -822,11 +822,20 @@ func (s *Store) UpdateByExternal(ctx context.Context, orgID int64, externalUUID 
 }
 
 // SetAction устанавливает текущее действие документа для 1С. Пустое
-// значение удаляет запись (действия нет); иначе — upsert единственной
-// записи с новым action, action_set_at=now() и action_received_at=NULL.
+// значение означает отмену ранее установленного действия: если запись
+// существует, она очищается (action пустой, action_set_at=now(),
+// action_received_at=NULL); если записи нет — ничего не происходит.
+// Непустое значение — upsert единственной записи с новым action,
+// action_set_at=now() и action_received_at=NULL.
 func (s *Store) SetAction(ctx context.Context, id int64, action string) error {
+	now := time.Now().UTC().Format("2006-01-02 15:04:05")
+
 	if action == "" {
-		_, err := s.db.ExecContext(ctx, `DELETE FROM receipt_actions WHERE receipt_id = ?`, id)
+		_, err := s.db.ExecContext(ctx, `
+			UPDATE receipt_actions
+			SET action = '', action_set_at = ?, action_received_at = NULL
+			WHERE receipt_id = ?
+		`, now, id)
 		return err
 	}
 
@@ -837,7 +846,7 @@ func (s *Store) SetAction(ctx context.Context, id int64, action string) error {
 			action = excluded.action,
 			action_set_at = excluded.action_set_at,
 			action_received_at = NULL
-	`, id, action, time.Now().UTC().Format("2006-01-02 15:04:05"))
+	`, id, action, now)
 	return err
 }
 
@@ -872,8 +881,10 @@ type Action struct {
 	Action string `json:"action"`
 }
 
-// ListActionsForSync возвращает ожидающие действия организации: есть
-// запись в receipt_actions и action_received_at IS NULL.
+// ListActionsForSync возвращает ожидающие действия организации: все записи
+// receipt_actions с action_received_at IS NULL, включая отменённые
+// (action пустой), которые передаются в 1С как отмена ранее установленного
+// действия.
 func (s *Store) ListActionsForSync(ctx context.Context, orgID int64) ([]Action, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT r.uuid, r.number, r.date, ra.action

@@ -1239,6 +1239,7 @@ func TestStore_SetAction_Clear(t *testing.T) {
 	if err := store.SetAction(ctx, rec.ID, ""); err != nil {
 		t.Fatal(err)
 	}
+
 	action, receivedAt, err := store.GetAction(ctx, rec.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -1248,6 +1249,39 @@ func TestStore_SetAction_Clear(t *testing.T) {
 	}
 	if receivedAt != nil {
 		t.Fatal("expected nil receivedAt after clear")
+	}
+
+	// Строка сохраняется, а не удаляется.
+	var n int
+	if err := store.db.QueryRow(`SELECT COUNT(*) FROM receipt_actions WHERE receipt_id = ?`, rec.ID).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("expected action row to persist after clear, got %d", n)
+	}
+}
+
+func TestStore_SetAction_Clear_WithoutRow(t *testing.T) {
+	ctx, store, orgID, custID := setupTestData(t)
+	rec := saveReceiptWith(t, store, ctx, "ACT002B", time.Now(), 100, orgID, custID, StatusCreated, false)
+
+	// Отмена без предварительной установки действия ничего не создаёт.
+	if err := store.SetAction(ctx, rec.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	if err := store.db.QueryRow(`SELECT COUNT(*) FROM receipt_actions WHERE receipt_id = ?`, rec.ID).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Fatalf("expected no row after clear without prior action, got %d", n)
+	}
+	action, receivedAt, err := store.GetAction(ctx, rec.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if action != "" || receivedAt != nil {
+		t.Fatalf("expected no action, got %q / %v", action, receivedAt)
 	}
 }
 
@@ -1296,6 +1330,43 @@ func TestStore_ListActionsForSync_Empty(t *testing.T) {
 	}
 	if len(actions) != 0 {
 		t.Fatalf("expected empty actions, got %d", len(actions))
+	}
+}
+
+func TestStore_ListActionsForSync_Cancelled(t *testing.T) {
+	ctx, store, orgID, custID := setupTestData(t)
+	rec := saveReceiptWith(t, store, ctx, "ACT005B", time.Now(), 100, orgID, custID, StatusCreated, false)
+	assignUUID(t, store, ctx, orgID, rec, "act-005b")
+
+	if err := store.SetAction(ctx, rec.ID, ActionDelete); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetAction(ctx, rec.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	// Отменённое действие попадает в очередь с пустым action.
+	actions, err := store.ListActionsForSync(ctx, orgID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(actions) != 1 {
+		t.Fatalf("expected 1 cancelled action in queue, got %d", len(actions))
+	}
+	if actions[0].UUID != "act-005b" || actions[0].Action != "" {
+		t.Fatalf("unexpected cancelled action item: %+v", actions[0])
+	}
+
+	// После подтверждения исчезает из очереди.
+	if _, err := store.ConfirmActions(ctx, orgID, []string{"act-005b"}); err != nil {
+		t.Fatal(err)
+	}
+	actions, err = store.ListActionsForSync(ctx, orgID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(actions) != 0 {
+		t.Fatalf("expected empty queue after confirm, got %d", len(actions))
 	}
 }
 
