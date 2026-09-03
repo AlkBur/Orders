@@ -1285,6 +1285,83 @@ func TestStore_SetAction_Clear_WithoutRow(t *testing.T) {
 	}
 }
 
+func TestStore_SetAction_SameActionIsNoOp(t *testing.T) {
+	ctx, store, orgID, custID := setupTestData(t)
+	rec := saveReceiptWith(t, store, ctx, "ACT0SAME", time.Now(), 100, orgID, custID, StatusCreated, false)
+	assignUUID(t, store, ctx, orgID, rec, "act-same")
+
+	if err := store.SetAction(ctx, rec.ID, ActionDelete); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ConfirmActions(ctx, orgID, []string{"act-same"}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Фиксируем времена, чтобы детерминированно проверить неизменность
+	// даже при совпадении now() в пределах секунды.
+	if _, err := store.db.Exec(`UPDATE receipt_actions SET action_set_at = '2026-05-15 10:00:00', action_received_at = '2026-05-15 11:00:00' WHERE receipt_id = ?`, rec.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	var setAtBefore string
+	var recvAtBefore string
+	if err := store.db.QueryRow(`SELECT action_set_at, action_received_at FROM receipt_actions WHERE receipt_id = ?`, rec.ID).Scan(&setAtBefore, &recvAtBefore); err != nil {
+		t.Fatal(err)
+	}
+
+	// Повторный выбор того же действия — no-op.
+	if err := store.SetAction(ctx, rec.ID, ActionDelete); err != nil {
+		t.Fatal(err)
+	}
+
+	var setAtAfter string
+	var recvAtAfter string
+	if err := store.db.QueryRow(`SELECT action_set_at, action_received_at FROM receipt_actions WHERE receipt_id = ?`, rec.ID).Scan(&setAtAfter, &recvAtAfter); err != nil {
+		t.Fatal(err)
+	}
+	if setAtAfter != setAtBefore {
+		t.Fatalf("action_set_at changed: %q -> %q", setAtBefore, setAtAfter)
+	}
+	if recvAtAfter != recvAtBefore {
+		t.Fatalf("action_received_at changed: %q -> %q", recvAtBefore, recvAtAfter)
+	}
+}
+
+func TestStore_SetAction_RepeatedClearIsNoOp(t *testing.T) {
+	ctx, store, orgID, custID := setupTestData(t)
+	rec := saveReceiptWith(t, store, ctx, "ACT0CLEAR", time.Now(), 100, orgID, custID, StatusCreated, false)
+
+	if err := store.SetAction(ctx, rec.ID, ActionDelete); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetAction(ctx, rec.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	// Фиксируем дату установки для детерминированной проверки неизменности.
+	if _, err := store.db.Exec(`UPDATE receipt_actions SET action_set_at = '2026-05-15 10:00:00' WHERE receipt_id = ?`, rec.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	var setAtBefore string
+	if err := store.db.QueryRow(`SELECT action_set_at FROM receipt_actions WHERE receipt_id = ?`, rec.ID).Scan(&setAtBefore); err != nil {
+		t.Fatal(err)
+	}
+
+	// Повторная отмена уже отменённого действия — no-op.
+	if err := store.SetAction(ctx, rec.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	var setAtAfter string
+	if err := store.db.QueryRow(`SELECT action_set_at FROM receipt_actions WHERE receipt_id = ?`, rec.ID).Scan(&setAtAfter); err != nil {
+		t.Fatal(err)
+	}
+	if setAtAfter != setAtBefore {
+		t.Fatalf("action_set_at changed on repeated clear: %q -> %q", setAtBefore, setAtAfter)
+	}
+}
+
 func TestStore_GetAction_None(t *testing.T) {
 	ctx, store, orgID, custID := setupTestData(t)
 	rec := saveReceiptWith(t, store, ctx, "ACT003", time.Now(), 100, orgID, custID, StatusCreated, false)

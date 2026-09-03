@@ -823,10 +823,13 @@ func (s *Store) UpdateByExternal(ctx context.Context, orgID int64, externalUUID 
 
 // SetAction устанавливает текущее действие документа для 1С. Пустое
 // значение означает отмену ранее установленного действия: если запись
-// существует, она очищается (action пустой, action_set_at=now(),
-// action_received_at=NULL); если записи нет — ничего не происходит.
+// существует и действие непустое, она очищается (action пустой,
+// action_set_at=now(), action_received_at=NULL); если записи нет или
+// действие уже пустое — ничего не происходит.
 // Непустое значение — upsert единственной записи с новым action,
-// action_set_at=now() и action_received_at=NULL.
+// action_set_at=now() и action_received_at=NULL. Повторный выбор того же
+// действия — no-op: запись не меняется (action_set_at и
+// action_received_at сохраняются, действие не возвращается в очередь).
 func (s *Store) SetAction(ctx context.Context, id int64, action string) error {
 	now := time.Now().UTC().Format("2006-01-02 15:04:05")
 
@@ -834,7 +837,7 @@ func (s *Store) SetAction(ctx context.Context, id int64, action string) error {
 		_, err := s.db.ExecContext(ctx, `
 			UPDATE receipt_actions
 			SET action = '', action_set_at = ?, action_received_at = NULL
-			WHERE receipt_id = ?
+			WHERE receipt_id = ? AND action <> ''
 		`, now, id)
 		return err
 	}
@@ -846,6 +849,7 @@ func (s *Store) SetAction(ctx context.Context, id int64, action string) error {
 			action = excluded.action,
 			action_set_at = excluded.action_set_at,
 			action_received_at = NULL
+		WHERE receipt_actions.action <> excluded.action
 	`, id, action, now)
 	return err
 }
