@@ -18,7 +18,7 @@
   <div class="receipts-cell"><span class="receipts-cell-value">{{.Customer}}</span></div>
   <div class="receipts-cell">{{.Total}}</div>
   <div class="receipts-cell"><span class="receipts-status is-{{.StatusKey}}">{{.Status}}</span></div>
-  <div class="receipts-cell is-info">{{if .Info}}<span class="receipts-info">{{.Info}}</span>{{end}}</div>
+  <div class="receipts-cell is-info">{{if .Info}}<span class="receipts-info{{if .InfoPending}} is-pending{{end}}">{{.Info}}</span>{{end}}</div>
   <div class="receipts-cell is-actions">
     <div class="receipts-actions">
       {{if .HasFiles}}<a class="button is-primary is-small" href="{{.FilesURL}}" data-dialog-url="{{.FilesURL}}" title="Файлы">{{icon

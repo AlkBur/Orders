@@ -322,10 +322,8 @@ func (a *App) buildReceiptListRows(ctx context.Context, list []*receipts.Receipt
 		base := a.URL(rec.URL())
 		idStr := strconv.FormatInt(rec.ID, 10)
 
-		info := ""
-		if rec.Action != "" && rec.ActionReceivedAt == nil {
-			info = rec.Action
-		}
+		info := rec.Action
+		pending := info != "" && rec.ActionReceivedAt == nil
 
 		rows = append(rows, pages.ReceiptListRow{
 			Number:       ui.MarkMatches(rec.Number, words),
@@ -336,7 +334,8 @@ func (a *App) buildReceiptListRows(ctx context.Context, list []*receipts.Receipt
 			Status:       presentation.Display,
 			StatusKey:    string(presentation.StatusKey),
 
-			Info: info,
+			Info:        info,
+			InfoPending: pending,
 
 			CanEdit: !sent,
 			CanSend: !sent,

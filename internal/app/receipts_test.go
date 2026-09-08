@@ -901,6 +901,65 @@ func TestReceiptsList_StatusCell(t *testing.T) {
 	}
 }
 
+// TestReceiptsList_ActionInfo — колонка «Инфо» отображает действие всегда,
+// а неподтверждённое 1С состояние обозначается классом is-pending (красный).
+func TestReceiptsList_ActionInfo(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	orgID, _ := insertOrg(t, db, "ActInfoOrg", "kact")
+	store := receipts.NewStore(db)
+	recUUID := insertReceiptForOrg(t, db, orgID)
+
+	doc, err := store.GetByExternal(context.Background(), recUUID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := doc.Receipt.ID
+
+	render := func() string {
+		app := &App{receipts: receipts.NewStore(db)}
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/receipts", nil)
+		app.ReceiptsPage(w, r)
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+		return w.Body.String()
+	}
+
+	// Действия нет — колонка «Инфо» пустая.
+	if body := render(); strings.Contains(body, "receipts-info") {
+		t.Fatalf("expected no action info without action:\n%s", body)
+	}
+
+	// Действие установлено, не подтверждено — красный индикатор is-pending.
+	if err := store.SetAction(context.Background(), id, receipts.ActionDelete); err != nil {
+		t.Fatal(err)
+	}
+	if body := render(); !strings.Contains(body, `class="receipts-info is-pending">Удалить</span>`) {
+		t.Fatalf("expected pending action badge:\n%s", body)
+	}
+
+	// Подтверждено 1С — текст действия остаётся, is-pending исчезает.
+	if _, err := store.ConfirmActions(context.Background(), orgID, []string{recUUID}); err != nil {
+		t.Fatal(err)
+	}
+	body := render()
+	if !strings.Contains(body, `class="receipts-info">Удалить</span>`) {
+		t.Fatalf("expected confirmed action badge:\n%s", body)
+	}
+	if strings.Contains(body, "receipts-info is-pending") {
+		t.Fatalf("expected no pending badge after confirm:\n%s", body)
+	}
+
+	// Отмена — колонка «Инфо» снова пустая (запись с пустым action остаётся).
+	if err := store.SetAction(context.Background(), id, ""); err != nil {
+		t.Fatal(err)
+	}
+	if body := render(); strings.Contains(body, "receipts-info") {
+		t.Fatalf("expected empty info after cancel:\n%s", body)
+	}
+}
+
 // indexesOf возвращает абсолютные позиции всех вхождений подстроки.
 func indexesOf(s, sub string) []int {
 	var res []int

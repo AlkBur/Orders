@@ -1252,10 +1252,14 @@ html.js .app-menu.is-open .app-menu-panel {
   color: var(--status-finished);
 }
 
-/* --- Receipts: «Инфо» — текущее действие (красным, пока не получено) --- */
+/* --- Receipts: «Инфо» — текущее действие --- */
 .receipts-cell.is-info .receipts-info {
-  color: var(--status-cancelled);
   font-weight: 600;
+}
+
+/* Действие, ещё не подтверждённое 1С, подсвечивается красным. */
+.receipts-cell.is-info .receipts-info.is-pending {
+  color: var(--status-cancelled);
 }
 
 /* --- Receipts: action dialog --- */

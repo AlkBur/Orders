@@ -3,4 +3,4 @@ data/*
 tools/agent/
 orders
 *.exe
-.kilo/*
+.kilo
