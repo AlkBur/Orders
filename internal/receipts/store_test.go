@@ -1023,6 +1023,27 @@ func TestReceiptDeletable(t *testing.T) {
 	}
 }
 
+func TestReceiptActionable(t *testing.T) {
+	tests := []struct {
+		status string
+		want   bool
+	}{
+		{"", true},
+		{StatusCreated, true},
+		{StatusSent, true},
+		{StatusAccepted, true},
+		{StatusProcessed, true},
+		{StatusFinished, true},
+		{OverdueStatus, true},
+		{StatusCancelled, false},
+	}
+	for _, tt := range tests {
+		if got := ReceiptActionable(tt.status); got != tt.want {
+			t.Errorf("ReceiptActionable(%q) = %v, want %v", tt.status, got, tt.want)
+		}
+	}
+}
+
 func TestStore_MarkDeleted_StatusMatrix(t *testing.T) {
 	ctx, store, orgID, custID := setupTestData(t)
 

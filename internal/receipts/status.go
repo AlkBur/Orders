@@ -41,3 +41,15 @@ func ReceiptDeletable(status string) bool {
 		return false
 	}
 }
+
+// ReceiptActionable определяет, можно ли устанавливать/изменять действие
+// (Удалить/Изменить) для документа в заданном статусе. Для отменённого
+// документа (StatusCancelled) действие запрещено.
+func ReceiptActionable(status string) bool {
+	switch status {
+	case StatusCancelled:
+		return false
+	default:
+		return true
+	}
+}

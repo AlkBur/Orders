@@ -1988,3 +1988,61 @@ func TestReceiptActionDialog_NotSynced(t *testing.T) {
 		t.Fatalf("expected 404 for non-synced, got %d", w.Code)
 	}
 }
+
+// cancelSyncedReceipt переводит синхронизированный чек в статус «Отменен».
+func cancelSyncedReceipt(t *testing.T, app *App, orgID int64, uuid string) {
+	t.Helper()
+	status := receipts.StatusCancelled
+	if err := app.receipts.UpdateByExternal(context.Background(), orgID, uuid, &status); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestReceiptActionSave_Cancelled(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	orgID, _ := insertOrg(t, db, "ActOrg6", "kact6")
+	app := &App{receipts: receipts.NewStore(db)}
+	rec := saveSyncedAppReceipt(t, app, orgID, "ACT1006")
+	cancelSyncedReceipt(t, app, orgID, rec.UUID)
+	idStr := strconv.FormatInt(rec.ID, 10)
+
+	w := httptest.NewRecorder()
+	app.ReceiptActionSave(w, actionRequest(t, http.MethodPost, idStr, receipts.ActionDelete))
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for cancelled document, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestReceiptActionDialog_Cancelled(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	orgID, _ := insertOrg(t, db, "ActOrg7", "kact7")
+	app := &App{receipts: receipts.NewStore(db)}
+	rec := saveSyncedAppReceipt(t, app, orgID, "ACT1007")
+	cancelSyncedReceipt(t, app, orgID, rec.UUID)
+	idStr := strconv.FormatInt(rec.ID, 10)
+
+	w := httptest.NewRecorder()
+	app.ReceiptActionDialog(w, actionRequest(t, http.MethodGet, idStr, ""))
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for cancelled document, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestReceiptsList_ActionButtonCancelled(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	orgID, _ := insertOrg(t, db, "ActOrg8", "kact8")
+	app := &App{receipts: receipts.NewStore(db)}
+	rec := saveSyncedAppReceipt(t, app, orgID, "ACT1008")
+	cancelSyncedReceipt(t, app, orgID, rec.UUID)
+	idStr := strconv.FormatInt(rec.ID, 10)
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/receipts", nil)
+	app.ReceiptsPage(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if body := w.Body.String(); strings.Contains(body, `data-dialog-url="/receipts/`+idStr+`/action"`) {
+		t.Fatalf("expected no action button for cancelled document:\n%s", body)
+	}
+}

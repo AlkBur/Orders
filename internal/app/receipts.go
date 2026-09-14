@@ -348,7 +348,7 @@ func (a *App) buildReceiptListRows(ctx context.Context, list []*receipts.Receipt
 			ViewURL:  base + "?mode=view",
 			EditURL:  base,
 
-			CanSendAction: rec.UUID != "",
+			CanSendAction: rec.UUID != "" && receipts.ReceiptActionable(rec.Status),
 			ActionURL:     a.URL("/receipts/" + idStr + "/action"),
 
 			CanMarkDeleted: isAdmin && receipts.ReceiptDeletable(rec.Status),
@@ -1068,7 +1068,7 @@ func (a *App) ReceiptMarkDeleted(w http.ResponseWriter, r *http.Request) {
 
 // ReceiptActionDialog отображает модальное окно «Действие» документа
 // (фрагмент для data-dialog-url). Доступно только для синхронизированных
-// в 1С документов (uuid != "").
+// в 1С документов (uuid != ""), кроме документов в статусе «Отменен».
 func (a *App) ReceiptActionDialog(w http.ResponseWriter, r *http.Request) {
 	NoCache(w)
 
@@ -1089,6 +1089,10 @@ func (a *App) ReceiptActionDialog(w http.ResponseWriter, r *http.Request) {
 	}
 	if doc.Receipt.UUID == "" {
 		http.NotFound(w, r)
+		return
+	}
+	if !receipts.ReceiptActionable(doc.Receipt.Status) {
+		http.Error(w, "receipt action cannot be changed for a cancelled document", http.StatusForbidden)
 		return
 	}
 
@@ -1115,8 +1119,9 @@ func (a *App) ReceiptActionDialog(w http.ResponseWriter, r *http.Request) {
 }
 
 // ReceiptActionSave устанавливает или очищает действие документа.
-// Доступно только для синхронизированных документов. Пустое значение
-// (кнопка «Отмена») очищает ранее установленное действие (если оно было).
+// Доступно только для синхронизированных документов, кроме документов
+// в статусе «Отменен» (403). Пустое значение (кнопка «Отмена») очищает
+// ранее установленное действие (если оно было).
 func (a *App) ReceiptActionSave(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		a.BadRequest(w, "Invalid request")
@@ -1140,6 +1145,10 @@ func (a *App) ReceiptActionSave(w http.ResponseWriter, r *http.Request) {
 	}
 	if doc.Receipt.UUID == "" {
 		http.NotFound(w, r)
+		return
+	}
+	if !receipts.ReceiptActionable(doc.Receipt.Status) {
+		http.Error(w, "receipt action cannot be changed for a cancelled document", http.StatusForbidden)
 		return
 	}
 
