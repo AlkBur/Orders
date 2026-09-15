@@ -803,6 +803,7 @@ func (a *App) ReceiptSave(w http.ResponseWriter, r *http.Request) {
 
 	var items []receipts.ReceiptItem
 	var total float64
+	var lineErrors []string
 	for i := 0; ; i++ {
 		productID := parseInt64(r.FormValue("items[" + strconv.Itoa(i) + "][product_id]"))
 		if productID == 0 && i > 0 {
@@ -832,6 +833,18 @@ func (a *App) ReceiptSave(w http.ResponseWriter, r *http.Request) {
 		amount := round2(parseFloat(amountStr))
 		if amountStr == "" {
 			amount = round2(quantity * price)
+		}
+		// Строка документа не может содержать нулевые значения. Проверка идёт
+		// по нормализованным значениям и не зависит от того, как поле было
+		// отредактировано (через модалку или прямо в таблице).
+		if quantity <= 0 {
+			lineErrors = append(lineErrors, "Строка "+strconv.Itoa(i+1)+": количество должно быть больше нуля.")
+		}
+		if price <= 0 {
+			lineErrors = append(lineErrors, "Строка "+strconv.Itoa(i+1)+": цена должна быть больше нуля.")
+		}
+		if amount <= 0 {
+			lineErrors = append(lineErrors, "Строка "+strconv.Itoa(i+1)+": сумма должна быть больше нуля.")
 		}
 		items = append(items, receipts.ReceiptItem{
 			LineNum:   i + 1,
@@ -910,6 +923,18 @@ func (a *App) ReceiptSave(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		rec.ExchangeID = uuid
+	}
+
+	itemVE := NewValidationError("Ошибка документа")
+	for _, msg := range lineErrors {
+		itemVE.Add(msg)
+	}
+	if len(items) == 0 {
+		itemVE.Add("Добавьте хотя бы одну строку.")
+	}
+	if !itemVE.IsEmpty() {
+		a.RenderReceiptValidationError(w, r, itemVE, items)
+		return
 	}
 
 	doc := &receipts.Document{Receipt: rec, Items: items}

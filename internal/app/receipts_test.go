@@ -243,24 +243,26 @@ func TestReceiptSend_HtmxEmptyItems(t *testing.T) {
 	r.Header.Set("HX-Request", "true")
 	app.ReceiptSave(w, r)
 
+	// Пустой документ не сохраняется: возвращаются ошибки, редиректа нет.
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
+	if redirect := w.Header().Get("HX-Redirect"); redirect != "" {
+		t.Errorf("expected no HX-Redirect, got %q", redirect)
+	}
+	if !strings.Contains(w.Body.String(), "Добавьте хотя бы одну строку.") {
+		t.Fatalf("expected empty-document error, got %s", w.Body.String())
+	}
 	list, err := app.receipts.List(context.Background(), receipts.ListOptions{}, nil)
-	if err != nil || len(list) != 1 {
-		t.Fatalf("expected one saved receipt, got %d: %v", len(list), err)
+	if err != nil {
+		t.Fatal(err)
 	}
-	redirect := w.Header().Get("HX-Redirect")
-	want := list[0].URL() + "?mode=send&from=edit"
-	if redirect != want {
-		t.Errorf("expected HX-Redirect %q, got %q", want, redirect)
-	}
-	if doc, err := app.receipts.GetByID(context.Background(), list[0].ID); err == nil && doc.Receipt.SentAt != nil {
-		t.Error("expected SentAt to stay nil after editor send")
+	if len(list) != 0 {
+		t.Fatalf("expected no saved receipt, got %d", len(list))
 	}
 }
 
-func TestReceiptSend_FullPageEmptyItemsRedirectsToConfirm(t *testing.T) {
+func TestReceiptSend_FullPageEmptyItemsRejected(t *testing.T) {
 	db := testutil.NewTestDB(t, NewSchema())
 	orgID, _ := insertOrg(t, db, "Org One", "key_org1")
 	app := &App{
@@ -274,16 +276,15 @@ func TestReceiptSend_FullPageEmptyItemsRedirectsToConfirm(t *testing.T) {
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	app.ReceiptSave(w, r)
 
-	if w.Code != http.StatusSeeOther {
-		t.Fatalf("expected 303, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d: %s", w.Code, w.Body.String())
 	}
 	list, err := app.receipts.List(context.Background(), receipts.ListOptions{}, nil)
-	if err != nil || len(list) != 1 {
-		t.Fatalf("expected one saved receipt, got %d: %v", len(list), err)
+	if err != nil {
+		t.Fatal(err)
 	}
-	want := list[0].URL() + "?mode=send&from=edit"
-	if got := w.Header().Get("Location"); got != want {
-		t.Errorf("expected Location %q, got %q", want, got)
+	if len(list) != 0 {
+		t.Fatalf("expected no saved receipt, got %d", len(list))
 	}
 }
 
@@ -302,19 +303,15 @@ func TestReceiptSave_EmptyItems(t *testing.T) {
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	app.ReceiptSave(w, r)
 
-	if w.Code != http.StatusSeeOther {
-		t.Fatalf("expected 303, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d: %s", w.Code, w.Body.String())
 	}
 	list, err := app.receipts.List(context.Background(), receipts.ListOptions{}, nil)
-	if err != nil || len(list) != 1 {
-		t.Fatalf("expected one saved receipt, got %d: %v", len(list), err)
-	}
-	doc, err := app.receipts.GetByID(context.Background(), list[0].ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(doc.Items) != 0 {
-		t.Fatalf("expected 0 items, got %d", len(doc.Items))
+	if len(list) != 0 {
+		t.Fatalf("expected no saved receipt, got %d", len(list))
 	}
 }
 
@@ -344,6 +341,8 @@ func TestReceiptSave_ExistingRemoveAllItems(t *testing.T) {
 	id := list[0].ID
 	idStr := strconv.FormatInt(id, 10)
 
+	// Удаление всех строк и сохранение пустого документа отклоняется,
+	// прежние строки в БД остаются без изменений.
 	body = "number=001&organization_id=" + strconv.FormatInt(orgID, 10) +
 		"&user_id=1&customer_id=1&total=0&date=2026-07-29"
 	w = httptest.NewRecorder()
@@ -353,16 +352,181 @@ func TestReceiptSave_ExistingRemoveAllItems(t *testing.T) {
 	rctx.URLParams.Add("id", idStr)
 	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
 	app.ReceiptSave(w, r)
-	if w.Code != http.StatusSeeOther {
-		t.Fatalf("update: expected 303, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("update: expected 422, got %d: %s", w.Code, w.Body.String())
 	}
 
 	doc, err := app.receipts.GetByID(context.Background(), id)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(doc.Items) != 0 {
-		t.Fatalf("expected 0 items after removing all, got %d", len(doc.Items))
+	if len(doc.Items) != 1 {
+		t.Fatalf("expected original item to remain, got %d items", len(doc.Items))
+	}
+	if doc.Items[0].Quantity != 2 || doc.Items[0].Price != 500 || doc.Items[0].Amount != 1000 {
+		t.Fatalf("expected original values, got qty=%v price=%v amount=%v",
+			doc.Items[0].Quantity, doc.Items[0].Price, doc.Items[0].Amount)
+	}
+}
+
+func TestReceiptSave_ZeroValuesRejected(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	orgID, _ := insertOrg(t, db, "ZeroOrg", "kzero")
+	prodStore := products.NewStore(db)
+	prodID, _ := insertProduct(t, db, orgID, "Zero Product", "pcs")
+	app := &App{
+		receipts:      receipts.NewStore(db),
+		organizations: organizations.NewStore(db),
+		products:      prodStore,
+	}
+
+	body := "number=Z1&organization_id=" + strconv.FormatInt(orgID, 10) +
+		"&user_id=1&customer_id=1&date=2026-07-29" +
+		"&items[0][product_id]=" + strconv.FormatInt(prodID, 10) +
+		"&items[0][quantity]=0&items[0][price]=0&items[0][amount]=0"
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPost, "/receipts", strings.NewReader(body))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	app.ReceiptSave(w, r)
+
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d: %s", w.Code, w.Body.String())
+	}
+	list, err := app.receipts.List(context.Background(), receipts.ListOptions{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 0 {
+		t.Fatalf("expected no saved receipt, got %d", len(list))
+	}
+}
+
+func TestReceiptSave_ZeroValuesRejected_Fragment(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	orgID, _ := insertOrg(t, db, "ZeroFragOrg", "kzerofrag")
+	prodStore := products.NewStore(db)
+	prodID, _ := insertProduct(t, db, orgID, "Zero Frag Product", "pcs")
+	app := &App{
+		receipts:      receipts.NewStore(db),
+		organizations: organizations.NewStore(db),
+		products:      prodStore,
+	}
+
+	body := "number=Z2&organization_id=" + strconv.FormatInt(orgID, 10) +
+		"&user_id=1&customer_id=1&date=2026-07-29" +
+		"&items[0][product_id]=" + strconv.FormatInt(prodID, 10) +
+		"&items[0][quantity]=1&items[0][price]=0&items[0][amount]=0"
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPost, "/receipts", strings.NewReader(body))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.Header.Set("HX-Request", "true")
+	app.ReceiptSave(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if redirect := w.Header().Get("HX-Redirect"); redirect != "" {
+		t.Errorf("expected no HX-Redirect, got %q", redirect)
+	}
+	if !strings.Contains(w.Body.String(), "цена должна быть больше нуля") {
+		t.Fatalf("expected price error, got %s", w.Body.String())
+	}
+	list, err := app.receipts.List(context.Background(), receipts.ListOptions{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 0 {
+		t.Fatalf("expected no saved receipt, got %d", len(list))
+	}
+}
+
+func TestReceiptSave_NegativeValuesRejected(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	orgID, _ := insertOrg(t, db, "NegOrg", "kneg")
+	prodStore := products.NewStore(db)
+	prodID, _ := insertProduct(t, db, orgID, "Neg Product", "pcs")
+	app := &App{
+		receipts:      receipts.NewStore(db),
+		organizations: organizations.NewStore(db),
+		products:      prodStore,
+	}
+
+	body := "number=N1&organization_id=" + strconv.FormatInt(orgID, 10) +
+		"&user_id=1&customer_id=1&date=2026-07-29" +
+		"&items[0][product_id]=" + strconv.FormatInt(prodID, 10) +
+		"&items[0][quantity]=-1&items[0][price]=-1&items[0][amount]=-1"
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPost, "/receipts", strings.NewReader(body))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	app.ReceiptSave(w, r)
+
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d: %s", w.Code, w.Body.String())
+	}
+	list, err := app.receipts.List(context.Background(), receipts.ListOptions{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 0 {
+		t.Fatalf("expected no saved receipt, got %d", len(list))
+	}
+}
+
+// TestReceiptSave_InlineEditZeroRejected проверяет второй путь правки строки:
+// значения изменены прямо в таблице (та же форма, документ существует).
+// Документ не должен сохраниться, а прежние значения строк остаются в БД.
+func TestReceiptSave_InlineEditZeroRejected(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	orgID, _ := insertOrg(t, db, "InlineOrg", "kinline")
+	prodStore := products.NewStore(db)
+	prodID, _ := insertProduct(t, db, orgID, "Inline Product", "pcs")
+	app := &App{
+		receipts:      receipts.NewStore(db),
+		organizations: organizations.NewStore(db),
+		products:      prodStore,
+	}
+
+	create := "number=I1&organization_id=" + strconv.FormatInt(orgID, 10) +
+		"&user_id=1&customer_id=1&date=2026-07-29" +
+		"&items[0][product_id]=" + strconv.FormatInt(prodID, 10) +
+		"&items[0][quantity]=2&items[0][price]=500&items[0][amount]=1000"
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPost, "/receipts", strings.NewReader(create))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	app.ReceiptSave(w, r)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("create: expected 303, got %d: %s", w.Code, w.Body.String())
+	}
+	list, _ := app.receipts.List(context.Background(), receipts.ListOptions{}, nil)
+	id := list[0].ID
+	idStr := strconv.FormatInt(id, 10)
+
+	update := "number=I1&organization_id=" + strconv.FormatInt(orgID, 10) +
+		"&user_id=1&customer_id=1&date=2026-07-29" +
+		"&items[0][product_id]=" + strconv.FormatInt(prodID, 10) +
+		"&items[0][quantity]=2&items[0][price]=0&items[0][amount]=0"
+	w = httptest.NewRecorder()
+	r = httptest.NewRequest(http.MethodPost, "/receipts/"+idStr, strings.NewReader(update))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", idStr)
+	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+	app.ReceiptSave(w, r)
+
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("update: expected 422, got %d: %s", w.Code, w.Body.String())
+	}
+
+	doc, err := app.receipts.GetByID(context.Background(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(doc.Items))
+	}
+	if doc.Items[0].Quantity != 2 || doc.Items[0].Price != 500 || doc.Items[0].Amount != 1000 {
+		t.Fatalf("expected original item values, got qty=%v price=%v amount=%v",
+			doc.Items[0].Quantity, doc.Items[0].Price, doc.Items[0].Amount)
 	}
 }
 
@@ -1806,7 +1970,7 @@ func TestReceiptSave_RoundsToTwoDecimals(t *testing.T) {
 	body.WriteString("&user_id=1&customer_id=1&date=2026-07-30")
 	body.WriteString("&" + line(0, prod1, "1.999", "1", "", false))
 	body.WriteString("&" + line(1, prod1, "3", "10", "10.00", true))
-	body.WriteString("&" + line(2, prod2, "5", "2", "0.00", true))
+	body.WriteString("&" + line(2, prod2, "2", "5", "7.00", true))
 	body.WriteString("&" + line(3, prod2, "1.2345", "2.3456", "3.4567", true))
 
 	w := httptest.NewRecorder()
@@ -1841,9 +2005,9 @@ func TestReceiptSave_RoundsToTwoDecimals(t *testing.T) {
 	if doc.Items[1].Amount != 10.00 {
 		t.Fatalf("line 1: trusted amount should stay 10.00, got %v", doc.Items[1].Amount)
 	}
-	// Строка 2: amount="0.00" — не пересчитывается.
-	if doc.Items[2].Amount != 0 {
-		t.Fatalf("line 2: zero amount should stay 0, got %v", doc.Items[2].Amount)
+	// Строка 2: amount="7.00" — доверенное, не заменяется qty*price (10).
+	if doc.Items[2].Amount != 7.00 {
+		t.Fatalf("line 2: trusted amount should stay 7.00, got %v", doc.Items[2].Amount)
 	}
 	// Строка 3: количество round3(1.2345)=1.235; цена round2(2.3456)=2.35;
 	// amount — доверенное round2(3.4567)=3.46.
@@ -1854,9 +2018,9 @@ func TestReceiptSave_RoundsToTwoDecimals(t *testing.T) {
 		t.Fatalf("line 3: normalized amount = %v, want 3.46", doc.Items[3].Amount)
 	}
 
-	// total = сумма округлённых amount строк: 2 + 10 + 0 + 3.46.
-	if doc.Receipt.Total != 15.46 {
-		t.Fatalf("total = %v, want 15.46", doc.Receipt.Total)
+	// total = сумма округлённых amount строк: 2 + 10 + 7 + 3.46.
+	if doc.Receipt.Total != 22.46 {
+		t.Fatalf("total = %v, want 22.46", doc.Receipt.Total)
 	}
 }
 
