@@ -130,6 +130,7 @@ func (a *App) NewRouter() *chi.Mux {
 				r.Get("/{id}", a.UserCard)
 				r.Post("/{id}", a.UserSave)
 				r.Delete("/{id}", a.UserDelete)
+				r.Post("/{id}/delete", a.UserDelete)
 			})
 		})
 	})

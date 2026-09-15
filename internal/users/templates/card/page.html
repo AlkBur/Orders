@@ -13,5 +13,12 @@
     <button type="submit" class="button is-primary">{{icon "save"}} <span>Сохранить</span></button>
   </div>
 </form>
+{{if .CanDelete}}
+<form method="post" action="{{.DeleteAction}}" data-confirm="{{.DeleteConfirm}}">
+  <div class="buttons mt-2">
+    <button type="submit" class="button is-danger">{{icon "trash"}} <span>Удалить</span></button>
+  </div>
+</form>
+{{end}}
 {{template "card_close"}}
 {{end}}

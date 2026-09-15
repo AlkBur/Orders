@@ -1,6 +1,7 @@
 package app
 
 import (
+	"database/sql"
 	"errors"
 	"io/fs"
 	"net/http"
@@ -133,13 +134,27 @@ func (a *App) UserCard(w http.ResponseWriter, r *http.Request) {
 		formAction = a.URL("/users/" + strconv.FormatInt(user.ID, 10))
 	}
 
+	// Удаление доступно администратору (группа /users под RequireAdmin),
+	// но не для последнего администратора: действие заведомо недопустимо.
+	// Серверная защита дублируется в UserDelete.
+	canDelete := user.ID > 0 && !a.identity.IsLastAdministrator(user.ID)
+	deleteAction := ""
+	deleteConfirm := ""
+	if user.ID > 0 {
+		deleteAction = a.URL("/users/" + strconv.FormatInt(user.ID, 10) + "/delete")
+		deleteConfirm = "Удалить пользователя «" + user.Login + "»?"
+	}
+
 	data := struct {
-		Title       string
-		Header      ui.HeaderData
-		Card        ui.CardData
-		FormAction  string
-		Fields      []ui.Field
-		HasPassword bool
+		Title         string
+		Header        ui.HeaderData
+		Card          ui.CardData
+		FormAction    string
+		Fields        []ui.Field
+		HasPassword   bool
+		CanDelete     bool
+		DeleteAction  string
+		DeleteConfirm string
 	}{
 		Title:      title,
 		Header:     a.pageHeader(r, "Пользователи"),
@@ -151,7 +166,10 @@ func (a *App) UserCard(w http.ResponseWriter, r *http.Request) {
 			{Name: "email", Label: "Email", Type: ui.FieldText, Value: user.Email},
 			{Name: "is_admin", Label: "Администратор", Type: ui.FieldCheckbox, Value: checkValue(user.IsAdmin)},
 		},
-		HasPassword: user.HasPassword,
+		HasPassword:   user.HasPassword,
+		CanDelete:     canDelete,
+		DeleteAction:  deleteAction,
+		DeleteConfirm: deleteConfirm,
 	}
 
 	if err := ui.RenderPage(w, TemplateFS(), pageFS, a.basePath(), data); err != nil {
@@ -164,6 +182,12 @@ func (a *App) UserSave(w http.ResponseWriter, r *http.Request) {
 		a.BadRequest(w, "Invalid request")
 		return
 	}
+
+	// Снятие прав администратора уменьшает их число — операция должна быть
+	// сериализована с UserDelete, чтобы инвариант «последний администратор»
+	// проверялся атомарно с записью.
+	a.usersMu.Lock()
+	defer a.usersMu.Unlock()
 
 	id := userIDFromURL(r)
 
@@ -210,8 +234,28 @@ func (a *App) UserSave(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, a.URL("/users/"+strconv.FormatInt(user.ID, 10)), http.StatusSeeOther)
 }
 
+// UserDelete удаляет пользователя. Доступно только администратору (маршрут
+// находится в группе /users под RequireAdmin). Последнего администратора
+// удалить нельзя: проверка инварианта и удаление сериализованы usersMu, чтобы
+// параллельные запросы не могли удалить двух администраторов одновременно.
+// После удаления пользователь удаляется из IdentityService (runtime-кэш),
+// как требует архитектура (удаление → Remove()).
 func (a *App) UserDelete(w http.ResponseWriter, r *http.Request) {
 	id := userIDFromURL(r)
+
+	a.usersMu.Lock()
+	defer a.usersMu.Unlock()
+
+	// Проверка существования: GetByID (FindByID) отдаёт sql.ErrNoRows,
+	// а DeleteByID — users.ErrNotFound, поэтому обрабатываем оба.
+	if _, err := a.users.GetByID(r.Context(), id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) || errors.Is(err, users.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		a.InternalError(w, r, err)
+		return
+	}
 
 	if a.identity.IsLastAdministrator(id) {
 		a.BadRequest(w, users.ErrLastAdministrator.Error())
@@ -219,6 +263,10 @@ func (a *App) UserDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := a.users.DeleteByID(r.Context(), id); err != nil {
+		if errors.Is(err, users.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
 		a.InternalError(w, r, err)
 		return
 	}
