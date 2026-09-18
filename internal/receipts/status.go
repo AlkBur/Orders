@@ -53,3 +53,10 @@ func ReceiptActionable(status string) bool {
 		return true
 	}
 }
+
+// ReceiptFilesViewable определяет, доступны ли файлы документа для
+// просмотра. Для отменённого документа файлы существуют, но открывать
+// их запрещено. Пустой (legacy) статус считается доступным.
+func ReceiptFilesViewable(status string) bool {
+	return status != StatusCancelled
+}

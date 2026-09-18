@@ -1128,7 +1128,7 @@ html.js .app-menu.is-open .app-menu-panel {
 .receipts-row {
   display: grid;
   grid-template-columns:
-    minmax(5.5rem, 1fr) minmax(6rem, 1fr) minmax(9rem, 1.6fr) minmax(9rem, 1.6fr) minmax(6rem, 1fr) minmax(6.5rem, 1fr) minmax(5rem, 0.9fr) 13.5rem;
+    minmax(5.5rem, 1fr) minmax(6rem, 1fr) minmax(9rem, 1.6fr) minmax(7rem, 1fr) minmax(9rem, 1.6fr) minmax(6rem, 1fr) minmax(6.5rem, 1fr) minmax(5rem, 0.9fr) 13.5rem;
   align-items: center;
   padding: 0.75rem 0.75rem;
   border-bottom: 1px solid var(--bulma-border);
@@ -1441,6 +1441,7 @@ html.js .app-menu.is-open .app-menu-panel {
 
   .receipts-cell:nth-child(3),
   .receipts-cell:nth-child(4),
+  .receipts-cell:nth-child(5),
   .receipts-cell.is-info,
   .receipts-cell.is-actions {
     grid-column: 1 / -1;
@@ -1480,14 +1481,18 @@ html.js .app-menu.is-open .app-menu-panel {
   }
 
   .receipts-cell:nth-child(4)::before {
-    content: "Контрагент";
+    content: "Пользователь";
   }
 
   .receipts-cell:nth-child(5)::before {
-    content: "Сумма";
+    content: "Контрагент";
   }
 
   .receipts-cell:nth-child(6)::before {
+    content: "Сумма";
+  }
+
+  .receipts-cell:nth-child(7)::before {
     content: "Статус";
   }
 

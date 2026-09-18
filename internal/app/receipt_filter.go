@@ -12,6 +12,7 @@ import (
 	"Orders/internal/organizations"
 	"Orders/internal/receipts"
 	"Orders/internal/ui"
+	"Orders/internal/users"
 )
 
 // receiptFilterStatuses — фиксированный список статусов панели фильтра
@@ -37,6 +38,7 @@ type receiptFilter struct {
 	amountTo      *float64
 	orgID         int64
 	custID        int64
+	userID        int64
 	status        string
 	actionSetFrom string
 	actionSetTo   string
@@ -47,7 +49,7 @@ type receiptFilter struct {
 func (f receiptFilter) active() bool {
 	return f.dateFrom != "" || f.dateTo != "" ||
 		f.amountFrom != nil || f.amountTo != nil ||
-		f.orgID > 0 || f.custID > 0 || f.status != "" ||
+		f.orgID > 0 || f.custID > 0 || f.userID > 0 || f.status != "" ||
 		f.actionSetFrom != "" || f.actionSetTo != ""
 }
 
@@ -60,6 +62,7 @@ func (f receiptFilter) storeFilter() receipts.Filter {
 		AmountTo:       f.amountTo,
 		OrganizationID: f.orgID,
 		CustomerID:     f.custID,
+		UserID:         f.userID,
 		Status:         f.status,
 		ActionSetFrom:  f.actionSetFrom,
 		ActionSetTo:    f.actionSetTo,
@@ -80,6 +83,7 @@ func parseReceiptFilter(r *http.Request) receiptFilter {
 	f.amountTo = parseAmountParam(q.Get("amount_to"))
 	f.orgID = parseIDParam(q.Get("organization_id"))
 	f.custID = parseIDParam(q.Get("customer_id"))
+	f.userID = parseIDParam(q.Get("user_id"))
 	f.actionSetFrom = parseDateParam(q.Get("action_set_from"))
 	f.actionSetTo = parseDateParam(q.Get("action_set_to"))
 
@@ -115,9 +119,25 @@ func validateReceiptFilterPair(f receiptFilter, custs []*customers.Customer) rec
 	return f
 }
 
+// validateReceiptFilterUser отбрасывает несуществующий user_id: отбор по
+// неизвестному пользователю не должен применяться.
+func validateReceiptFilterUser(f receiptFilter, us []*users.User) receiptFilter {
+	if f.userID == 0 {
+		return f
+	}
+	for _, u := range us {
+		if u.ID == f.userID {
+			return f
+		}
+	}
+	f.userID = 0
+	return f
+}
+
 // buildFilterData собирает модель панели фильтра для шаблона: текущие
-// значения, список статусов и JSON-справочники для пикеров.
-func buildFilterData(f receiptFilter, orgs []*organizations.Organization, custs []*customers.Customer) *ui.FilterData {
+// значения, список статусов, список пользователей и JSON-справочники
+// для пикеров.
+func buildFilterData(f receiptFilter, orgs []*organizations.Organization, custs []*customers.Customer, us []*users.User) *ui.FilterData {
 	fd := &ui.FilterData{
 		HasFilter:      f.active(),
 		Open:           f.active(),
@@ -127,6 +147,8 @@ func buildFilterData(f receiptFilter, orgs []*organizations.Organization, custs 
 		Statuses:       filterStatusOptions(),
 		OrganizationID: f.orgID,
 		CustomerID:     f.custID,
+		UserID:         f.userID,
+		Users:          filterUserOptions(us),
 		ActionSetFrom:  f.actionSetFrom,
 		ActionSetTo:    f.actionSetTo,
 	}
@@ -207,6 +229,19 @@ func filterCustomerOptions(custs []*customers.Customer) []filterCustomerOption {
 	opts := make([]filterCustomerOption, 0, len(custs))
 	for _, c := range custs {
 		opts = append(opts, filterCustomerOption{ID: c.ID, Name: c.Name, OrganizationID: c.OrganizationID})
+	}
+	return opts
+}
+
+// filterUserOptions строит список пользователей для <select> панели
+// фильтра. Пустая опция «Все пользователи» добавляется в шаблоне.
+func filterUserOptions(us []*users.User) []ui.UserOption {
+	if us == nil {
+		us = []*users.User{}
+	}
+	opts := make([]ui.UserOption, 0, len(us))
+	for _, u := range us {
+		opts = append(opts, ui.UserOption{ID: u.ID, Login: u.Login})
 	}
 	return opts
 }

@@ -53,6 +53,17 @@
         <input type="hidden" name="customer_id" :value="custID">
       </div>
       <div class="filter-field">
+        <span class="filter-label">Пользователь</span>
+        <div class="select is-fullwidth">
+          <select name="user_id">
+            <option value="0">Все пользователи</option>
+            {{range .Search.Filter.Users}}
+            <option value="{{.ID}}" {{if eq .ID $.Search.Filter.UserID}}selected{{end}}>{{.Login}}</option>
+            {{end}}
+          </select>
+        </div>
+      </div>
+      <div class="filter-field">
         <span class="filter-label">Статус</span>
         <div class="select is-fullwidth">
           <select name="status">

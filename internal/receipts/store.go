@@ -115,6 +115,7 @@ type Filter struct {
 	AmountTo       *float64
 	OrganizationID int64
 	CustomerID     int64
+	UserID         int64
 	Status         string
 	ActionSetFrom  string
 	ActionSetTo    string
@@ -297,6 +298,10 @@ func buildFilterWhere(f Filter) (string, []any) {
 	if f.CustomerID > 0 {
 		conds = append(conds, "r.customer_id = ?")
 		args = append(args, f.CustomerID)
+	}
+	if f.UserID > 0 {
+		conds = append(conds, "r.user_id = ?")
+		args = append(args, f.UserID)
 	}
 
 	if cond, cargs := statusFilterWhere(f.Status); cond != "" {

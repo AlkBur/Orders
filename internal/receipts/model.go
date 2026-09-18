@@ -103,6 +103,15 @@ func (r Receipt) URL() string {
 	return "/receipts/" + strconv.FormatInt(r.ID, 10)
 }
 
+// DisplayDate возвращает дату документа со временем создания. Для новых
+// документов date всегда совпадает с датой created_at (инвариант при записи).
+func (r Receipt) DisplayDate() string {
+	if r.CreatedAt.IsZero() {
+		return r.Date.Format("02.01.2006")
+	}
+	return r.CreatedAt.Format("02.01.2006 15:04")
+}
+
 func displayStatus(r Receipt) string {
 	if r.Status != "" {
 		return r.Status

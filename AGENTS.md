@@ -38,6 +38,24 @@ The project follows a minimalistic architecture:
 
 ---
 
+# Server-owned fields
+
+The server is the source of truth for server-owned attributes. Client input
+must never become a trusted value for them.
+
+- For a new document (`ID == 0`) the server assigns `Date` (current server
+  date) and `UserID` (current session user).
+- Client-supplied `date` / `user_id` must not be assigned to the domain
+  model at all: remove the read instead of overwriting it later.
+- For an existing document (`ID != 0`) `Date` and `UserID` are preserved
+  from the stored document.
+- Enforcement lives in the single server write path (for receipts —
+  `ReceiptSave`), not in the form handler or the copy handler.
+- The same rule applies to every other field the server owns, for example
+  `SentAt`, external UUIDs, and numbers assigned on creation.
+
+---
+
 # Coding Style
 
 ## Go

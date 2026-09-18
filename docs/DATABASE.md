@@ -312,9 +312,9 @@ Descriptor предоставляет:
 | uuid | TEXT UNIQUE | Внешний UUID (присваивается 1С, nullable) |
 | exchange_id | TEXT UNIQUE NOT NULL | Локальный UUID, генерируется при создании |
 | number | TEXT NOT NULL | Номер документа |
-| date | TEXT NOT NULL | Дата документа (YYYY-MM-DD) |
+| date | TEXT NOT NULL | Дата документа (YYYY-MM-DD). Всегда равна дате создания; назначается сервером при создании |
 | organization_id | INTEGER NOT NULL | FK → organizations.id |
-| user_id | INTEGER NOT NULL | FK → users.id |
+| user_id | INTEGER NOT NULL | FK → users.id. Пользователь, создавший документ; назначается сервером при создании, при редактировании не меняется |
 | customer_id | INTEGER NOT NULL | FK → customers.id |
 | total | REAL | Итоговая сумма |
 | sent_at | DATETIME | Дата отправки (когда документ готов к выдаче 1С) |

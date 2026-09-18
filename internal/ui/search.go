@@ -60,6 +60,12 @@ type StatusOption struct {
 	Label string
 }
 
+// UserOption — пункт списка пользователей панели фильтра.
+type UserOption struct {
+	ID    int64
+	Login string
+}
+
 // FilterData — модель панели расширенного отбора списка.
 //
 // Заполняется сервером из query parameters: значения полей — единственный
@@ -87,6 +93,8 @@ type FilterData struct {
 	OrganizationName string
 	CustomerID       int64
 	CustomerName     string
+	UserID           int64
+	Users            []UserOption
 	Status           string
 	Statuses         []StatusOption
 	ActionSetFrom    string

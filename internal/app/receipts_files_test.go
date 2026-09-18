@@ -474,3 +474,120 @@ func uniqueSuffix() string {
 	uniqueCounter++
 	return strconv.Itoa(uniqueCounter)
 }
+
+// cancelledFilesApp создаёт приложение с чеком и загруженным файлом,
+// переводит чек в статус «Отменен» и возвращает ID чека и файла.
+func cancelledFilesApp(t *testing.T) (*App, int64, int64) {
+	t.Helper()
+	db := testutil.NewTestDB(t, NewSchema())
+	filesDB := testutil.NewTestDB(t, NewFilesSchema())
+	orgID, orgUUID := insertOrg(t, db, "CancelFilesOrg", "k1")
+	ruuid := insertReceiptForOrg(t, db, orgID)
+
+	app := &App{
+		receipts:      receipts.NewStore(db),
+		receiptFiles:  receipts.NewFileStore(filesDB),
+		organizations: organizations.NewStore(db),
+		orgKeys:       map[string]string{orgUUID: "k1"},
+	}
+	uploadFile(t, app, orgUUID, ruuid, "f1", "a.pdf", pdfBody)
+
+	doc, err := app.receipts.GetByExternal(context.Background(), ruuid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, err := app.receiptFiles.ListByReceipt(context.Background(), doc.Receipt.ID)
+	if err != nil || len(files) != 1 {
+		t.Fatalf("expected one file, got %d: %v", len(files), err)
+	}
+	if _, err := db.Exec(`UPDATE receipts SET status = ? WHERE id = ?`,
+		receipts.StatusCancelled, doc.Receipt.ID); err != nil {
+		t.Fatal(err)
+	}
+	return app, doc.Receipt.ID, files[0].ID
+}
+
+// TestReceiptsList_CancelledHidesFilesButton — у отменённого документа
+// кнопка «Файлы» в списке отсутствует.
+func TestReceiptsList_CancelledHidesFilesButton(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	filesDB := testutil.NewTestDB(t, NewFilesSchema())
+	orgID, orgUUID := insertOrg(t, db, "CancelListOrg", "k1")
+	ruuid := insertReceiptForOrg(t, db, orgID)
+	app := &App{
+		receipts:      receipts.NewStore(db),
+		receiptFiles:  receipts.NewFileStore(filesDB),
+		organizations: organizations.NewStore(db),
+		orgKeys:       map[string]string{orgUUID: "k1"},
+	}
+	uploadFile(t, app, orgUUID, ruuid, "f1", "a.pdf", pdfBody)
+	doc, _ := app.receipts.GetByExternal(context.Background(), ruuid)
+
+	w := httptest.NewRecorder()
+	app.ReceiptsPage(w, httptest.NewRequest(http.MethodGet, "/receipts", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "/files") {
+		t.Fatal("expected files button before cancellation")
+	}
+
+	if _, err := db.Exec(`UPDATE receipts SET status = ? WHERE id = ?`,
+		receipts.StatusCancelled, doc.Receipt.ID); err != nil {
+		t.Fatal(err)
+	}
+	w = httptest.NewRecorder()
+	app.ReceiptsPage(w, httptest.NewRequest(http.MethodGet, "/receipts", nil))
+	if strings.Contains(w.Body.String(), "/files") {
+		t.Fatal("expected no files button for cancelled document")
+	}
+}
+
+// TestReceiptCard_CancelledFilesNotClickable — в карточке просмотра
+// отменённого документа файлы видны, но не открываются.
+func TestReceiptCard_CancelledFilesNotClickable(t *testing.T) {
+	app, receiptID, _ := cancelledFilesApp(t)
+	idStr := strconv.FormatInt(receiptID, 10)
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/receipts/"+idStr+"?mode=view", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", idStr)
+	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+	app.ReceiptCard(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "a.pdf") {
+		t.Fatal("expected file name in cancelled receipt card")
+	}
+	if strings.Contains(body, "/files/") {
+		t.Fatal("cancelled receipt file must not be clickable")
+	}
+}
+
+// TestReceiptFiles_CancelledForbidden — оба эндпоинта файлов отменённого
+// документа возвращают 403.
+func TestReceiptFiles_CancelledForbidden(t *testing.T) {
+	app, receiptID, fileID := cancelledFilesApp(t)
+
+	w := httptest.NewRecorder()
+	app.ReceiptFiles(w, receiptFilesURL(t, receiptID))
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("files modal: expected 403, got %d: %s", w.Code, w.Body.String())
+	}
+
+	idStr := strconv.FormatInt(receiptID, 10)
+	fileIDStr := strconv.FormatInt(fileID, 10)
+	w = httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/receipts/"+idStr+"/files/"+fileIDStr, nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", idStr)
+	rctx.URLParams.Add("fileID", fileIDStr)
+	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+	app.ReceiptFileContent(w, r)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("file content: expected 403, got %d: %s", w.Code, w.Body.String())
+	}
+}

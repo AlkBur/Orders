@@ -21,6 +21,7 @@ import (
 	"Orders/internal/receipts"
 	"Orders/internal/sessions"
 	"Orders/internal/ui"
+	"Orders/internal/users"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -206,7 +207,17 @@ func (a *App) ReceiptsPage(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	var us []*users.User
+	if a.users != nil {
+		var err error
+		us, err = a.users.List(r.Context(), users.ListOptions{}, nil)
+		if err != nil {
+			a.InternalError(w, r, err)
+			return
+		}
+	}
 	filter = validateReceiptFilterPair(filter, custs)
+	filter = validateReceiptFilterUser(filter, us)
 
 	// Только одна порция (keyset-пагинация). Поиск и фильтры применяются
 	// в SQL до LIMIT; связанные данные считаются только для этой порции.
@@ -236,8 +247,8 @@ func (a *App) ReceiptsPage(w http.ResponseWriter, r *http.Request) {
 		Mode:        ui.SearchLive,
 		TargetID:    "#receipts-browser",
 	}
-	if a.organizations != nil || a.customers != nil {
-		searchData.Filter = buildFilterData(filter, orgs, custs)
+	if a.organizations != nil || a.customers != nil || a.users != nil {
+		searchData.Filter = buildFilterData(filter, orgs, custs, us)
 	}
 
 	page := pages.ReceiptsListPage{
@@ -329,6 +340,7 @@ func (a *App) buildReceiptListRows(ctx context.Context, list []*receipts.Receipt
 			Number:       ui.MarkMatches(rec.Number, words),
 			Date:         rec.Date.Format("02.01.2006"),
 			Organization: ui.MarkMatches(rec.OrganizationName, words),
+			User:         rec.UserLogin,
 			Customer:     ui.MarkMatches(rec.CustomerName, words),
 			Total:        total,
 			Status:       presentation.Display,
@@ -340,7 +352,7 @@ func (a *App) buildReceiptListRows(ctx context.Context, list []*receipts.Receipt
 			CanEdit: !sent,
 			CanSend: !sent,
 
-			HasFiles: fileCounts[rec.ID] > 0,
+			HasFiles: fileCounts[rec.ID] > 0 && receipts.ReceiptFilesViewable(rec.Status),
 
 			FilesURL: a.URL("/receipts/" + idStr + "/files"),
 			CopyURL:  a.URL("/receipts/" + idStr + "/copy"),
@@ -489,13 +501,20 @@ func (a *App) ReceiptCard(w http.ResponseWriter, r *http.Request) {
 		}
 		if len(files) > 0 {
 			idStr := strconv.FormatInt(doc.Receipt.ID, 10)
+			viewable := receipts.ReceiptFilesViewable(doc.Receipt.Status)
 			fileViews = make([]pages.ReceiptFile, 0, len(files))
 			for _, f := range files {
-				fileViews = append(fileViews, pages.ReceiptFile{
+				file := pages.ReceiptFile{
 					Name: f.FileName,
 					Icon: "file-text",
-					URL:  a.URL("/receipts/" + idStr + "/files/" + strconv.FormatInt(f.ID, 10)),
-				})
+				}
+				if viewable {
+					file.URL = a.URL("/receipts/" + idStr + "/files/" + strconv.FormatInt(f.ID, 10))
+				} else {
+					// Отменённый документ: файлы видны, но не открываются.
+					file.Blank = true
+				}
+				fileViews = append(fileViews, file)
 			}
 		}
 	}
@@ -557,7 +576,7 @@ func (a *App) ReceiptCopyPage(w http.ResponseWriter, r *http.Request) {
 	rec := a.receipts.New()
 	rec.Date = time.Now()
 	rec.OrganizationID = src.Receipt.OrganizationID
-	rec.UserID = src.Receipt.UserID
+	rec.UserID = CurrentUser(r).ID
 	rec.CustomerID = src.Receipt.CustomerID
 	rec.CustomerName = src.Receipt.CustomerName
 
@@ -678,6 +697,11 @@ func (a *App) ReceiptFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !receipts.ReceiptFilesViewable(doc.Receipt.Status) {
+		http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+		return
+	}
+
 	rec := doc.Receipt
 	header := pages.ReceiptHeader{
 		Number:       rec.Number,
@@ -746,6 +770,20 @@ func (a *App) ReceiptFileContent(w http.ResponseWriter, r *http.Request) {
 	fileID, err := strconv.ParseInt(fileIDStr, 10, 64)
 	if err != nil {
 		http.NotFound(w, r)
+		return
+	}
+
+	doc, err := a.receipts.GetByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, receipts.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		a.InternalError(w, r, err)
+		return
+	}
+	if !receipts.ReceiptFilesViewable(doc.Receipt.Status) {
+		http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 		return
 	}
 
@@ -866,16 +904,6 @@ func (a *App) ReceiptSave(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	dateStr := r.FormValue("date")
-	if dateStr == "" {
-		dateStr = time.Now().Format("2006-01-02")
-	}
-	date, err := time.Parse("2006-01-02", dateStr)
-	if err != nil {
-		a.BadRequest(w, "Invalid date")
-		return
-	}
-
 	var customerName string
 	if customerID > 0 && a.customers != nil {
 		if c, err := a.customers.GetByID(r.Context(), customerID); err == nil {
@@ -883,25 +911,26 @@ func (a *App) ReceiptSave(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	userID := CurrentUser(r).ID
-	if userID == 0 {
-		userID = parseInt64(r.FormValue("user_id"))
-	}
-
 	sendTo1C := r.FormValue("send_to_1c") == "1"
 	rec := &receipts.Receipt{
 		ID:             id,
 		Number:         r.FormValue("number"),
-		Date:           date,
 		OrganizationID: orgID,
-		UserID:         userID,
 		CustomerID:     customerID,
 		CustomerName:   customerName,
 		Total:          total,
 	}
 	if existing != nil {
+		// Редактирование существующего документа: дата и автор не меняются.
+		rec.Date = existing.Receipt.Date
+		rec.UserID = existing.Receipt.UserID
 		rec.UUID = existing.Receipt.UUID
 		rec.ExchangeID = existing.Receipt.ExchangeID
+	} else {
+		// Создание нового документа: дата и автор назначаются только
+		// сервером; значения date/user_id из формы игнорируются.
+		rec.Date = time.Now()
+		rec.UserID = CurrentUser(r).ID
 	}
 
 	if id == 0 {
@@ -1015,10 +1044,18 @@ func (a *App) renderReceiptForm(w http.ResponseWriter, r *http.Request, ve *Vali
 	receipt.OrganizationID = organizationID
 	receipt.CustomerID = customerID
 	receipt.CustomerName = customerName
-	if date, err := time.Parse("2006-01-02", r.FormValue("date")); err == nil {
-		receipt.Date = date
+	if id > 0 {
+		// Повторный показ формы существующего документа: дата и автор —
+		// из сохранённого документа, а не из формы.
+		if existing, err := a.receipts.GetByID(r.Context(), id); err == nil {
+			receipt.Date = existing.Receipt.Date
+			receipt.UserID = existing.Receipt.UserID
+		} else {
+			receipt.Date = time.Now()
+		}
 	} else {
 		receipt.Date = time.Now()
+		receipt.UserID = CurrentUser(r).ID
 	}
 
 	page := pages.ReceiptCardPage{

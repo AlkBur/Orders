@@ -98,6 +98,9 @@ func (a *App) receiptListLoadMoreURL(query string, filter receiptFilter, limit i
 	if filter.custID > 0 {
 		q.Set("customer_id", strconv.FormatInt(filter.custID, 10))
 	}
+	if filter.userID > 0 {
+		q.Set("user_id", strconv.FormatInt(filter.userID, 10))
+	}
 	if filter.status != "" {
 		q.Set("status", filter.status)
 	}

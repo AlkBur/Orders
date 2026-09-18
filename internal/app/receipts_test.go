@@ -989,8 +989,8 @@ func TestReceiptsList_AfterFromDifferentQuery(t *testing.T) {
 
 // TestReceiptsList_StatusCell — порядок ячеек журнала и семантический
 // класс статуса. Проверяется структура целиком: Номер → Дата → Организация →
-// Контрагент → Сумма → Статус → Действия. Статус передаётся как
-// receipts-status is-<key> без inline-стиля; у .receipts-row и ячеек
+// Пользователь → Контрагент → Сумма → Статус → Действия. Статус передаётся
+// как receipts-status is-<key> без inline-стиля; у .receipts-row и ячеек
 // фонового цвета и цвета текста нет (цвет определяет CSS темой).
 func TestReceiptsList_StatusCell(t *testing.T) {
 	db := testutil.NewTestDB(t, NewSchema())
@@ -1027,12 +1027,12 @@ func TestReceiptsList_StatusCell(t *testing.T) {
 
 	for name, block := range map[string]string{"sent": sentRow, "created": createdRow} {
 		info := indexesOf(block, `<div class="receipts-cell"`)
-		if len(info) != 6 {
-			t.Fatalf("%s: expected 6 info cells, got %d", name, len(info))
+		if len(info) != 7 {
+			t.Fatalf("%s: expected 7 info cells, got %d", name, len(info))
 		}
 		actions := indexesOf(block, `<div class="receipts-cell is-actions">`)
-		if len(actions) != 1 || actions[0] < info[5] {
-			t.Fatalf("%s: actions cell must follow the 6 info cells", name)
+		if len(actions) != 1 || actions[0] < info[6] {
+			t.Fatalf("%s: actions cell must follow the 7 info cells", name)
 		}
 	}
 
@@ -2208,5 +2208,271 @@ func TestReceiptsList_ActionButtonCancelled(t *testing.T) {
 	}
 	if body := w.Body.String(); strings.Contains(body, `data-dialog-url="/receipts/`+idStr+`/action"`) {
 		t.Fatalf("expected no action button for cancelled document:\n%s", body)
+	}
+}
+
+// insertTestUser создаёт пользователя с логином и возвращает его ID.
+func insertTestUser(t *testing.T, dbt *sql.DB, login string) int64 {
+	t.Helper()
+	res, err := dbt.Exec(`
+		INSERT INTO users (uuid, login, email, password_hash, is_admin, created_at, updated_at)
+		VALUES (?, ?, '', '', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+	`, "user-"+login, login)
+	if err != nil {
+		t.Fatalf("insert user %s: %v", login, err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+// withUserIdentity кладёт пользователя сессии в контекст запроса.
+func withUserIdentity(r *http.Request, u users.Identity) *http.Request {
+	return r.WithContext(context.WithValue(r.Context(), userContextKey, u))
+}
+
+// TestReceiptSave_NewDocumentIgnoresClientDateAndUser проверяет, что при
+// создании нового документа date и user_id из POST игнорируются: дата и
+// автор назначаются сервером.
+func TestReceiptSave_NewDocumentIgnoresClientDateAndUser(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	orgID, _ := insertOrg(t, db, "AuditOrg", "kaudit")
+	prodID, _ := insertProduct(t, db, orgID, "Audit Product", "pcs")
+	app := &App{
+		receipts:      receipts.NewStore(db),
+		organizations: organizations.NewStore(db),
+		products:      products.NewStore(db),
+	}
+	sessionUser := users.Identity{ID: 7, Login: "session-user"}
+
+	body := "number=001&organization_id=" + strconv.FormatInt(orgID, 10) +
+		"&user_id=999&customer_id=1&total=1000&date=2020-01-01" +
+		"&items[0][product_id]=" + strconv.FormatInt(prodID, 10) +
+		"&items[0][quantity]=2&items[0][price]=500&items[0][amount]=1000"
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPost, "/receipts", strings.NewReader(body))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r = withUserIdentity(r, sessionUser)
+	app.ReceiptSave(w, r)
+
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d: %s", w.Code, w.Body.String())
+	}
+	list, err := app.receipts.List(context.Background(), receipts.ListOptions{}, nil)
+	if err != nil || len(list) != 1 {
+		t.Fatalf("expected one receipt, got %d: %v", len(list), err)
+	}
+	got := list[0]
+	today := time.Now().Format("2006-01-02")
+	if got.Date.Format("2006-01-02") != today {
+		t.Fatalf("expected server date %s, got %s", today, got.Date.Format("2006-01-02"))
+	}
+	if got.UserID != sessionUser.ID {
+		t.Fatalf("expected session user %d, got %d", sessionUser.ID, got.UserID)
+	}
+	if got.CreatedAt.Format("2006-01-02") != today {
+		t.Fatalf("expected created_at today, got %s", got.CreatedAt.Format("2006-01-02"))
+	}
+}
+
+// TestReceiptCopy_UsesServerDateAndSessionUser проверяет, что копирование
+// не переносит дату и автора исходного документа: новый документ получает
+// текущую дату и текущего пользователя сессии.
+func TestReceiptCopy_UsesServerDateAndSessionUser(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	orgID, _ := insertOrg(t, db, "CopyAuditOrg", "kcopyaudit")
+	prodID, _ := insertProduct(t, db, orgID, "Copy Product", "pcs")
+	app := &App{
+		receipts:      receipts.NewStore(db),
+		organizations: organizations.NewStore(db),
+		products:      products.NewStore(db),
+	}
+	srcUserID := insertTestUser(t, db, "src-user")
+	src := &receipts.Receipt{
+		Number:         "SRC001",
+		Date:           time.Date(2020, 1, 1, 12, 0, 0, 0, time.Local),
+		OrganizationID: orgID,
+		UserID:         srcUserID,
+		CustomerID:     1,
+		Total:          0,
+	}
+	if err := app.receipts.Save(context.Background(), &receipts.Document{Receipt: src}); err != nil {
+		t.Fatal(err)
+	}
+	idStr := strconv.FormatInt(src.ID, 10)
+	sessionUser := users.Identity{ID: 7, Login: "session-user"}
+
+	// GET /receipts/{id}/copy — форма нового документа.
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/receipts/"+idStr+"/copy", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", idStr)
+	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+	r = withUserIdentity(r, sessionUser)
+	app.ReceiptCopyPage(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("copy page: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	pageBody := w.Body.String()
+	if !strings.Contains(pageBody, "Создан на основании документа №SRC001") {
+		t.Fatal("expected copy banner")
+	}
+	if !strings.Contains(pageBody, time.Now().Format("2006-01-02")) {
+		t.Fatal("expected current date in copy form")
+	}
+	if strings.Contains(pageBody, "src-user") {
+		t.Fatal("source user must not leak into copy page")
+	}
+
+	// POST /receipts — сохранение копии с подменёнными date/user_id.
+	body := "number=&organization_id=" + strconv.FormatInt(orgID, 10) +
+		"&user_id=999&customer_id=1&total=1000&date=2020-01-01" +
+		"&items[0][product_id]=" + strconv.FormatInt(prodID, 10) +
+		"&items[0][quantity]=2&items[0][price]=500&items[0][amount]=1000"
+	w = httptest.NewRecorder()
+	r = httptest.NewRequest(http.MethodPost, "/receipts", strings.NewReader(body))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r = withUserIdentity(r, sessionUser)
+	app.ReceiptSave(w, r)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("save copy: expected 303, got %d: %s", w.Code, w.Body.String())
+	}
+
+	list, err := app.receipts.List(context.Background(), receipts.ListOptions{}, nil)
+	if err != nil || len(list) != 2 {
+		t.Fatalf("expected two receipts, got %d: %v", len(list), err)
+	}
+	var copied *receipts.Receipt
+	for _, rec := range list {
+		if rec.ID != src.ID {
+			copied = rec
+		}
+	}
+	if copied == nil {
+		t.Fatal("expected a new copied receipt")
+	}
+	today := time.Now().Format("2006-01-02")
+	if copied.Date.Format("2006-01-02") != today {
+		t.Fatalf("copied: expected server date %s, got %s", today, copied.Date.Format("2006-01-02"))
+	}
+	if copied.UserID != sessionUser.ID {
+		t.Fatalf("copied: expected session user %d, got %d", sessionUser.ID, copied.UserID)
+	}
+
+	srcAfter, err := app.receipts.GetByID(context.Background(), src.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if srcAfter.Receipt.Date.Format("2006-01-02") != "2020-01-01" || srcAfter.Receipt.UserID != srcUserID {
+		t.Fatalf("source receipt changed: date=%s user=%d",
+			srcAfter.Receipt.Date.Format("2006-01-02"), srcAfter.Receipt.UserID)
+	}
+}
+
+// TestReceiptCard_ViewShowsDateWithTime проверяет, что read-only карточка
+// показывает дату со временем создания.
+func TestReceiptCard_ViewShowsDateWithTime(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	orgID, _ := insertOrg(t, db, "DTOrg", "kdt")
+	app := &App{receipts: receipts.NewStore(db)}
+	rec := saveAppReceipt(t, app, orgID, "DT001", receipts.StatusCreated, false)
+	idStr := strconv.FormatInt(rec.ID, 10)
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/receipts/"+idStr+"?mode=view", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", idStr)
+	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+	app.ReceiptCard(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	want := rec.CreatedAt.Format("02.01.2006 15:04")
+	if !strings.Contains(w.Body.String(), want) {
+		t.Fatalf("expected date with time %q in card:\n%s", want, w.Body.String())
+	}
+}
+
+// TestReceiptsList_ShowsUserColumn проверяет колонку «Пользователь».
+func TestReceiptsList_ShowsUserColumn(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	orgID, _ := insertOrg(t, db, "UserColOrg", "kuc")
+	userID := insertTestUser(t, db, "creator-login")
+	app := &App{
+		receipts:      receipts.NewStore(db),
+		organizations: organizations.NewStore(db),
+		users:         users.NewStore(db),
+	}
+	rec := &receipts.Receipt{
+		Number:         "UC001",
+		Date:           time.Now(),
+		OrganizationID: orgID,
+		UserID:         userID,
+		CustomerID:     1,
+		Total:          10,
+	}
+	if err := app.receipts.Save(context.Background(), &receipts.Document{Receipt: rec}); err != nil {
+		t.Fatal(err)
+	}
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/receipts", nil)
+	app.ReceiptsPage(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "creator-login") {
+		t.Fatal("expected creator login in list")
+	}
+}
+
+// TestReceiptsList_FilterByUser проверяет отбор по пользователю и
+// отбрасывание неизвестного user_id.
+func TestReceiptsList_FilterByUser(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	orgID, _ := insertOrg(t, db, "FilterUserOrg", "kfu")
+	userA := insertTestUser(t, db, "filter-user-a")
+	userB := insertTestUser(t, db, "filter-user-b")
+	app := &App{
+		receipts:      receipts.NewStore(db),
+		organizations: organizations.NewStore(db),
+		users:         users.NewStore(db),
+	}
+	save := func(number string, userID int64) {
+		rec := &receipts.Receipt{
+			Number:         number,
+			Date:           time.Now(),
+			OrganizationID: orgID,
+			UserID:         userID,
+			CustomerID:     1,
+			Total:          10,
+		}
+		if err := app.receipts.Save(context.Background(), &receipts.Document{Receipt: rec}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	save("FU001", userA)
+	save("FU002", userB)
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/receipts?user_id="+strconv.FormatInt(userA, 10), nil)
+	app.ReceiptsPage(w, r)
+	body := w.Body.String()
+	if !strings.Contains(body, "FU001") {
+		t.Fatalf("expected user A receipt:\n%s", body)
+	}
+	if strings.Contains(body, "FU002") {
+		t.Fatalf("did not expect user B receipt:\n%s", body)
+	}
+
+	// Неизвестный user_id отбрасывается — список не сужается.
+	w = httptest.NewRecorder()
+	r = httptest.NewRequest(http.MethodGet, "/receipts?user_id=999999", nil)
+	app.ReceiptsPage(w, r)
+	body = w.Body.String()
+	if !strings.Contains(body, "FU001") || !strings.Contains(body, "FU002") {
+		t.Fatalf("unknown user filter must be dropped:\n%s", body)
 	}
 }

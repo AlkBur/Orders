@@ -23,9 +23,12 @@ type ReceiptListRow struct {
 	Number       template.HTML
 	Date         string
 	Organization template.HTML
-	Customer     template.HTML
-	Total        string
-	Status       string
+	// User — логин пользователя, создавшего документ. Не входит в
+	// поисковые колонки, поэтому выводится как обычный текст.
+	User     string
+	Customer template.HTML
+	Total    string
+	Status   string
 
 	// StatusKey — семантический UI-ключ статуса (created, overdue, sent,
 	// accepted, cancelled, processed, finished). Не является цветом:
