@@ -485,6 +485,12 @@
     <td>Статус</td>
     <td>{{if $r.Status}}{{$r.Status}}{{else if $r.SentAt}}Отправлен{{else}}Не отправлен{{end}}</td>
   </tr>
+  {{if $r.SentAt}}
+  <tr>
+    <td>Отправлен в 1С</td>
+    <td>{{$r.SentAt.Format "02.01.2006 15:04"}}</td>
+  </tr>
+  {{end}}
 </table>
 
 <h2>Позиции</h2>

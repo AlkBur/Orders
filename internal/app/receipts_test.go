@@ -2395,6 +2395,44 @@ func TestReceiptCard_ViewShowsDateWithTime(t *testing.T) {
 	}
 }
 
+// TestReceiptCard_ViewShowsSentAt проверяет, что read-only карточка
+// показывает дату отправки документа в 1С, и скрывает её до отправки.
+func TestReceiptCard_ViewShowsSentAt(t *testing.T) {
+	db := testutil.NewTestDB(t, NewSchema())
+	orgID, _ := insertOrg(t, db, "SentAtOrg", "ksentat")
+	app := &App{receipts: receipts.NewStore(db)}
+
+	render := func(rec *receipts.Receipt) string {
+		t.Helper()
+		idStr := strconv.FormatInt(rec.ID, 10)
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/receipts/"+idStr+"?mode=view", nil)
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", idStr)
+		r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+		app.ReceiptCard(w, r)
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+		return w.Body.String()
+	}
+
+	sent := saveAppReceipt(t, app, orgID, "SENT001", receipts.StatusSent, true)
+	body := render(sent)
+	if !strings.Contains(body, "Отправлен в 1С") {
+		t.Fatalf("expected send label in card:\n%s", body)
+	}
+	want := sent.SentAt.Format("02.01.2006 15:04")
+	if !strings.Contains(body, want) {
+		t.Fatalf("expected send date %q in card:\n%s", want, body)
+	}
+
+	unsent := saveAppReceipt(t, app, orgID, "SENT002", receipts.StatusCreated, false)
+	if body := render(unsent); strings.Contains(body, "Отправлен в 1С") {
+		t.Fatalf("expected no send row before sending:\n%s", body)
+	}
+}
+
 // TestReceiptsList_ShowsUserColumn проверяет колонку «Пользователь».
 func TestReceiptsList_ShowsUserColumn(t *testing.T) {
 	db := testutil.NewTestDB(t, NewSchema())
