@@ -2157,7 +2157,7 @@ func TestReceiptActionDialog_NotSynced(t *testing.T) {
 func cancelSyncedReceipt(t *testing.T, app *App, orgID int64, uuid string) {
 	t.Helper()
 	status := receipts.StatusCancelled
-	if err := app.receipts.UpdateByExternal(context.Background(), orgID, uuid, &status); err != nil {
+	if _, err := app.receipts.UpdateByExternal(context.Background(), orgID, uuid, &status); err != nil {
 		t.Fatal(err)
 	}
 }

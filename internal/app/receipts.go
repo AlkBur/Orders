@@ -1107,6 +1107,16 @@ func (a *App) ReceiptMarkDeleted(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	doc, err := a.receipts.GetByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, receipts.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		a.InternalError(w, r, err)
+		return
+	}
+
 	err = a.receipts.MarkDeleted(r.Context(), id)
 	if err != nil {
 		switch {
@@ -1119,6 +1129,8 @@ func (a *App) ReceiptMarkDeleted(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+
+	a.notifyReceiptStatus(doc.Receipt, receipts.StatusCancelled, CurrentUser(r).Login)
 
 	if err := a.SetFlash(r, sessions.FlashSuccess, "Документ помечен на удаление."); err != nil {
 		a.InternalError(w, r, err)
@@ -1226,7 +1238,11 @@ func (a *App) ReceiptActionSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if changed {
-		a.notify(notifyReceiptAction(doc.Receipt, action, CurrentUser(r).Login))
+		label := action
+		if label == "" {
+			label = "отменено"
+		}
+		a.notifyReceiptAction(doc.Receipt, label, CurrentUser(r).Login)
 	}
 
 	message := "Действие отменено."
@@ -1283,7 +1299,7 @@ func (a *App) ReceiptSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	a.notify(notifyReceiptSent(doc.Receipt, CurrentUser(r).Login))
+	a.notifyReceiptStatus(doc.Receipt, receipts.StatusSent, CurrentUser(r).Login)
 
 	if err := a.SetFlash(r, sessions.FlashSuccess, "Документ успешно отправлен в 1С."); err != nil {
 		a.InternalError(w, r, err)

@@ -645,6 +645,17 @@ func (s *Store) Synchronize(ctx context.Context, updates []ReceiptUpdate) error 
 type SyncResult struct {
 	Inserted int `json:"inserted"`
 	Updated  int `json:"updated"`
+
+	// StatusChanges — документы, у которых статус реально изменился в этом
+	// вызове. Не сериализуется: контракт Integration API не меняется.
+	// Гарантируется не более одной записи на receipt (последнее значение).
+	StatusChanges []StatusChange `json:"-"`
+}
+
+// StatusChange — фактическое изменение статуса документа.
+type StatusChange struct {
+	ID     int64
+	Status string
 }
 
 // SyncUpdate — обновление чека по внутреннему ID в рамках организации.
@@ -716,7 +727,9 @@ func (s *Store) ListAvailableForSync(ctx context.Context, orgID int64) ([]*Docum
 //	X≠Y  → ошибка ErrUUIDAlreadyAssigned (uuid неизменяем)
 //
 // Строка без полей пропускается. Все операции в рамках одного вызова
-// атомарны.
+// атомарны. Фактические изменения статуса возвращаются в
+// SyncResult.StatusChanges (не более одной записи на документ, последнее
+// значение) и не попадают в JSON-контракт.
 func (s *Store) SynchronizeByID(ctx context.Context, orgID int64, updates []SyncUpdate) (SyncResult, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -725,17 +738,25 @@ func (s *Store) SynchronizeByID(ctx context.Context, orgID int64, updates []Sync
 	defer tx.Rollback()
 
 	var result SyncResult
+	// Дедупликация: один receipt может встретиться в updates несколько раз.
+	// Для уведомлений храним последнее значение статуса на документ.
+	statusChanges := make(map[int64]string)
+	var statusOrder []int64
+
 	for _, upd := range updates {
 		var currentUUID sql.NullString
+		var currentStatus string
 		err := tx.QueryRowContext(ctx,
-			`SELECT uuid FROM receipts WHERE id = ? AND organization_id = ? AND deleted_at IS NULL`,
-			upd.ID, orgID).Scan(&currentUUID)
+			`SELECT uuid, status FROM receipts WHERE id = ? AND organization_id = ? AND deleted_at IS NULL`,
+			upd.ID, orgID).Scan(&currentUUID, &currentStatus)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				return SyncResult{}, ErrNotFound
 			}
 			return SyncResult{}, err
 		}
+
+		statusChanged := upd.Status != nil && *upd.Status != currentStatus
 
 		if upd.UUID != nil && *upd.UUID != "" {
 			if currentUUID.Valid && *upd.UUID != currentUUID.String {
@@ -753,7 +774,7 @@ func (s *Store) SynchronizeByID(ctx context.Context, orgID int64, updates []Sync
 			sets = append(sets, "uuid = ?")
 			args = append(args, *upd.UUID)
 		}
-		if upd.Status != nil {
+		if statusChanged {
 			sets = append(sets, "status = ?")
 			args = append(args, *upd.Status)
 		}
@@ -779,6 +800,17 @@ func (s *Store) SynchronizeByID(ctx context.Context, orgID int64, updates []Sync
 			return SyncResult{}, err
 		}
 		result.Updated++
+
+		if statusChanged {
+			if _, seen := statusChanges[upd.ID]; !seen {
+				statusOrder = append(statusOrder, upd.ID)
+			}
+			statusChanges[upd.ID] = *upd.Status
+		}
+	}
+
+	for _, id := range statusOrder {
+		result.StatusChanges = append(result.StatusChanges, StatusChange{ID: id, Status: statusChanges[id]})
 	}
 
 	return result, tx.Commit()
@@ -787,43 +819,43 @@ func (s *Store) SynchronizeByID(ctx context.Context, orgID int64, updates []Sync
 // UpdateByExternal обновляет статус чека по внешнему UUID
 // (receipts.uuid) в рамках организации. Частичное обновление: заполняются
 // только переданные поля, остальные не сбрасываются.
-func (s *Store) UpdateByExternal(ctx context.Context, orgID int64, externalUUID string, status *string) error {
-	var sets []string
-	var args []any
-
-	if status != nil {
-		sets = append(sets, "status = ?")
-		args = append(args, *status)
-	}
-	if len(sets) == 0 {
-		return nil
+//
+// changed=true только при фактическом изменении статуса: UPDATE не трогает
+// строку, если статус уже равен переданному. При отсутствии изменений
+// updated_at не обновляется. Если строки нет — ErrNotFound.
+func (s *Store) UpdateByExternal(ctx context.Context, orgID int64, externalUUID string, status *string) (bool, error) {
+	if status == nil {
+		return false, nil
 	}
 
-	sets = append(sets, "updated_at = ?")
-	args = append(args, time.Now().Format(time.RFC3339))
-	args = append(args, orgID, externalUUID)
-
-	query := "UPDATE receipts SET "
-	for i, set := range sets {
-		if i > 0 {
-			query += ", "
-		}
-		query += set
-	}
-	query += " WHERE organization_id = ? AND uuid = ? AND deleted_at IS NULL"
-
-	res, err := s.db.ExecContext(ctx, query, args...)
+	res, err := s.db.ExecContext(ctx, `
+		UPDATE receipts
+		SET status = ?, updated_at = ?
+		WHERE organization_id = ? AND uuid = ? AND deleted_at IS NULL AND status <> ?
+	`, *status, time.Now().Format(time.RFC3339), orgID, externalUUID, *status)
 	if err != nil {
-		return err
+		return false, err
 	}
 	n, err := res.RowsAffected()
 	if err != nil {
-		return err
+		return false, err
 	}
-	if n == 0 {
-		return ErrNotFound
+	if n > 0 {
+		return true, nil
 	}
-	return nil
+
+	// Ни одна строка не изменена: либо статус уже такой, либо документа нет.
+	var exists int
+	err = s.db.QueryRowContext(ctx,
+		`SELECT 1 FROM receipts WHERE organization_id = ? AND uuid = ? AND deleted_at IS NULL`,
+		orgID, externalUUID).Scan(&exists)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return false, ErrNotFound
+		}
+		return false, err
+	}
+	return false, nil
 }
 
 // SetAction устанавливает текущее действие документа для 1С. Пустое

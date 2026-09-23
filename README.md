@@ -168,10 +168,19 @@ Optional Gotify notifications are configured in the `gotify` section:
 - `tokens` — one or more application tokens: one notification is delivered
   to each application.
 
-Notifications are sent when a receipt is submitted to accounting and when its
-action (Удалить/Изменить) actually changes. Delivery is best-effort and
-asynchronous: failures are only logged and never affect the user operation.
-The section is disabled when `url` is empty or `tokens` is empty.
+Two notification types are sent:
+
+- **status** — on any real status change: submitting a receipt to accounting
+  (effective status «Отправлен»), marking it for deletion («Отменен»), and
+  status updates from the Integration API. For API-driven changes the actor is
+  «1С»; otherwise it is the session user.
+- **action** — when a receipt action (Удалить/Изменить) actually changes or is
+  cleared.
+
+Repeated status/action values do not produce a notification. Delivery is
+best-effort and asynchronous: failures are only logged and never affect the
+user operation. The section is disabled when `url` is empty or `tokens` is
+empty. Message texts live in `internal/app/notify_templates.go`.
 
 ---
 

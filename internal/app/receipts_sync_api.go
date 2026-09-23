@@ -165,6 +165,15 @@ func (a *App) HandleSyncReceipts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	for _, change := range result.StatusChanges {
+		doc, err := a.receipts.GetByID(r.Context(), change.ID)
+		if err != nil {
+			a.log.Error().Err(err).Int64("receipt_id", change.ID).Msg("gotify status notification: load receipt failed")
+			continue
+		}
+		a.notifyReceiptStatus(doc.Receipt, change.Status, notifyIntegrationActor)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(result)
 }
@@ -203,13 +212,22 @@ func (a *App) HandleUpdateReceiptStatus(w http.ResponseWriter, r *http.Request) 
 	}
 
 	ruuid := chi.URLParam(r, "ruuid")
-	if err := a.receipts.UpdateByExternal(r.Context(), orgID, ruuid, req.Status); err != nil {
+	changed, err := a.receipts.UpdateByExternal(r.Context(), orgID, ruuid, req.Status)
+	if err != nil {
 		if errors.Is(err, receipts.ErrNotFound) {
 			http.NotFound(w, r)
 			return
 		}
 		a.InternalError(w, r, err)
 		return
+	}
+	if changed {
+		doc, err := a.receipts.GetByExternal(r.Context(), ruuid)
+		if err != nil {
+			a.log.Error().Err(err).Str("receipt_uuid", ruuid).Msg("gotify status notification: load receipt failed")
+		} else {
+			a.notifyReceiptStatus(doc.Receipt, *req.Status, notifyIntegrationActor)
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")

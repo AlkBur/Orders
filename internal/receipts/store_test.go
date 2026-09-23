@@ -720,6 +720,9 @@ func TestStore_SynchronizeByID_Assign(t *testing.T) {
 	if result.Updated != 1 {
 		t.Fatalf("expected Updated 1, got %d", result.Updated)
 	}
+	if len(result.StatusChanges) != 1 || result.StatusChanges[0].ID != rec.ID || result.StatusChanges[0].Status != status {
+		t.Fatalf("unexpected StatusChanges: %+v", result.StatusChanges)
+	}
 
 	doc, err := store.GetByID(ctx, rec.ID)
 	if err != nil {
@@ -747,10 +750,14 @@ func TestStore_SynchronizeByID_PartialStatus(t *testing.T) {
 	rec := saveReceipt(t, store, ctx, orgID, "100011", true)
 
 	status := "Проверен"
-	if _, err := store.SynchronizeByID(ctx, orgID, []SyncUpdate{
+	result, err := store.SynchronizeByID(ctx, orgID, []SyncUpdate{
 		{ID: rec.ID, Status: &status},
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatal(err)
+	}
+	if len(result.StatusChanges) != 1 || result.StatusChanges[0].Status != status {
+		t.Fatalf("unexpected StatusChanges: %+v", result.StatusChanges)
 	}
 
 	doc, err := store.GetByID(ctx, rec.ID)
@@ -762,6 +769,63 @@ func TestStore_SynchronizeByID_PartialStatus(t *testing.T) {
 	}
 	if doc.Receipt.UUID != "" {
 		t.Fatalf("expected UUID to stay empty, got %s", doc.Receipt.UUID)
+	}
+}
+
+// TestStore_SynchronizeByID_StatusNoChange проверяет, что повторная передача
+// того же статуса не попадает в StatusChanges.
+func TestStore_SynchronizeByID_StatusNoChange(t *testing.T) {
+	ctx, store, orgID, _ := setupTestData(t)
+
+	rec := saveReceipt(t, store, ctx, orgID, "100012", true)
+
+	status := "Принят"
+	if _, err := store.SynchronizeByID(ctx, orgID, []SyncUpdate{
+		{ID: rec.ID, Status: &status},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := store.SynchronizeByID(ctx, orgID, []SyncUpdate{
+		{ID: rec.ID, Status: &status},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.StatusChanges) != 0 {
+		t.Fatalf("expected no StatusChanges on repeat, got %+v", result.StatusChanges)
+	}
+}
+
+// TestStore_SynchronizeByID_StatusDeduplicated проверяет инвариант: один
+// receipt в одном вызове даёт максимум одну запись с последним статусом.
+func TestStore_SynchronizeByID_StatusDeduplicated(t *testing.T) {
+	ctx, store, orgID, _ := setupTestData(t)
+
+	rec := saveReceipt(t, store, ctx, orgID, "100013", true)
+
+	first := "Принят"
+	second := "Обработан"
+	result, err := store.SynchronizeByID(ctx, orgID, []SyncUpdate{
+		{ID: rec.ID, Status: &first},
+		{ID: rec.ID, Status: &second},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.StatusChanges) != 1 {
+		t.Fatalf("expected 1 StatusChange, got %+v", result.StatusChanges)
+	}
+	if result.StatusChanges[0].ID != rec.ID || result.StatusChanges[0].Status != second {
+		t.Fatalf("expected last status %q, got %+v", second, result.StatusChanges[0])
+	}
+
+	doc, err := store.GetByID(ctx, rec.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if doc.Receipt.Status != second {
+		t.Fatalf("expected stored status %q, got %q", second, doc.Receipt.Status)
 	}
 }
 
@@ -825,8 +889,21 @@ func TestStore_UpdateByExternal_Partial(t *testing.T) {
 	}
 
 	status := "Оплачен"
-	if err := store.UpdateByExternal(ctx, orgID, uuid, &status); err != nil {
+	changed, err := store.UpdateByExternal(ctx, orgID, uuid, &status)
+	if err != nil {
 		t.Fatal(err)
+	}
+	if !changed {
+		t.Fatal("expected changed=true on first status set")
+	}
+
+	// Повтор того же статуса — не изменение.
+	changed, err = store.UpdateByExternal(ctx, orgID, uuid, &status)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed {
+		t.Fatal("expected changed=false on repeated status")
 	}
 
 	doc, err := store.GetByID(ctx, rec.ID)
@@ -842,7 +919,7 @@ func TestStore_UpdateByExternal_NotFound(t *testing.T) {
 	ctx, store, orgID, _ := setupTestData(t)
 
 	status := "test"
-	if err := store.UpdateByExternal(ctx, orgID, "no-such-uuid", &status); err != ErrNotFound {
+	if _, err := store.UpdateByExternal(ctx, orgID, "no-such-uuid", &status); err != ErrNotFound {
 		t.Fatalf("expected ErrNotFound, got %v", err)
 	}
 }
@@ -859,7 +936,7 @@ func TestStore_UpdateByExternal_CrossOrgNotFound(t *testing.T) {
 	}
 
 	status := "test"
-	if err := store.UpdateByExternal(ctx, 999, uuid, &status); err != ErrNotFound {
+	if _, err := store.UpdateByExternal(ctx, 999, uuid, &status); err != ErrNotFound {
 		t.Fatalf("expected ErrNotFound for other org, got %v", err)
 	}
 }
@@ -1198,7 +1275,7 @@ func TestStore_MarkDeleted_BlocksIntegration(t *testing.T) {
 	if _, err := store.SynchronizeByID(ctx, orgID, []SyncUpdate{{ID: rec.ID, Status: &status}}); err != ErrNotFound {
 		t.Fatalf("SynchronizeByID marked: got %v, want ErrNotFound", err)
 	}
-	if err := store.UpdateByExternal(ctx, orgID, extUUID, &status); err != ErrNotFound {
+	if _, err := store.UpdateByExternal(ctx, orgID, extUUID, &status); err != ErrNotFound {
 		t.Fatalf("UpdateByExternal marked: got %v, want ErrNotFound", err)
 	}
 	// Legacy-путь обновления по exchange_id также отсекает помеченные.

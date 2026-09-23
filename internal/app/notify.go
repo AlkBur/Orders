@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"text/template"
 	"time"
 
 	"Orders/internal/gotify"
@@ -13,6 +14,10 @@ const (
 	gotifyHTTPTimeout = 10 * time.Second
 	// gotifyDispatchTimeout ограничивает всю фоновую рассылку.
 	gotifyDispatchTimeout = 10 * time.Second
+
+	// notifyIntegrationActor — инициатор событий, пришедших из 1С через
+	// Integration API: сессии пользователя в этих запросах нет.
+	notifyIntegrationActor = "1С"
 )
 
 // gotifySender — минимальный контракт отправителя уведомлений. Позволяет
@@ -37,41 +42,53 @@ func (a *App) notify(msg gotify.Message) {
 	}()
 }
 
-// receiptNotifyBody — общее тело уведомления по документу. actor — логин
-// пользователя, инициатора события (нажал «Отправить» / изменил действие),
-// а не автора документа: rec.UserLogin здесь не используется.
-func receiptNotifyBody(rec *receipts.Receipt, actor string) string {
+// notifyDataFromReceipt заполняет общие поля сообщения. actor — инициатор
+// события, а не автор документа: rec.UserLogin здесь не используется.
+func notifyDataFromReceipt(rec *receipts.Receipt, actor string) notifyData {
 	total := ""
 	if v, err := rec.DisplayValue("Total"); err == nil {
 		total = v
 	}
-	return "Организация: " + rec.OrganizationName + "\n" +
-		"Клиент: " + rec.CustomerName + "\n" +
-		"Сумма: " + total + "\n" +
-		"Пользователь: " + actor
-}
-
-// notifyReceiptSent — уведомление об успешной отправке документа в бухгалтерию.
-// actor — пользователь, нажавший «Отправить»; он может отличаться от автора.
-func notifyReceiptSent(rec *receipts.Receipt, actor string) gotify.Message {
-	return gotify.Message{
-		Title:   "Чек №" + rec.Number + " отправлен в бухгалтерию",
-		Message: receiptNotifyBody(rec, actor),
+	return notifyData{
+		Number:       rec.Number,
+		Date:         rec.Date.Format("02.01.2006"),
+		Organization: rec.OrganizationName,
+		Customer:     rec.CustomerName,
+		Total:        total,
+		User:         actor,
 	}
 }
 
-// notifyReceiptAction — уведомление об изменении действия документа. actor —
-// пользователь, изменивший действие; он может отличаться от автора. Пустое
-// action означает отмену ранее установленного действия.
-func notifyReceiptAction(rec *receipts.Receipt, action, actor string) gotify.Message {
-	if action == "" {
-		return gotify.Message{
-			Title:   "Чек №" + rec.Number + ": действие отменено",
-			Message: receiptNotifyBody(rec, actor) + "\nДействие: отменено",
-		}
+// notifyReceiptStatus отправляет уведомление об изменении статуса документа.
+// status — новое отображаемое значение; actor — инициатор события (логин
+// сессии или notifyIntegrationActor).
+func (a *App) notifyReceiptStatus(rec *receipts.Receipt, status, actor string) {
+	data := notifyDataFromReceipt(rec, actor)
+	data.Status = status
+	a.sendNotify(statusTemplates, data)
+}
+
+// notifyReceiptAction отправляет уведомление об изменении действия документа.
+// Отмена действия передаётся как action = "отменено".
+func (a *App) notifyReceiptAction(rec *receipts.Receipt, action, actor string) {
+	data := notifyDataFromReceipt(rec, actor)
+	data.Action = action
+	a.sendNotify(actionTemplates, data)
+}
+
+// sendNotify рендерит заголовок и тело по шаблону и ставит уведомление в фон.
+// Ошибка рендера только логируется: уведомления best-effort и не влияют на
+// операцию пользователя.
+func (a *App) sendNotify(tmpl *template.Template, data notifyData) {
+	title, err := renderNotify(tmpl, "title", data)
+	if err != nil {
+		a.log.Error().Err(err).Msg("gotify template render failed")
+		return
 	}
-	return gotify.Message{
-		Title:   "Чек №" + rec.Number + ": действие " + action,
-		Message: receiptNotifyBody(rec, actor) + "\nДействие: " + action,
+	body, err := renderNotify(tmpl, "body", data)
+	if err != nil {
+		a.log.Error().Err(err).Msg("gotify template render failed")
+		return
 	}
+	a.notify(gotify.Message{Title: title, Message: body})
 }
