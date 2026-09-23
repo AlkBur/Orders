@@ -69,7 +69,7 @@ func (a *App) notifyReceiptStatus(rec *receipts.Receipt, status, actor string) {
 }
 
 // notifyReceiptAction отправляет уведомление об изменении действия документа.
-// Отмена действия передаётся как action = "отменено".
+// Отмена действия передаётся как action = "Отменено".
 func (a *App) notifyReceiptAction(rec *receipts.Receipt, action, actor string) {
 	data := notifyDataFromReceipt(rec, actor)
 	data.Action = action

@@ -290,10 +290,10 @@ func TestNotify_ReceiptAction(t *testing.T) {
 		t.Fatalf("clear: expected 303, got %d", w.Code)
 	}
 	msg = waitMessage(t, notifier.msgs)
-	if !strings.Contains(msg.Title, "действие отменено") {
+	if !strings.Contains(msg.Title, "действие Отменено") {
 		t.Fatalf("clear: title = %q, want cancel", msg.Title)
 	}
-	if !strings.Contains(msg.Message, "Действие: отменено") {
+	if !strings.Contains(msg.Message, "Действие: Отменено") {
 		t.Fatalf("clear: message = %q, want cancel field", msg.Message)
 	}
 	if !strings.Contains(msg.Message, "Пользователь: operator") {
@@ -329,7 +329,7 @@ func TestNotify_TemplateFields(t *testing.T) {
 	if !strings.Contains(statusBody, "Статус: Принят") {
 		t.Fatalf("status body = %q, want status field", statusBody)
 	}
-	if !strings.Contains(statusBody, "Дата: 01.01.2026") {
+	if !strings.Contains(statusBody, "Дата чека: 01.01.2026") {
 		t.Fatalf("status body = %q, want date field", statusBody)
 	}
 	if strings.Contains(statusBody, "Действие") {
@@ -350,20 +350,20 @@ func TestNotify_TemplateFields(t *testing.T) {
 	if !strings.Contains(actionBody, "Действие: Удалить") {
 		t.Fatalf("action body = %q, want action field", actionBody)
 	}
-	if !strings.Contains(actionBody, "Дата: 01.01.2026") {
+	if !strings.Contains(actionBody, "Дата чека: 01.01.2026") {
 		t.Fatalf("action body = %q, want date field", actionBody)
 	}
 	if strings.Contains(actionBody, "Статус") {
 		t.Fatalf("action body must not contain status field: %q", actionBody)
 	}
 
-	// Отмена действия идёт через тот же action-шаблон со значением «отменено».
-	data.Action = "отменено"
+	// Отмена действия идёт через тот же action-шаблон со значением «Отменено».
+	data.Action = "Отменено"
 	cancelBody, err := renderNotify(actionTemplates, "body", data)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(cancelBody, "Действие: отменено") {
+	if !strings.Contains(cancelBody, "Действие: Отменено") {
 		t.Fatalf("cancel body = %q, want cancel field", cancelBody)
 	}
 }

@@ -1240,7 +1240,7 @@ func (a *App) ReceiptActionSave(w http.ResponseWriter, r *http.Request) {
 	if changed {
 		label := action
 		if label == "" {
-			label = "отменено"
+			label = "Отменено"
 		}
 		a.notifyReceiptAction(doc.Receipt, label, CurrentUser(r).Login)
 	}

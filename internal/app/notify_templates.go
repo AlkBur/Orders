@@ -26,7 +26,7 @@ var statusTemplates = template.Must(template.New("status").Parse(`
 {{define "body"}}Организация: {{.Organization}}
 Клиент: {{.Customer}}
 Сумма: {{.Total}}
-Дата: {{.Date}}
+Дата чека: {{.Date}}
 Пользователь: {{.User}}
 Статус: {{.Status}}{{end}}
 `))
@@ -34,13 +34,13 @@ var statusTemplates = template.Must(template.New("status").Parse(`
 // actionTemplates — текст уведомления об изменении действия.
 // Доступные плейсхолдеры: {{.Number}}, {{.Date}}, {{.Organization}},
 // {{.Customer}}, {{.Total}}, {{.User}}, {{.Action}}. Отмена действия
-// передаётся как Action = "отменено".
+// передаётся как Action = "Отменено".
 var actionTemplates = template.Must(template.New("action").Parse(`
 {{define "title"}}Чек №{{.Number}}: действие {{.Action}}{{end}}
 {{define "body"}}Организация: {{.Organization}}
 Клиент: {{.Customer}}
 Сумма: {{.Total}}
-Дата: {{.Date}}
+Дата чека: {{.Date}}
 Пользователь: {{.User}}
 Действие: {{.Action}}{{end}}
 `))
