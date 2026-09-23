@@ -10,6 +10,7 @@ import (
 
 	"Orders/internal/customers"
 	"Orders/internal/database"
+	"Orders/internal/gotify"
 	"Orders/internal/organizations"
 	"Orders/internal/products"
 	"Orders/internal/receipts"
@@ -34,6 +35,10 @@ type App struct {
 	products      *products.Store
 	receipts      *receipts.Store
 	receiptFiles  *receipts.FileStore
+
+	// notifier — отправитель уведомлений Gotify. nil, если рассылка не
+	// настроена: вызовы notify становятся no-op.
+	notifier gotifySender
 
 	router *chi.Mux
 	server *http.Server
@@ -106,9 +111,20 @@ func New(configPath string) (*App, error) {
 		return nil, err
 	}
 
+	logger := NewLogger(false)
+
+	var notifier gotifySender
+	if config.Gotify.Enabled() {
+		notifier = gotify.New(gotify.Config{
+			URL:      config.Gotify.URL,
+			Priority: config.Gotify.Priority,
+			Tokens:   config.Gotify.Tokens,
+		}, &http.Client{Timeout: gotifyHTTPTimeout})
+	}
+
 	app := &App{
 		config:        config,
-		log:           NewLogger(false),
+		log:           logger,
 		db:            db,
 		filesDB:       filesDB,
 		users:         usersStore,
@@ -119,6 +135,7 @@ func New(configPath string) (*App, error) {
 		products:      products.NewStore(db),
 		receipts:      receipts.NewStore(db),
 		receiptFiles:  receipts.NewFileStore(filesDB),
+		notifier:      notifier,
 		orgKeys:       orgKeys,
 	}
 

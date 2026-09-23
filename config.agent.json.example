@@ -6,5 +6,10 @@
     "rate_limit": {
         "login_by_ip": { "requests": 10, "window_sec": 60 },
         "login_by_account": { "requests": 5, "window_sec": 600 }
+    },
+    "gotify": {
+        "url": "",
+        "priority": 0,
+        "tokens": []
     }
 }

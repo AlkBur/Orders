@@ -151,6 +151,28 @@ Application configuration is stored in:
 config.json
 ```
 
+### Gotify notifications
+
+Optional Gotify notifications are configured in the `gotify` section:
+
+```json
+"gotify": {
+    "url": "https://gotify.example.com",
+    "priority": 5,
+    "tokens": ["app-token-1", "app-token-2"]
+}
+```
+
+- `url` — base URL of the Gotify server;
+- `priority` — Gotify message priority applied to every token;
+- `tokens` — one or more application tokens: one notification is delivered
+  to each application.
+
+Notifications are sent when a receipt is submitted to accounting and when its
+action (Удалить/Изменить) actually changes. Delivery is best-effort and
+asynchronous: failures are only logged and never affect the user operation.
+The section is disabled when `url` is empty or `tokens` is empty.
+
 ---
 
 ## Documentation

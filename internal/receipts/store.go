@@ -835,19 +835,23 @@ func (s *Store) UpdateByExternal(ctx context.Context, orgID int64, externalUUID 
 // action_set_at=now() и action_received_at=NULL. Повторный выбор того же
 // действия — no-op: запись не меняется (action_set_at и
 // action_received_at сохраняются, действие не возвращается в очередь).
-func (s *Store) SetAction(ctx context.Context, id int64, action string) error {
+//
+// changed=true только при фактическом изменении состояния. Признак берётся из
+// RowsAffected: WHERE-условия в обоих запросах отсекают no-op, поэтому
+// проверка атомарна и не требует предварительного чтения.
+func (s *Store) SetAction(ctx context.Context, id int64, action string) (bool, error) {
 	now := time.Now().UTC().Format("2006-01-02 15:04:05")
 
 	if action == "" {
-		_, err := s.db.ExecContext(ctx, `
+		result, err := s.db.ExecContext(ctx, `
 			UPDATE receipt_actions
 			SET action = '', action_set_at = ?, action_received_at = NULL
 			WHERE receipt_id = ? AND action <> ''
 		`, now, id)
-		return err
+		return actionChanged(result, err)
 	}
 
-	_, err := s.db.ExecContext(ctx, `
+	result, err := s.db.ExecContext(ctx, `
 		INSERT INTO receipt_actions (receipt_id, action, action_set_at, action_received_at)
 		VALUES (?, ?, ?, NULL)
 		ON CONFLICT(receipt_id) DO UPDATE SET
@@ -856,7 +860,19 @@ func (s *Store) SetAction(ctx context.Context, id int64, action string) error {
 			action_received_at = NULL
 		WHERE receipt_actions.action <> excluded.action
 	`, id, action, now)
-	return err
+	return actionChanged(result, err)
+}
+
+// actionChanged сообщает, изменила ли запись хотя бы одну строку.
+func actionChanged(result sql.Result, err error) (bool, error) {
+	if err != nil {
+		return false, err
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
 }
 
 // GetAction возвращает текущее действие документа и дату получения.

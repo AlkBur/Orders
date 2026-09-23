@@ -1220,8 +1220,10 @@ func TestStore_SetAction_Upsert(t *testing.T) {
 	ctx, store, orgID, custID := setupTestData(t)
 	rec := saveReceiptWith(t, store, ctx, "ACT001", time.Now(), 100, orgID, custID, StatusCreated, false)
 
-	if err := store.SetAction(ctx, rec.ID, ActionDelete); err != nil {
+	if changed, err := store.SetAction(ctx, rec.ID, ActionDelete); err != nil {
 		t.Fatal(err)
+	} else if !changed {
+		t.Fatal("expected changed=true on first set")
 	}
 	action, receivedAt, err := store.GetAction(ctx, rec.ID)
 	if err != nil {
@@ -1235,8 +1237,10 @@ func TestStore_SetAction_Upsert(t *testing.T) {
 	}
 
 	// Повторный выбор меняет действие и сбрасывает дату получения.
-	if err := store.SetAction(ctx, rec.ID, ActionChange); err != nil {
+	if changed, err := store.SetAction(ctx, rec.ID, ActionChange); err != nil {
 		t.Fatal(err)
+	} else if !changed {
+		t.Fatal("expected changed=true when action changes")
 	}
 	action, receivedAt, err = store.GetAction(ctx, rec.ID)
 	if err != nil {
@@ -1254,11 +1258,15 @@ func TestStore_SetAction_Clear(t *testing.T) {
 	ctx, store, orgID, custID := setupTestData(t)
 	rec := saveReceiptWith(t, store, ctx, "ACT002", time.Now(), 100, orgID, custID, StatusCreated, false)
 
-	if err := store.SetAction(ctx, rec.ID, ActionDelete); err != nil {
+	if changed, err := store.SetAction(ctx, rec.ID, ActionDelete); err != nil {
 		t.Fatal(err)
+	} else if !changed {
+		t.Fatal("expected changed=true on set before clear")
 	}
-	if err := store.SetAction(ctx, rec.ID, ""); err != nil {
+	if changed, err := store.SetAction(ctx, rec.ID, ""); err != nil {
 		t.Fatal(err)
+	} else if !changed {
+		t.Fatal("expected changed=true on clear")
 	}
 
 	action, receivedAt, err := store.GetAction(ctx, rec.ID)
@@ -1287,8 +1295,10 @@ func TestStore_SetAction_Clear_WithoutRow(t *testing.T) {
 	rec := saveReceiptWith(t, store, ctx, "ACT002B", time.Now(), 100, orgID, custID, StatusCreated, false)
 
 	// Отмена без предварительной установки действия ничего не создаёт.
-	if err := store.SetAction(ctx, rec.ID, ""); err != nil {
+	if changed, err := store.SetAction(ctx, rec.ID, ""); err != nil {
 		t.Fatal(err)
+	} else if changed {
+		t.Fatal("expected changed=false when clearing without prior action")
 	}
 	var n int
 	if err := store.db.QueryRow(`SELECT COUNT(*) FROM receipt_actions WHERE receipt_id = ?`, rec.ID).Scan(&n); err != nil {
@@ -1311,7 +1321,7 @@ func TestStore_SetAction_SameActionIsNoOp(t *testing.T) {
 	rec := saveReceiptWith(t, store, ctx, "ACT0SAME", time.Now(), 100, orgID, custID, StatusCreated, false)
 	assignUUID(t, store, ctx, orgID, rec, "act-same")
 
-	if err := store.SetAction(ctx, rec.ID, ActionDelete); err != nil {
+	if _, err := store.SetAction(ctx, rec.ID, ActionDelete); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := store.ConfirmActions(ctx, orgID, []string{"act-same"}); err != nil {
@@ -1331,8 +1341,10 @@ func TestStore_SetAction_SameActionIsNoOp(t *testing.T) {
 	}
 
 	// Повторный выбор того же действия — no-op.
-	if err := store.SetAction(ctx, rec.ID, ActionDelete); err != nil {
+	if changed, err := store.SetAction(ctx, rec.ID, ActionDelete); err != nil {
 		t.Fatal(err)
+	} else if changed {
+		t.Fatal("expected changed=false on repeated same action")
 	}
 
 	var setAtAfter string
@@ -1352,10 +1364,10 @@ func TestStore_SetAction_RepeatedClearIsNoOp(t *testing.T) {
 	ctx, store, orgID, custID := setupTestData(t)
 	rec := saveReceiptWith(t, store, ctx, "ACT0CLEAR", time.Now(), 100, orgID, custID, StatusCreated, false)
 
-	if err := store.SetAction(ctx, rec.ID, ActionDelete); err != nil {
+	if _, err := store.SetAction(ctx, rec.ID, ActionDelete); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.SetAction(ctx, rec.ID, ""); err != nil {
+	if _, err := store.SetAction(ctx, rec.ID, ""); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1370,8 +1382,10 @@ func TestStore_SetAction_RepeatedClearIsNoOp(t *testing.T) {
 	}
 
 	// Повторная отмена уже отменённого действия — no-op.
-	if err := store.SetAction(ctx, rec.ID, ""); err != nil {
+	if changed, err := store.SetAction(ctx, rec.ID, ""); err != nil {
 		t.Fatal(err)
+	} else if changed {
+		t.Fatal("expected changed=false on repeated clear")
 	}
 
 	var setAtAfter string
@@ -1403,7 +1417,7 @@ func TestStore_ListActionsForSync(t *testing.T) {
 	assignUUID(t, store, ctx, orgID, rec1, "act-004")
 	assignUUID(t, store, ctx, orgID, rec2, "act-005")
 
-	if err := store.SetAction(ctx, rec1.ID, ActionChange); err != nil {
+	if _, err := store.SetAction(ctx, rec1.ID, ActionChange); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1436,10 +1450,10 @@ func TestStore_ListActionsForSync_Cancelled(t *testing.T) {
 	rec := saveReceiptWith(t, store, ctx, "ACT005B", time.Now(), 100, orgID, custID, StatusCreated, false)
 	assignUUID(t, store, ctx, orgID, rec, "act-005b")
 
-	if err := store.SetAction(ctx, rec.ID, ActionDelete); err != nil {
+	if _, err := store.SetAction(ctx, rec.ID, ActionDelete); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.SetAction(ctx, rec.ID, ""); err != nil {
+	if _, err := store.SetAction(ctx, rec.ID, ""); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1473,7 +1487,7 @@ func TestStore_ConfirmActions(t *testing.T) {
 	rec := saveReceiptWith(t, store, ctx, "ACT006", time.Now(), 100, orgID, custID, StatusCreated, false)
 	assignUUID(t, store, ctx, orgID, rec, "act-006")
 
-	if err := store.SetAction(ctx, rec.ID, ActionDelete); err != nil {
+	if _, err := store.SetAction(ctx, rec.ID, ActionDelete); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1516,7 +1530,7 @@ func TestStore_MarkDeleted_RemovesAction(t *testing.T) {
 	rec := saveReceiptWith(t, store, ctx, "ACT007", time.Now(), 100, orgID, custID, StatusSent, true)
 	assignUUID(t, store, ctx, orgID, rec, "act-007")
 
-	if err := store.SetAction(ctx, rec.ID, ActionDelete); err != nil {
+	if _, err := store.SetAction(ctx, rec.ID, ActionDelete); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.MarkDeleted(ctx, rec.ID); err != nil {
@@ -1536,7 +1550,7 @@ func TestStore_DeleteByID_RemovesAction(t *testing.T) {
 	ctx, store, orgID, custID := setupTestData(t)
 	rec := saveReceiptWith(t, store, ctx, "ACT008", time.Now(), 100, orgID, custID, StatusCreated, false)
 
-	if err := store.SetAction(ctx, rec.ID, ActionChange); err != nil {
+	if _, err := store.SetAction(ctx, rec.ID, ActionChange); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.DeleteByID(ctx, rec.ID); err != nil {
@@ -1555,7 +1569,7 @@ func TestStore_DeleteByID_RemovesAction(t *testing.T) {
 func TestStore_List_FilterByActionSetAt(t *testing.T) {
 	ctx, store, orgID, custID := setupTestData(t)
 	rec := saveReceiptWith(t, store, ctx, "ACT009", time.Now(), 100, orgID, custID, StatusCreated, false)
-	if err := store.SetAction(ctx, rec.ID, ActionDelete); err != nil {
+	if _, err := store.SetAction(ctx, rec.ID, ActionDelete); err != nil {
 		t.Fatal(err)
 	}
 	// Фиксируем дату установки для детерминированного отбора.

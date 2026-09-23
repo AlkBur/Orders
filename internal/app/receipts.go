@@ -1220,9 +1220,13 @@ func (a *App) ReceiptActionSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := a.receipts.SetAction(r.Context(), id, action); err != nil {
+	changed, err := a.receipts.SetAction(r.Context(), id, action)
+	if err != nil {
 		a.InternalError(w, r, err)
 		return
+	}
+	if changed {
+		a.notify(notifyReceiptAction(doc.Receipt, action, CurrentUser(r).Login))
 	}
 
 	message := "Действие отменено."
@@ -1278,6 +1282,8 @@ func (a *App) ReceiptSubmit(w http.ResponseWriter, r *http.Request) {
 		a.InternalError(w, r, err)
 		return
 	}
+
+	a.notify(notifyReceiptSent(doc.Receipt, CurrentUser(r).Login))
 
 	if err := a.SetFlash(r, sessions.FlashSuccess, "Документ успешно отправлен в 1С."); err != nil {
 		a.InternalError(w, r, err)

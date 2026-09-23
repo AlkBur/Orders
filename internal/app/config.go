@@ -25,6 +25,21 @@ type RateLimitConfig struct {
 	IntegrationAPI LimitConfig `json:"integration_api"`
 }
 
+// GotifyConfig — настройки рассылки уведомлений в Gotify. Один url и один
+// priority применяются ко всем tokens: одно уведомление уходит в каждое
+// приложение. Пустой url или пустой список tokens отключают рассылку.
+type GotifyConfig struct {
+	URL      string   `json:"url"`
+	Priority int      `json:"priority"`
+	Tokens   []string `json:"tokens"`
+}
+
+// Enabled сообщает, настроена ли рассылка. Пустая или частично заполненная
+// секция считается выключенной: приложение работает как раньше.
+func (g GotifyConfig) Enabled() bool {
+	return g.URL != "" && len(g.Tokens) > 0
+}
+
 type Config struct {
 	HTTPAddress       string          `json:"http_address"`
 	DatabasePath      string          `json:"database_path"`
@@ -33,6 +48,7 @@ type Config struct {
 	Secret            string          `json:"secret"`
 	Auth              AuthConfig      `json:"auth"`
 	RateLimit         RateLimitConfig `json:"rate_limit"`
+	Gotify            GotifyConfig    `json:"gotify"`
 }
 
 // defaultRateLimit применяется, когда соответствующая секция не задана или
@@ -69,8 +85,27 @@ func LoadConfig(filename string) (*Config, error) {
 	config.BasePath = NormalizeBasePath(config.BasePath)
 
 	config.applyRateLimitDefaults()
+	config.Gotify = normalizeGotify(config.Gotify)
 
 	return &config, nil
+}
+
+// normalizeGotify приводит секцию gotify к каноническому виду: url без
+// пробелов и завершающего "/", tokens без пустых значений. Пустая секция
+// остаётся пустой и не включает рассылку.
+func normalizeGotify(g GotifyConfig) GotifyConfig {
+	g.URL = strings.TrimRight(strings.TrimSpace(g.URL), "/")
+
+	tokens := make([]string, 0, len(g.Tokens))
+	for _, token := range g.Tokens {
+		token = strings.TrimSpace(token)
+		if token != "" {
+			tokens = append(tokens, token)
+		}
+	}
+	g.Tokens = tokens
+
+	return g
 }
 
 // NormalizeBasePath приводит base_path из конфига к каноническому виду.

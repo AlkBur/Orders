@@ -391,7 +391,7 @@ func actionReceipt(t *testing.T, app *App, orgID int64, action string) *receipts
 		t.Fatal(err)
 	}
 	rec.UUID = uuid
-	if err := app.receipts.SetAction(context.Background(), rec.ID, action); err != nil {
+	if _, err := app.receipts.SetAction(context.Background(), rec.ID, action); err != nil {
 		t.Fatal(err)
 	}
 	return rec
@@ -442,7 +442,7 @@ func TestSyncAPI_GetActions_Empty(t *testing.T) {
 func TestSyncAPI_GetActions_Cancelled(t *testing.T) {
 	app, orgID, orgUUID := setupSyncApp(t)
 	rec := actionReceipt(t, app, orgID, receipts.ActionDelete)
-	if err := app.receipts.SetAction(context.Background(), rec.ID, ""); err != nil {
+	if _, err := app.receipts.SetAction(context.Background(), rec.ID, ""); err != nil {
 		t.Fatal(err)
 	}
 

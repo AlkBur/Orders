@@ -1096,7 +1096,7 @@ func TestReceiptsList_ActionInfo(t *testing.T) {
 	}
 
 	// Действие установлено, не подтверждено — красный индикатор is-pending.
-	if err := store.SetAction(context.Background(), id, receipts.ActionDelete); err != nil {
+	if _, err := store.SetAction(context.Background(), id, receipts.ActionDelete); err != nil {
 		t.Fatal(err)
 	}
 	if body := render(); !strings.Contains(body, `class="receipts-info is-pending">Удалить</span>`) {
@@ -1116,7 +1116,7 @@ func TestReceiptsList_ActionInfo(t *testing.T) {
 	}
 
 	// Отмена — колонка «Инфо» снова пустая (запись с пустым action остаётся).
-	if err := store.SetAction(context.Background(), id, ""); err != nil {
+	if _, err := store.SetAction(context.Background(), id, ""); err != nil {
 		t.Fatal(err)
 	}
 	if body := render(); strings.Contains(body, "receipts-info") {
@@ -2121,7 +2121,7 @@ func TestReceiptActionDialog(t *testing.T) {
 	rec := saveSyncedAppReceipt(t, app, orgID, "ACT1004")
 	idStr := strconv.FormatInt(rec.ID, 10)
 
-	if err := app.receipts.SetAction(context.Background(), rec.ID, receipts.ActionChange); err != nil {
+	if _, err := app.receipts.SetAction(context.Background(), rec.ID, receipts.ActionChange); err != nil {
 		t.Fatal(err)
 	}
 
