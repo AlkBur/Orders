@@ -4,3 +4,4 @@ tools/agent/
 orders
 *.exe
 .kilo
+config.json
